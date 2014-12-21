@@ -1,0 +1,14 @@
+diff -rupN ntp-4.2.6p5/ntpd/ntp_intres.c ntp-new/ntpd/ntp_intres.c
+--- ntp-4.2.6p5/ntpd/ntp_intres.c	2014-12-21 17:24:19.000000000 +0000
++++ ntp-new/ntpd/ntp_intres.c	2014-12-21 17:26:42.000000000 +0000
+@@ -1249,10 +1249,6 @@ doconfigure(
+ 			    dores ? "with" : "without" );
+ #endif
+ 
+-#if defined(HAVE_RES_INIT)
+-	if (dores)	   /* Reload /etc/resolv.conf - bug 1226 */
+-		res_init();
+-#endif
+ 	ce = confentries;
+ 	while (ce != NULL) {
+ #ifdef DEBUG
