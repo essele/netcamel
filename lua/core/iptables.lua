@@ -191,7 +191,6 @@ master["iptables/variable"] =			{ ["delegate"] = "iptables/*" }
 master["iptables/variable/*"] =			{ ["style"] = "ipt_variable" }
 master["iptables/variable/*/value"] =	{ ["type"] = "OK",
 										  ["list"] = 1 }
-
 --
 -- Creation of ipset with pre-poulation of items if needed
 --
@@ -201,5 +200,13 @@ master["iptables/set/*/type"] = 		{ ["type"] = "iptables_set_type",
 										  ["default"] = "hash:ip" }
 master["iptables/set/*/item"] = 		{ ["type"] = "hostname_or_ip",
 										  ["list"] = 1 }
+
+--
+-- The init function is always called once all the modules
+-- are fully loaded so we can configure dependencies/callbacks etc.
+--
+function iptables_init()
+	print("IPTAB INIT")
+end
 
 

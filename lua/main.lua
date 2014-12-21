@@ -18,10 +18,10 @@
 ------------------------------------------------------------------------------
 
 package.path = "./lib/?.lua"
-package.cpath = "./lib/?.so"
+package.cpath = "/usr/lib/lua/5.1/?.so;./lib/?.so"
 
 -- global level packages
---require("lfs")
+require("lfs")
 require("utils")
 require("config")
 --require("api")
@@ -37,11 +37,35 @@ current={}
 new={}
 
 --
--- import all of the core modules
+-- work out which are all of the core modules
 --
-dofile("core/interface.lua")
-dofile("core/iptables.lua")
-dofile("core/dnsmasq.lua")
+local core_modules = {}
+for m in lfs.dir("core") do
+	local mname = m:match("^(.*)%.lua$")
+	if mname then table.insert(core_modules, mname) end
+end
+table.sort(core_modules)
+
+--
+-- Import each of the modules...
+--
+for module in each(core_modules) do
+	dofile("core/" .. module .. ".lua")
+end
+
+--
+-- If the module has a <modname>_init() function then we call it, the
+-- intent of this is to initialise the depends and triggers once we know
+-- that all the structures are initialised.
+--
+for module in each(core_modules) do
+	local funcname = string.format("%s_init", module)
+	if _G[funcname] then
+		-- TODO: return code (assert)
+		local x = pcall(_G[funcname])
+	end
+end
+
 
 
 function other() 

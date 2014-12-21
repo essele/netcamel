@@ -256,5 +256,7 @@ master["interface/pppoe/*/disabled"] = 		{ ["type"] = "boolean" }
 -- a knock on effect on a pppoe interface, so we should trigger
 -- a check
 --
-add_trigger("interface/ethernet/*", "interface/pppoe/@ethernet_change")
+function interface_init()
+	add_trigger("interface/ethernet/*", "interface/pppoe/@ethernet_change")
+end
 
