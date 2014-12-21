@@ -174,6 +174,16 @@ function add_trigger(tonode, trigger)
 end
 
 --
+-- Add a dependency to a given node
+--
+function add_dependency(tonode, depends)
+	if not master[tonode].depends then master[tonode].depends = {} end
+	if not in_list(master[tonode].depends, depends) then
+		table.insert(master[tonode].depends, depends)
+	end
+end
+
+--
 --
 --
 --

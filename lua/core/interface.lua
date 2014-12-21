@@ -239,7 +239,6 @@ master["interface/ethernet/*/disabled"] = 	{ ["type"] = "boolean" }
 master["interface/pppoe"] = {
 	["commit"] = pppoe_commit,
 	["precommit"] = pppoe_precommit,
-	["depends"] = { "interface/ethernet" },
 	["with_children"] = 1,
 }
 
@@ -252,11 +251,17 @@ master["interface/pppoe/*/password"] =		{ ["type"] = "OK" }
 master["interface/pppoe/*/disabled"] = 		{ ["type"] = "boolean" }
 
 --
--- If we change an underlying ethernet interface then it may have
--- a knock on effect on a pppoe interface, so we should trigger
--- a check
+-- Deal with triggers and depdencies
 --
 function interface_init()
+	--
+	-- Trigger the pppoe work if the underlying ethernet changes
+	--
 	add_trigger("interface/ethernet/*", "interface/pppoe/@ethernet_change")
+
+	--
+	-- Make sure we deal with ethernet before we consider pppoe
+	--
+	add_dependency("interface/pppoe", "interface/ethernet")
 end
 

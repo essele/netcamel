@@ -81,6 +81,18 @@ end
 -- forward declare, so we can keep code order sensible
 local process_table
 
+local macros = {
+	["(stateful-firewall)"] = {
+			"-s 127.0.0.1/32 -j ACCEPT",
+			"-m state --state RELATED,ESTABLISHED -j ACCEPT"
+	},
+	["(input-allowed-services)"] = build_input_services,
+	["(ssh-limit-rate)"] = {
+			"-p tcp --dport 22 -m state --state NEW -m recent --set --name SSH --rsource",
+			"-p tcp --dport 22 -m state --state NEW -m recent --update --seconds 60 --hitcount 4 --rttl --name SSH --rsource -j DROP"
+	}
+}
+
 
 local function ipt_table(changes)
 
@@ -98,6 +110,22 @@ local function ipt_table(changes)
 		return keys_to_values(rc)
 	end
 
+	--
+	-- Build all chains in a given table. 
+	-- 1. Get a list of all the chains.
+	-- 2. Look for chains that call others, record the depedencies
+	-- 3. RUn through finding any with no depends (or complete ones)
+	-- 4. Process that chain, mark as done.
+	-- 5. Repeat from 3
+	--
+	function rebuild_table(table)
+--		local chains = node_list("iptables/"..table, CF_new, true)
+
+		for ch in each(node_list("iptables/"..table, CF_new, true)) do
+			print("  chain -- " .. ch)
+		end
+		
+	end
 
 	--
 	-- Build a list of tables we will need to rebuild, start with
@@ -120,7 +148,10 @@ local function ipt_table(changes)
 	end
 
 	rebuild = uniq(rebuild)
-	for t in each(rebuild) do print("NEED TO REBUILD: " .. t) end
+	for t in each(rebuild) do 
+		print("NEED TO REBUILD: " .. t) 
+		rebuild_table(t)
+	end
 
 	return true
 end
@@ -176,7 +207,6 @@ master["iptables"] = 					{}
 -- The main tables/chains/rules definition
 --
 master["iptables/*"] = 					{ ["commit"] = ipt_table,
-										  ["depends"] = { "iptables/set" },
 										  ["style"] = "iptables_table" }
 master["iptables/*/*"] = 				{ ["style"] = "iptables_chain" }
 master["iptables/*/*/policy"] = 		{ ["type"] = "iptables_policy" }
@@ -207,6 +237,10 @@ master["iptables/set/*/item"] = 		{ ["type"] = "hostname_or_ip",
 --
 function iptables_init()
 	print("IPTAB INIT")
+	--
+	-- We need to make sure the ipsets happen before the main chains
+	--
+	add_dependency("iptables/*", "iptables/set")
 end
 
 
