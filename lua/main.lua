@@ -62,7 +62,8 @@ for module in each(core_modules) do
 	local funcname = string.format("%s_init", module)
 	if _G[funcname] then
 		-- TODO: return code (assert)
-		local x = pcall(_G[funcname])
+		local ok, err = pcall(_G[funcname])
+		if not ok then assert(false, string.format("[%s]: %s code error: %s", key, funcname, err)) end
 	end
 end
 
@@ -102,7 +103,7 @@ new["interface/ethernet/*0/ip"] = nil
 new["interface/ethernet/*0/mtu"] = 1492
 --current["interface/ethernet/bill"] = "nope"
 
-new["iptables/*filter/*INPUT/rule/*0001"] = "(input-stateful-firewall)"
+new["iptables/*filter/*INPUT/rule/*0001"] = "(stateful-firewall)"
 new["iptables/*filter/*INPUT/rule/*0002"] = "(input-allowed-services)"
 new["iptables/*filter/*FORWARD/policy"] = "ACCEPT"
 new["iptables/*filter/*FORWARD/rule/*10"] = "-s 12.3.4 -p [fred] -j ACCEPT"
@@ -112,7 +113,7 @@ new["iptables/*filter/*FORWARD/rule/*40"] = "-d 2.3.4.5 -j another-chain -m fred
 
 new["iptables/*filter/*custom-chain/rule/*10"] = "-d 2.3.4.5 -j another-chain -m fred"
 new["iptables/*filter/*another-chain/rule/*10"] = "-d 2.3.4.5 -j ACCEPT -m fred"
-new["iptables/*filter/*another-chain/rule/*20"] = "-d 2.3.4.5 -j custom-chain -m fred"
+--new["iptables/*filter/*another-chain/rule/*20"] = "-d 2.3.4.5 -j custom-chain -m fred"
 
 new["service/ntp/enable"] = true
 

@@ -78,19 +78,27 @@ end
 --
 --------------------------------------------------------------------------------
 
--- forward declare, so we can keep code order sensible
-local process_table
-
 --
 -- Macros are a way of simplifying the look of the config, but also provides
 -- other modules a way of updating sets of rules
 --
 local macros = {
-	["(input-stateful-firewall)"] = {
+	--
+	--
+	--
+	["(stateful-firewall)"] = {
 			"-s 127.0.0.1/32 -j ACCEPT",
 			"-m state --state RELATED,ESTABLISHED -j ACCEPT"
 	},
-	["(input-allowed-services)"] = build_input_services,
+	--
+	-- input-allowed-services should be used by other modules to ensure standard
+	-- stuff is allowed
+	--
+	["(input-allowed-services)"] = {},
+
+	--
+	--
+	--
 	["(ssh-limit-rate)"] = {
 			"-p tcp --dport 22 -m state --state NEW -m recent --set --name SSH --rsource",
 			"-p tcp --dport 22 -m state --state NEW -m recent --update --seconds 60 --hitcount 4 --rttl --name SSH --rsource -j DROP"
@@ -98,7 +106,51 @@ local macros = {
 }
 
 
+--
+-- TODO: move somewhere else
+--
+-- Allow for other modules to add functions to the macros list
+--
+function iptables_add_macro_item(macro, item_or_func)
+	if not macros[macro] then macros[macro] = {} end
+	table.insert(macros[macro], item_or_func)
+end
+
+
 local function ipt_table(changes)
+
+	--
+	-- Go through each rule, expand any macros, and expand any variables
+	--
+	function process_chain(iptable, chain)
+		local base = string.format("iptables/%s/%s/rule", iptable, chain)
+		local commands = {}
+
+		for rule in each(node_list(base, CF_new, true)) do
+			local value = CF_new[base.."/"..rule]
+			if macros[value] then
+				for line in each(macros[value]) do
+					if type(line) == "function" then
+						local rc, items = pcall(line)
+						if rc and items then
+							add_to_list(commands, items)
+						else
+							assert(false, "ERROR HERE - iptables process_chain")
+						end
+					else
+						table.insert(commands, line)
+					end
+				end
+			else
+				table.insert(commands, value)
+			end
+		end
+		iptable = iptable:gsub("^*", "")
+		chain = chain:gsub("^*", "")
+		for line in each(commands) do
+			print(string.format("# iptables -t %s -A %s %s", iptable, chain, line))
+		end
+	end
 
 	--
 	-- Return a list of tables who reference the variable
@@ -115,21 +167,18 @@ local function ipt_table(changes)
 	end
 
 	--
-	-- Return a list of chains in a table who reference a given macro
+	-- Return a list of tables who's chains reference a given macro
 	--
-	-- TODO: do we really need chains, or should it be tables?
-	function find_chains_with_macro(table, macro)
+	function find_tables_with_macro(macro)
 		local rc = {}
-		for chain in each(node_list("iptables/"..table, CF_new, true)) do
-			for rule in each(node_list("iptables/"..table.."/"..chain.."/rule", CF_new, true)) do
-				local path = string.format("iptables/%s/%s/rule/%s", table, chain, rule)
-				if(CF_new[path] == "("..macro..")") then
-					print("Chain: "..chain.." --> path="..path)
-					rc[chain] = 1
+		for iptable in each(node_list("iptables", CF_new, true)) do
+			for rule in each(matching_list("iptables/"..iptable.."/%/rule/%", CF_new)) do
+				if(CF_new[rule] == macro) then
+					rc[iptable] = 1
 				end
 			end
 		end
-		return rc
+		return keys_to_values(rc)
 	end
 
 	--
@@ -146,11 +195,11 @@ local function ipt_table(changes)
 
 	--
 	-- Build all chains in a given table. 
-	-- 1. Get a list of all the chains.
-	-- 2. Look for chains that call others, record the depedencies
-	-- 3. RUn through finding any with no depends (or complete ones)
-	-- 4. Process that chain, mark as done.
-	-- 5. Repeat from 3
+	-- 
+	-- Get a list of all the chains
+	-- While we have an outstanding list
+	--   process any chain that has no dependencies, and remove from the list
+	-- If we do no work, then flag circular dependency
 	--
 	function rebuild_table(iptable)
 		-- 
@@ -165,12 +214,13 @@ local function ipt_table(changes)
 			if #chains == 0 then break end
 
 			for chain in each(chains) do
-				if has_incomplete_subchains(iptable, chain, outstanding) then
-					print("Chain "..chain.." has incomplete subchains")
-				else
+				if not has_incomplete_subchains(iptable, chain, outstanding) then
 					print("Chain "..chain.." is ok to process")
+					process_chain(iptable, chain)
 					outstanding[chain] = nil
 					done_work = true
+				else
+					print("Chain "..chain.." has incomplete subchains")
 				end
 			end
 	
@@ -179,22 +229,12 @@ local function ipt_table(changes)
 				return false
 			end
 		end
-
-		print("FINDIG MACROS")
-		find_chains_with_macro(iptable, "input-stateful-firewall")
 		print("DONE")
---		chains_referencing_chain(table, "input-stateful-firewall")
-
-		for ch in each(node_list("iptables/"..iptable, CF_new, true)) do
-			print("  chain -- " .. ch)
-		end
-		
 	end
 
-	--
-	-- Build a list of tables we will need to rebuild, start with
-	-- triggers for macros, then add any added or changed...
-	--
+	-- ------------------------------------------------------------------------------
+	-- MAIN IPTABLES ENTRY POINT
+	-- ------------------------------------------------------------------------------
     print("Hello From IPTABLES")
 	local state = process_changes(changes, "iptables", true)
 	local rebuild = {}
@@ -207,11 +247,15 @@ local function ipt_table(changes)
 	print("LOOKING FOR TRIGGERS")
 	for trigger in each(state.triggers) do
 		print("IPTABLES TRIGGER: "..trigger)
-		for t in each(node_list("iptables/"..trigger, changes)) do
-			print("  --> " .. t)
+		for macro in each(node_list("iptables/"..trigger, changes)) do
+			print("ADDING DUE TO TRIG: " .. table.concat(find_tables_with_macro(macro:gsub("^@", "")), ", "))
+			add_to_list(rebuild, find_tables_with_macro(macro:gsub("^@", "")))
 		end
 	end
 
+	--
+	-- Add any tables that have been added or changed
+	--
 	add_to_list(rebuild, state.added)
 	add_to_list(rebuild, state.changed)
 	
@@ -233,17 +277,6 @@ local function ipt_table(changes)
 	return true
 end
 
---
--- 
---
-function process_table(table, changes)
-    local state = process_changes(changes, string.format("iptables/*%s", table))
-
-    for v in each(state.added) do print("Added: "..v) end
-    for v in each(state.removed) do print("Removed: "..v) end
-    for v in each(state.changed) do print("Changed: "..v) end
-	
-end
 
 
 

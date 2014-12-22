@@ -62,6 +62,13 @@ local function ntp_precommit(changes)
 	return true
 end
 
+local function ntp_iptables_rules()
+	print("AT NTP_IPTABLES_RULES")
+	return( {
+		"tule one", "hghgh sdhdhdh", "ghskfjghdkfg"
+	} )
+end
+
 
 --
 -- Main interface config definition
@@ -76,10 +83,16 @@ master["service/ntp/enable"] = { ["type"] = "bool" }
 
 
 function ntp_init()
+	print("INIT_NTP")
 	--
 	-- If we change the settings we will need to adjust the iptables
 	-- macro
 	--
-	add_trigger("service/ntp/enable", "iptables/*joe/@blahblahblah")
+	add_trigger("service/ntp/enable", "iptables/*MACROS/@(input-allowed-services)")
+
+	--
+	-- Make sure we can contribute to the allowed services list...
+	--
+	iptables_add_macro_item("(input-allowed-services)", ntp_iptables_rules)
 end
 
