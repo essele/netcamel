@@ -215,7 +215,7 @@ function build_work_list(current, new)
 					print("Found trigger in ["..kp.."] --> " .. trig)
 					-- check if we have any new config for this func since
 					-- we don't want to trigger if we have nothing
-					local fkey, origkey = find_master_function(trig)
+					local fkey, origkey = find_master_function(find_master_key(trig))
 					print("Master function is ["..fkey.."] ["..origkey.."]")
 					if node_exists_using_master(origkey, CF_new) then
 						print("Config exists, so adding trigger")

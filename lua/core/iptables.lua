@@ -81,8 +81,12 @@ end
 -- forward declare, so we can keep code order sensible
 local process_table
 
+--
+-- Macros are a way of simplifying the look of the config, but also provides
+-- other modules a way of updating sets of rules
+--
 local macros = {
-	["(stateful-firewall)"] = {
+	["(input-stateful-firewall)"] = {
 			"-s 127.0.0.1/32 -j ACCEPT",
 			"-m state --state RELATED,ESTABLISHED -j ACCEPT"
 	},
@@ -111,6 +115,36 @@ local function ipt_table(changes)
 	end
 
 	--
+	-- Return a list of chains in a table who reference a given macro
+	--
+	-- TODO: do we really need chains, or should it be tables?
+	function find_chains_with_macro(table, macro)
+		local rc = {}
+		for chain in each(node_list("iptables/"..table, CF_new, true)) do
+			for rule in each(node_list("iptables/"..table.."/"..chain.."/rule", CF_new, true)) do
+				local path = string.format("iptables/%s/%s/rule/%s", table, chain, rule)
+				if(CF_new[path] == "("..macro..")") then
+					print("Chain: "..chain.." --> path="..path)
+					rc[chain] = 1
+				end
+			end
+		end
+		return rc
+	end
+
+	--
+	-- does the given chain have any calls to chains we haven't completed yet
+	--
+	function has_incomplete_subchains(table, chain, outstanding)
+		for rule in each(node_list("iptables/"..table.."/"..chain.."/rule", CF_new, true)) do
+			local path = string.format("iptables/%s/%s/rule/%s", table, chain, rule)
+			local jump = CF_new[path]:match("-j%s+([^%s]+)")
+			if jump and outstanding["*"..jump] then return true end
+		end
+		return false
+	end
+
+	--
 	-- Build all chains in a given table. 
 	-- 1. Get a list of all the chains.
 	-- 2. Look for chains that call others, record the depedencies
@@ -118,10 +152,40 @@ local function ipt_table(changes)
 	-- 4. Process that chain, mark as done.
 	-- 5. Repeat from 3
 	--
-	function rebuild_table(table)
---		local chains = node_list("iptables/"..table, CF_new, true)
+	function rebuild_table(iptable)
+		-- 
+		-- Get a list of all the chains we need to worry about...
+		-- 
+		print("TABLE REBUILD: "..iptable)
+		local outstanding = values_to_keys(node_list("iptables/"..iptable, CF_new, true))
 
-		for ch in each(node_list("iptables/"..table, CF_new, true)) do
+		while true do
+			local chains = keys_to_values(outstanding)
+			local done_work = false
+			if #chains == 0 then break end
+
+			for chain in each(chains) do
+				if has_incomplete_subchains(iptable, chain, outstanding) then
+					print("Chain "..chain.." has incomplete subchains")
+				else
+					print("Chain "..chain.." is ok to process")
+					outstanding[chain] = nil
+					done_work = true
+				end
+			end
+	
+			if not done_work then
+				print("REFERENCE LOOP for chains: " .. table.concat(chains, ", "))
+				return false
+			end
+		end
+
+		print("FINDIG MACROS")
+		find_chains_with_macro(iptable, "input-stateful-firewall")
+		print("DONE")
+--		chains_referencing_chain(table, "input-stateful-firewall")
+
+		for ch in each(node_list("iptables/"..iptable, CF_new, true)) do
 			print("  chain -- " .. ch)
 		end
 		
@@ -129,12 +193,25 @@ local function ipt_table(changes)
 
 	--
 	-- Build a list of tables we will need to rebuild, start with
-	-- any added or changed...
+	-- triggers for macros, then add any added or changed...
 	--
     print("Hello From IPTABLES")
 	local state = process_changes(changes, "iptables", true)
 	local rebuild = {}
-	
+
+	--
+	-- If we were triggered, then it will probably be for a macro
+	-- so we need to see which tables use the macro and add them
+	-- to the list
+	--
+	print("LOOKING FOR TRIGGERS")
+	for trigger in each(state.triggers) do
+		print("IPTABLES TRIGGER: "..trigger)
+		for t in each(node_list("iptables/"..trigger, changes)) do
+			print("  --> " .. t)
+		end
+	end
+
 	add_to_list(rebuild, state.added)
 	add_to_list(rebuild, state.changed)
 	

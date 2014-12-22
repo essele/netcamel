@@ -108,6 +108,14 @@ new["iptables/*filter/*FORWARD/policy"] = "ACCEPT"
 new["iptables/*filter/*FORWARD/rule/*10"] = "-s 12.3.4 -p [fred] -j ACCEPT"
 new["iptables/*filter/*FORWARD/rule/*20"] = "-d -a [bill] -b [fred] 2.3.4.5 -j DROP"
 new["iptables/*filter/*FORWARD/rule/*30"] = "-d 2.3.4.5 -j DROP"
+new["iptables/*filter/*FORWARD/rule/*40"] = "-d 2.3.4.5 -j another-chain -m fred"
+
+new["iptables/*filter/*custom-chain/rule/*10"] = "-d 2.3.4.5 -j another-chain -m fred"
+new["iptables/*filter/*another-chain/rule/*10"] = "-d 2.3.4.5 -j ACCEPT -m fred"
+new["iptables/*filter/*another-chain/rule/*20"] = "-d 2.3.4.5 -j custom-chain -m fred"
+
+new["service/ntp/enable"] = true
+
 --
 --
 current["iptables/set/*vpn-dst/type"] = "hash:ip"
