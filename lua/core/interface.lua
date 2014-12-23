@@ -1,6 +1,6 @@
 #!./luajit
 --------------------------------------------------------------------------------
---  This file is part of OpenTik
+--  This file is part of NetCamel
 --  Copyright (C) 2014 Lee Essen <lee.essen@nowonline.co.uk>
 --
 --  This program is free software: you can redistribute it and/or modify
