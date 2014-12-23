@@ -116,6 +116,9 @@ new["iptables/*filter/*another-chain/rule/*10"] = "-d 2.3.4.5 -j ACCEPT -m fred"
 --new["iptables/*filter/*another-chain/rule/*20"] = "-d 2.3.4.5 -j custom-chain -m fred"
 
 new["service/ntp/enable"] = true
+new["service/ntp/provide-service"] = true
+new["service/ntp/listen-on"] = { "ethernet/0", "pppoe/0" }
+new["service/ntp/server"] = { "0.pool.ntp.org", "1.pool.ntp.org" }
 
 --
 --

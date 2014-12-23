@@ -135,6 +135,7 @@ local function ipt_table(changes)
 						if rc and items then
 							add_to_list(commands, items)
 						else
+							print("rc="..tostring(rc).." items="..tostring(items))
 							assert(false, "ERROR HERE - iptables process_chain")
 						end
 					else

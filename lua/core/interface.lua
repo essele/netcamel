@@ -186,6 +186,14 @@ VALIDATOR["mtu"] = function(v)
 end
 
 --
+-- Where we expect an interface name...
+--
+VALIDATOR["interface"] = function(v)
+	-- TODO
+	return OK
+end
+
+--
 -- Convert any format into a full keypath, this is used by any function that
 -- takes any interface as an argument. It allows complete flexibility in what
 -- can be used.
