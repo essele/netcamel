@@ -17,19 +17,6 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
---
---	for any deleted
---		- unconfigure
---
---	for any changed
---		- reconfigure
---
---	for any new
---		- configure
---
---
---
-
 local function ethernet_commit(changes)
 	print("Hello From Interface")
 

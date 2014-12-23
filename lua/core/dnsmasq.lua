@@ -19,23 +19,6 @@
 
 
 --
--- Take a prefix and build a hash of elements and values (using the
--- defaults it provided in the master config)
---
---[[
-function config_vars(prefix, kv)
-	local rc = {}
-
-	for k in each(node_list(prefix, master)) do
-		local kp = prefix .. "/" .. k
-		if master[kp].default then rc[k] = master[kp].default end
-	end
-	for k in each(node_list(prefix, kv)) do rc[k] = kv[prefix .. "/" .. k] end
-	return rc
-end
-]]--
-
---
 -- Output build a string that's a format output once for each
 -- value of a list
 --
