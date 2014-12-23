@@ -70,7 +70,9 @@ local function dnsmasq_commit(changes)
 		local forwarding = node_vars("dns/forwarding", CF_new)
 		io.write("# -- forwarding --\n\n")
 		io.write(string.format("cache-size %s\n", forwarding["cache-size"]))
-		io.write(sprintf_list("interface %s\n", forwarding["listen-on"] or {}))
+		for interface in each(forwarding["listen-on"] or {}) do
+			io.write(string.format("interface %s\n", interface_name(interface)))
+		end
 		io.write(sprintf_list("server %s\n", forwarding.server or {}))
 		io.write(sprintf_list("options %s\n", forwarding.options or {}))
 		io.write("\n")

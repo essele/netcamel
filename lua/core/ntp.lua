@@ -17,6 +17,10 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
+local NTPD = "/usr/sbin/ntpd"
+local NTPD_NAME = "ntpd"
+local NTPD_ARGS = "-g"
+
 
 --
 -- NTP has a number of configuration options which we need to worry about,
@@ -33,6 +37,11 @@ local function ntp_commit(changes)
 		print("No NTP config required, stopping daemon")
 		return true
 	end
+
+	--
+	-- Stop the daemon...
+	--
+	ntp_stop()
 
 	--
 	-- Build the configuration file...
@@ -59,6 +68,11 @@ local function ntp_commit(changes)
 			io.write(string.format("# interface listen %s\n", interface_name(interface)))
 		end
 	end
+
+	--
+	-- Start the daemon...
+	--
+	ntp_start()
 
 	return true
 end
@@ -119,6 +133,23 @@ local function ntp_iptables_rules()
 		end
 	end
 	return rules
+end
+
+--
+-- Functions to start and stop the ntp daemon
+--
+-- We use start-stop-daemon since the process forks and killing via a
+-- pidfile doesn't kill the second process.
+--
+function ntp_start()
+	print(string.format("start-stop-daemon -S -q -x %s -- %s", NTPD, NTPD_ARGS))
+end
+function ntp_stop()
+	print(string.format("start-stop-daemon -K -q -n %s", NTPD_NAME))
+end
+function ntp_isrunning()
+	print(string.format("start-stop-daemon -K -t -n %s", NTPD_NAME))
+	-- TODO return value
 end
 
 
