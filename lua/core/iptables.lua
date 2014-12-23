@@ -122,7 +122,7 @@ local function ipt_table(changes)
 	--
 	-- Go through each rule, expand any macros, and expand any variables
 	--
-	function process_chain(iptable, chain)
+	function process_chain(iptable, chain, vars)
 		local base = string.format("iptables/%s/%s/rule", iptable, chain)
 		local commands = {}
 
@@ -147,9 +147,48 @@ local function ipt_table(changes)
 		end
 		iptable = iptable:gsub("^*", "")
 		chain = chain:gsub("^*", "")
-		for line in each(commands) do
+		for line in each(variable_expand(commands, vars)) do
 			print(string.format("# iptables -t %s -A %s %s", iptable, chain, line))
 		end
+	end
+
+	--
+	-- Return a hash with all variables set
+	--
+	function load_variables()
+		local vars = {}
+		for var in each(node_list("iptables/variable", CF_new)) do
+			local value = CF_new["iptables/variable/"..var.."/value"]
+			vars[var:gsub("^%*", "")] = value
+		end
+		return vars
+	end
+
+	--
+	-- For a given list of lines of text (iptables rule) we will return a list
+	-- of lines that represent the same lines with variables expanded, we cope
+	-- with multiple multi-value variables as well.
+	--
+	function variable_expand(lines, vars)
+		local inlist = lines
+		local outlist = {}
+
+		while #inlist > 0 do
+			local rule = table.remove(inlist, 1)
+			local var = rule:match("%[([^%]]+)%]")
+			if var then
+				if vars[var] then
+					for newval in back_each(vars[var]) do
+						table.insert(inlist, 1, (rule:gsub("%["..var.."%]", newval)))
+					end
+				else
+					assert(false, "Unknown variable TOD TODO")
+				end
+			else
+				table.insert(outlist, rule)
+			end
+		end
+		return outlist
 	end
 
 	--
@@ -201,7 +240,7 @@ local function ipt_table(changes)
 	--   process any chain that has no dependencies, and remove from the list
 	-- If we do no work, then flag circular dependency
 	--
-	function rebuild_table(iptable)
+	function rebuild_table(iptable, vars)
 		-- 
 		-- Get a list of all the chains we need to worry about...
 		-- 
@@ -216,7 +255,7 @@ local function ipt_table(changes)
 			for chain in each(chains) do
 				if not has_incomplete_subchains(iptable, chain, outstanding) then
 					print("Chain "..chain.." is ok to process")
-					process_chain(iptable, chain)
+					process_chain(iptable, chain, vars)
 					outstanding[chain] = nil
 					done_work = true
 				else
@@ -267,11 +306,22 @@ local function ipt_table(changes)
 		print("Changed var: ["..var.."]")
 		add_to_list(rebuild, find_variable_references(var))
 	end
+	--
+	--
+	-- Load all the variables into a hash
+	--
+	local vars = load_variables()
+	print("VARIABLES")
+	for k,v in pairs(vars) do
+		print("k="..k.."  v="..tostring(v))
+	end
+	print("END VARIABLES")
+
 
 	rebuild = uniq(rebuild)
 	for t in each(rebuild) do 
 		print("NEED TO REBUILD: " .. t) 
-		rebuild_table(t)
+		rebuild_table(t, vars)
 	end
 
 	return true

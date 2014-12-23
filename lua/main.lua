@@ -125,7 +125,8 @@ current["iptables/set/*vpn-dst/item"] = { "1.2.3.4", "2.2.2.2", "8.8.8.8" }
 new["iptables/set/*vpn-dst/type"] = "hash:ip"
 new["iptables/set/*vpn-dst/item"] = { "2.2.2.2", "8.8.8.8" }
 
-new["iptables/variable/*fred/value"] = { "one", "rwo" }
+new["iptables/variable/*fred/value"] = { "fred-one", "fred-two" }
+new["iptables/variable/*bill/value"] = { "billX" }
 
 new["dns/forwarding/server"] = { "one", "three", "four" }
 new["dns/forwarding/cache-size"] =150

@@ -121,6 +121,20 @@ function each(t)
 end
 
 --
+-- Each, but backwards
+--
+function back_each(t)
+	t = t or {}
+    local i = #t
+
+    return function()
+        i = i - 1
+        return t[i+1]
+    end
+end
+
+
+--
 -- Check to see if the prefix of line matches token, but where
 -- the next char is either eol or the sep
 --
