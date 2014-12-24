@@ -154,6 +154,24 @@ function ntp_isrunning()
 end
 
 --
+-- Define the service so that we can stop, start and monitor the
+-- daemon.
+--
+service.define("ntpd", {
+    ["binary"] = "/home/essele/dev/netcamel/lua/testing/ntp",
+    ["args"] = { "-g", "-p", "/var/run/ntpd.pid" },
+    ["name"] = "pretend_ntp",
+    ["pidfile"] = "/var/run/ntpd.pid",
+    ["generate_pidfile"] = true,
+
+    ["start"] = service.start_as_daemon,
+    ["stop"] = service.kill_by_name,
+})
+
+--service.start("ntpd")
+--service.stop("ntpd")
+
+--
 -- Main interface config definition
 --
 master["service"] = {}

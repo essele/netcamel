@@ -28,6 +28,7 @@ require("config")
 
 -- different namespace packages
 local base64 = require("base64")
+service = require("service")
 
 --
 -- global configuration spaces
@@ -233,3 +234,23 @@ if not rc then print(err) os.exit(1) end
 --
 local rc, err = execute_work_using_func("commit", work_list)
 if not rc then print(err) os.exit(1) end
+
+
+service.define("ntpd", {
+    ["binary"] = "/home/essele/dev/netcamel/lua/testing/ntpd",
+    ["args"] = { "-g", "-p", "/var/run/ntpd.pid" },
+    ["name"] = "ntpd",
+    ["pidfile"] = "/var/run/ntpd.pid",
+    ["generate_pidfile"] = true,
+
+	--
+	-- TODO: monitoring??
+	--
+    
+    ["start"] = service.start_as_daemon,
+    ["stop"] = service.kill_by_name,
+	["status"] = check_pid_by_name
+})
+
+--service.start("ntpd")
+service.stop("ntpd")
