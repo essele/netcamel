@@ -240,8 +240,9 @@ service.define("ntpd", {
     ["binary"] = "/home/essele/dev/netcamel/lua/testing/ntpd",
     ["args"] = { "-g", "-p", "/var/run/ntpd.pid" },
     ["name"] = "ntpd",
-    ["pidfile"] = "/var/run/ntpd.pid",
-    ["generate_pidfile"] = true,
+    ["pidfile"] = "/tmp/leentpd.pid",
+    ["create_pidfile"] = true,
+	["restart_delay"] = 1000,
 
 	--
 	-- TODO: monitoring??
@@ -249,8 +250,13 @@ service.define("ntpd", {
     
     ["start"] = service.start_as_daemon,
     ["stop"] = service.kill_by_name,
-	["status"] = check_pid_by_name
+	["restart"] = service.stop_then_start,
+	["status"] = service.check_pid_by_name
 })
 
 --service.start("ntpd")
-service.stop("ntpd")
+service.restart("ntpd")
+
+print("ST="..tostring(service.status("ntpd")))
+
+
