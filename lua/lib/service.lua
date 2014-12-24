@@ -242,7 +242,7 @@ local function start_as_daemon(name)
 	if npid ~= 0 then ffi.C.exit(0) end
 	
 	--
-	-- TODO: create a pidfile if we've been asked to
+	-- Create a pidfile if we've been asked to
 	--
 	if svc.create_pidfile then
 		local file = io.open(svc.pidfile, "w+")

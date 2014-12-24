@@ -147,3 +147,19 @@ function prefix_match(line, token, sep)
 	return false
 end
 
+
+--
+-- Create a configuration file
+--
+-- TODO: probably move somewhere else
+--
+function create_config_file(name, text)
+	local file = io.open(name, "r+")
+	if not file then return nil end
+
+	file:write(text)
+	file:close()
+	return true
+end
+
+

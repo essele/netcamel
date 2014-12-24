@@ -27,7 +27,8 @@ require("config")
 --require("api")
 
 -- different namespace packages
-local base64 = require("base64")
+base64 	= require("base64")
+ffi 	= require("ffi")
 service = require("service")
 
 --
@@ -240,14 +241,12 @@ service.define("ntpd", {
     ["binary"] = "/home/essele/dev/netcamel/lua/testing/ntpd",
     ["args"] = { "-g", "-p", "/var/run/ntpd.pid" },
     ["name"] = "ntpd",
+
     ["pidfile"] = "/tmp/leentpd.pid",
     ["create_pidfile"] = true,
-	["restart_delay"] = 1000,
 
-	--
-	-- TODO: monitoring??
-	--
-    
+	["restart_delay"] = 50,
+
     ["start"] = service.start_as_daemon,
     ["stop"] = service.kill_by_name,
 	["restart"] = service.stop_then_start,
