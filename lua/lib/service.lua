@@ -25,7 +25,6 @@ local services = {}
 --
 -- We use quite a few c libary function with ffi in this module...
 --
-local ffi = require("ffi")
 ffi.cdef[[
 	typedef int 			pid_t;
 	typedef int				ssize_t;

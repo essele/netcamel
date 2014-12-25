@@ -125,12 +125,12 @@ end
 --
 function back_each(t)
 	t = t or {}
-    local i = #t
+	local i = #t
 
-    return function()
-        i = i - 1
-        return t[i+1]
-    end
+	return function()
+		i = i - 1
+		return t[i+1]
+	end
 end
 
 
@@ -147,17 +147,66 @@ function prefix_match(line, token, sep)
 	return false
 end
 
+--
+-- Split a string into a list, given a specific separator
+--
+function split(str, sep)
+	local t = {}
+	local function helper(line) table.insert(t, line) return "" end
+
+	helper((str:gsub("(.-)"..sep, helper)))
+	return t
+end
+
 
 --
 -- Create a configuration file
 --
+-- We work out what the leading space is on the first line
+-- and remove that from every subsequent line.
+--
+-- Also we replace [value] where value appears in dict.
+-- If [value] is followed by newline, then it's considered part of
+-- the value.
+--
 -- TODO: probably move somewhere else
 --
-function create_config_file(name, text)
-	local file = io.open(name, "r+")
+function create_config_file(name, template, dict)
+	local input = split(template, "\n")
+	local output = {}
+
+	-- work out leading space
+	local lead = input[1]:match("^(%s+)") or ""
+
+	-- now process each line
+	for line in each(input) do
+		local out = line:gsub("^"..lead, "")		-- remove leading space
+		local var = out:match("{{([^%]]+)}}")
+
+		if var and dict[var] then
+			if type(dict[var]) == "table" then
+				for v in each(dict[var]) do
+					table.insert(output, (out:gsub("{{"..var.."}}", v)))
+				end
+			else
+				table.insert(output, (out:gsub("{{"..var.."}}", dict[var])))
+			end
+		else
+			table.insert(output, out)
+		end
+	end
+
+	-- remove the last line if it's just whitespace
+	if output[#output]:match("^%s+$") then
+		table.remove(output, #output)
+	end
+
+	local file = io.open(name, "w+")
 	if not file then return nil end
 
-	file:write(text)
+	for line in each(output) do
+		file:write(line .. "\n")
+	end
 	file:close()
 	return true
 end
