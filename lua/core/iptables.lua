@@ -116,6 +116,28 @@ function iptables_add_macro_item(macro, item_or_func)
 	table.insert(macros[macro], item_or_func)
 end
 
+--
+-- Given a macro name run through getting the needed lines (which may involve
+-- calling a series of functions)
+--
+local function expand_macro(name)
+	local lines = {}
+	for line in each(macros[name]) do
+		if type(line) == "function" then
+			local rc, items = pcall(line)
+			if rc and items then
+				add_to_list(lines, items)
+			else
+				print("rc="..tostring(rc).." items="..tostring(items))
+				assert(false, "ERROR HERE - iptables process_chain")
+			end
+		else
+			table.insert(lines, line)
+		end
+	end
+	return lines
+end
+
 
 local function ipt_table(changes)
 
@@ -176,14 +198,14 @@ local function ipt_table(changes)
 
 		while #inlist > 0 do
 			local rule = table.remove(inlist, 1)
-			local var = rule:match("%[([^%]]+)%]")
+			local var = rule:match("{{([^}]+)}}")
 			if var then
 				if vars[var] then
 					for newval in back_each(vars[var]) do
-						table.insert(inlist, 1, (rule:gsub("%["..var.."%]", newval)))
+						table.insert(inlist, 1, (rule:gsub("{{"..var.."}}", newval)))
 					end
 				else
-					assert(false, "Unknown variable TOD TODO")
+					assert(false, string.format("Unknown variable: %s", var))
 				end
 			else
 				table.insert(outlist, rule)
@@ -276,6 +298,69 @@ local function ipt_table(changes)
 	-- MAIN IPTABLES ENTRY POINT
 	-- ------------------------------------------------------------------------------
     print("Hello From IPTABLES")
+
+
+	local tables = {
+		{ ["name"] = "nat",
+		  ["chains"] = { "PREROUTING", "INPUT", "OUTPUT", "POSTROUTING" } },
+		{ ["name"] = "filter",
+		  ["chains"] = { "INPUT", "FORWARD", "OUTPUT" } },
+		{ ["name"] = "mangle",
+		  ["chains"] = { "PREROUTING", "INPUT", "FORWARD", "OUTPUT", "POSTROUTING" } },
+		{ ["name"] = "raw",
+		  ["chains"] = { "PREROUTING", "OUTPUT" } }
+	}
+
+	--
+	-- Build a full list of chains for each of the tables
+	--
+	for iptable in each(tables) do
+		for chain in each(node_list("iptables/*"..iptable.name, CF_new, true)) do
+			chain = chain:sub(2)
+			if not in_list(iptable.chains, chain) then
+				table.insert(iptable.chains, chain)
+			end
+		end
+	end
+
+	--
+	-- Process each table in turn...
+	--
+	local vars = load_variables()
+	local output = {}
+	for iptable in each(tables) do
+		table.insert(output, "*"..iptable.name)
+		for chain in each(iptable.chains) do
+			table.insert(output, string.format(":%s ACCEPT [0:0]", chain))
+		end
+		for chain in each(iptable.chains) do
+			local base = string.format("iptables/*%s/*%s/rule", iptable.name, chain)
+			local rules = {}
+
+			for rule in each(node_list(base, CF_new, true)) do
+				local value = CF_new[base.."/"..rule]
+				if macros[value] then
+					add_to_list(rules, expand_macro(value))
+				else
+					table.insert(rules, value)
+				end
+
+				-- TODO: generic variable substitution concept??
+			end
+			for rule in each(variable_expand(rules, vars)) do
+				table.insert(output, string.format("-A %s %s", chain, rule))
+			end
+		end
+		table.insert(output, "COMMIT")
+	end
+
+	for x in each(output) do
+		print(x)
+	end
+	os.exit(1)
+
+
+
 	local state = process_changes(changes, "iptables", true)
 	local rebuild = {}
 

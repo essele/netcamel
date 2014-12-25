@@ -143,6 +143,7 @@ local function ntp_iptables_rules()
 			table.insert(rules, string.format("-i %s -p udp --dport 123 -j ACCEPT", interface))
 		end
 	end
+	print("DONE RETURNING RULES")
 	return rules
 end
 

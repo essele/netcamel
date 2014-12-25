@@ -181,7 +181,7 @@ function create_config_file(name, template, dict)
 	-- now process each line
 	for line in each(input) do
 		local out = line:gsub("^"..lead, "")		-- remove leading space
-		local var = out:match("{{([^%]]+)}}")
+		local var = out:match("{{([^}]+)}}")
 
 		if var and dict[var] then
 			if type(dict[var]) == "table" then

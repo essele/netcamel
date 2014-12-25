@@ -108,8 +108,8 @@ new["interface/ethernet/*0/mtu"] = 1492
 new["iptables/*filter/*INPUT/rule/*0001"] = "(stateful-firewall)"
 new["iptables/*filter/*INPUT/rule/*0002"] = "(input-allowed-services)"
 new["iptables/*filter/*FORWARD/policy"] = "ACCEPT"
-new["iptables/*filter/*FORWARD/rule/*10"] = "-s 12.3.4 -p [fred] -j ACCEPT"
-new["iptables/*filter/*FORWARD/rule/*20"] = "-d -a [bill] -b [fred] 2.3.4.5 -j DROP"
+new["iptables/*filter/*FORWARD/rule/*10"] = "-s 12.3.4 -p {{fred}} -j ACCEPT"
+new["iptables/*filter/*FORWARD/rule/*20"] = "-d -a {{bill}} -b {{fred}} 2.3.4.5 -j DROP"
 new["iptables/*filter/*FORWARD/rule/*30"] = "-d 2.3.4.5 -j DROP"
 new["iptables/*filter/*FORWARD/rule/*40"] = "-d 2.3.4.5 -j another-chain -m fred"
 
