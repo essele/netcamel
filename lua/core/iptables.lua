@@ -116,63 +116,29 @@ function iptables_add_macro_item(macro, item_or_func)
 	table.insert(macros[macro], item_or_func)
 end
 
---
--- Given a macro name run through getting the needed lines (which may involve
--- calling a series of functions)
---
-local function expand_macro(name)
-	local lines = {}
-	for line in each(macros[name]) do
-		if type(line) == "function" then
-			local rc, items = pcall(line)
-			if rc and items then
-				add_to_list(lines, items)
-			else
-				print("rc="..tostring(rc).." items="..tostring(items))
-				assert(false, "ERROR HERE - iptables process_chain")
-			end
-		else
-			table.insert(lines, line)
-		end
-	end
-	return lines
-end
-
 
 local function ipt_table(changes)
 
 	--
-	-- Go through each rule, expand any macros, and expand any variables
+	-- Given a macro name run through getting the needed lines (which may involve
+	-- calling a series of functions)
 	--
-	function process_chain(iptable, chain, vars)
-		local base = string.format("iptables/%s/%s/rule", iptable, chain)
-		local commands = {}
-
-		for rule in each(node_list(base, CF_new, true)) do
-			local value = CF_new[base.."/"..rule]
-			if macros[value] then
-				for line in each(macros[value]) do
-					if type(line) == "function" then
-						local rc, items = pcall(line)
-						if rc and items then
-							add_to_list(commands, items)
-						else
-							print("rc="..tostring(rc).." items="..tostring(items))
-							assert(false, "ERROR HERE - iptables process_chain")
-						end
-					else
-						table.insert(commands, line)
-					end
+	function expand_macro(name)
+		local lines = {}
+		for line in each(macros[name]) do
+			if type(line) == "function" then
+				local rc, items = pcall(line)
+				if rc and items then
+					add_to_list(lines, items)
+				else
+					print("rc="..tostring(rc).." items="..tostring(items))
+					assert(false, "ERROR HERE - iptables process_chain")
 				end
 			else
-				table.insert(commands, value)
+				table.insert(lines, line)
 			end
 		end
-		iptable = iptable:gsub("^*", "")
-		chain = chain:gsub("^*", "")
-		for line in each(variable_expand(commands, vars)) do
-			print(string.format("# iptables -t %s -A %s %s", iptable, chain, line))
-		end
+		return lines
 	end
 
 	--
@@ -220,7 +186,7 @@ local function ipt_table(changes)
 	function find_variable_references(var)
 		local rc = {}
 		for rule in each(matching_list("iptables/%/%/rule/%", CF_new)) do
-			if CF_new[rule]:match("%["..var.."%]") then
+			if CF_new[rule]:match("{{"..var.."}}") then
 				-- pull out the table name
 				rc[rule:match("^iptables/(%*[^/]+)")] = 1
 			end
@@ -243,63 +209,52 @@ local function ipt_table(changes)
 		return keys_to_values(rc)
 	end
 
-	--
-	-- does the given chain have any calls to chains we haven't completed yet
-	--
-	function has_incomplete_subchains(table, chain, outstanding)
-		for rule in each(node_list("iptables/"..table.."/"..chain.."/rule", CF_new, true)) do
-			local path = string.format("iptables/%s/%s/rule/%s", table, chain, rule)
-			local jump = CF_new[path]:match("-j%s+([^%s]+)")
-			if jump and outstanding["*"..jump] then return true end
-		end
-		return false
-	end
-
-	--
-	-- Build all chains in a given table. 
-	-- 
-	-- Get a list of all the chains
-	-- While we have an outstanding list
-	--   process any chain that has no dependencies, and remove from the list
-	-- If we do no work, then flag circular dependency
-	--
-	function rebuild_table(iptable, vars)
-		-- 
-		-- Get a list of all the chains we need to worry about...
-		-- 
-		print("TABLE REBUILD: "..iptable)
-		local outstanding = values_to_keys(node_list("iptables/"..iptable, CF_new, true))
-
-		while true do
-			local chains = keys_to_values(outstanding)
-			local done_work = false
-			if #chains == 0 then break end
-
-			for chain in each(chains) do
-				if not has_incomplete_subchains(iptable, chain, outstanding) then
-					print("Chain "..chain.." is ok to process")
-					process_chain(iptable, chain, vars)
-					outstanding[chain] = nil
-					done_work = true
-				else
-					print("Chain "..chain.." has incomplete subchains")
-				end
-			end
-	
-			if not done_work then
-				print("REFERENCE LOOP for chains: " .. table.concat(chains, ", "))
-				return false
-			end
-		end
-		print("DONE")
-	end
-
 	-- ------------------------------------------------------------------------------
 	-- MAIN IPTABLES ENTRY POINT
 	-- ------------------------------------------------------------------------------
     print("Hello From IPTABLES")
 
+	local state = process_changes(changes, "iptables", true)
+	local rebuild = {}
 
+	--
+	-- If we were triggered, then it will probably be for a macro
+	-- so we need to see which tables use the macro and add them
+	-- to the list
+	--
+	print("LOOKING FOR TRIGGERS")
+	for trigger in each(state.triggers) do
+		print("IPTABLES TRIGGER: "..trigger)
+		for macro in each(node_list("iptables/"..trigger, changes)) do
+			print("ADDING DUE TO TRIG: " .. table.concat(find_tables_with_macro(macro:gsub("^@", "")), ", "))
+			add_to_list(rebuild, find_tables_with_macro(macro:gsub("^@", "")))
+		end
+	end
+
+	--
+	-- Add any tables that have been added or changed
+	--
+	add_to_list(rebuild, state.added)
+	add_to_list(rebuild, state.changed)
+	
+	--
+	-- See if we have any variables that would cause additional
+	-- tables to be reworked
+	--
+	for var in each(node_list("iptables/variable", changes)) do
+		print("Changed var: ["..var.."]")
+		add_to_list(rebuild, find_variable_references(var))
+	end
+
+	--
+	-- Now, if rebuild is empty then we have nothing to do
+	--
+	if #rebuild == 0 then return true end
+
+
+	--
+	-- Start building an iptables-restore format file
+	--
 	local tables = {
 		{ ["name"] = "nat",
 		  ["chains"] = { "PREROUTING", "INPUT", "OUTPUT", "POSTROUTING" } },
@@ -357,59 +312,6 @@ local function ipt_table(changes)
 	for x in each(output) do
 		print(x)
 	end
-	os.exit(1)
-
-
-
-	local state = process_changes(changes, "iptables", true)
-	local rebuild = {}
-
-	--
-	-- If we were triggered, then it will probably be for a macro
-	-- so we need to see which tables use the macro and add them
-	-- to the list
-	--
-	print("LOOKING FOR TRIGGERS")
-	for trigger in each(state.triggers) do
-		print("IPTABLES TRIGGER: "..trigger)
-		for macro in each(node_list("iptables/"..trigger, changes)) do
-			print("ADDING DUE TO TRIG: " .. table.concat(find_tables_with_macro(macro:gsub("^@", "")), ", "))
-			add_to_list(rebuild, find_tables_with_macro(macro:gsub("^@", "")))
-		end
-	end
-
-	--
-	-- Add any tables that have been added or changed
-	--
-	add_to_list(rebuild, state.added)
-	add_to_list(rebuild, state.changed)
-	
-	--
-	-- See if we have any variables that would cause additional
-	-- tables to be reworked
-	--
-	for var in each(node_list("iptables/variable", changes)) do
-		print("Changed var: ["..var.."]")
-		add_to_list(rebuild, find_variable_references(var))
-	end
-	--
-	--
-	-- Load all the variables into a hash
-	--
-	local vars = load_variables()
-	print("VARIABLES")
-	for k,v in pairs(vars) do
-		print("k="..k.."  v="..tostring(v))
-	end
-	print("END VARIABLES")
-
-
-	rebuild = uniq(rebuild)
-	for t in each(rebuild) do 
-		print("NEED TO REBUILD: " .. t) 
-		rebuild_table(t, vars)
-	end
-
 	return true
 end
 

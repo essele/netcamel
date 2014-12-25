@@ -158,7 +158,7 @@ rc, err = set(new, "iptables/filter/INPUT/rule/0030", "-a -b -c")
 if not rc then print("ERROR: " .. err) end
 
 rc, err = set(new, "iptables/nat/PREROUTING/rule/0010", "-a -b -c")
-rc, err = set(new, "iptables/mangle/PREROUTING/rule/0010", "-a -b -x [fred] -c")
+rc, err = set(new, "iptables/mangle/PREROUTING/rule/0010", "-a -b -x {{fred}} -c")
 rc, err = set(new, "iptables/nat/POSTROUTING/rule/0020", "-a -b -c")
 
 
