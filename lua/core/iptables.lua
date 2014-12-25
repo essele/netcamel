@@ -116,70 +116,14 @@ function iptables_add_macro_item(macro, item_or_func)
 	table.insert(macros[macro], item_or_func)
 end
 
-
-local function ipt_table(changes)
-
-	--
-	-- Given a macro name run through getting the needed lines (which may involve
-	-- calling a series of functions)
-	--
-	function expand_macro(name)
-		local lines = {}
-		for line in each(macros[name]) do
-			if type(line) == "function" then
-				local rc, items = pcall(line)
-				if rc and items then
-					add_to_list(lines, items)
-				else
-					print("rc="..tostring(rc).." items="..tostring(items))
-					assert(false, "ERROR HERE - iptables process_chain")
-				end
-			else
-				table.insert(lines, line)
-			end
-		end
-		return lines
-	end
-
-	--
-	-- Return a hash with all variables set
-	--
-	function load_variables()
-		local vars = {}
-		for var in each(node_list("iptables/variable", CF_new)) do
-			local value = CF_new["iptables/variable/"..var.."/value"]
-			vars[var:gsub("^%*", "")] = value
-		end
-		return vars
-	end
-
-	--
-	-- For a given list of lines of text (iptables rule) we will return a list
-	-- of lines that represent the same lines with variables expanded, we cope
-	-- with multiple multi-value variables as well.
-	--
-	function variable_expand(lines, vars)
-		local inlist = lines
-		local outlist = {}
-
-		while #inlist > 0 do
-			local rule = table.remove(inlist, 1)
-			local var = rule:match("{{([^}]+)}}")
-			if var then
-				if vars[var] then
-					for newval in back_each(vars[var]) do
-						table.insert(inlist, 1, (rule:gsub("{{"..var.."}}", newval)))
-					end
-				else
-					assert(false, string.format("Unknown variable: %s", var))
-				end
-			else
-				table.insert(outlist, rule)
-			end
-		end
-		return outlist
-	end
-
+--
+-- Look for any of the reasons that we might need to rebuild our iptables
+--
+-- 1. any triggers (relevant macros)
+-- 2. actual table/chain changes
+-- 3. variable changes that are used in rules
+--
+local function needs_rebuild(changes)
 	--
 	-- Return a list of tables who reference the variable
 	--
@@ -210,10 +154,8 @@ local function ipt_table(changes)
 	end
 
 	-- ------------------------------------------------------------------------------
-	-- MAIN IPTABLES ENTRY POINT
+	-- NEEDS REBUILD ENTRY POINT
 	-- ------------------------------------------------------------------------------
-    print("Hello From IPTABLES")
-
 	local state = process_changes(changes, "iptables", true)
 	local rebuild = {}
 
@@ -249,8 +191,78 @@ local function ipt_table(changes)
 	--
 	-- Now, if rebuild is empty then we have nothing to do
 	--
-	if #rebuild == 0 then return true end
+	if #rebuild == 0 then return false end
+	return true
+end
 
+--
+-- Build the full list of iptables-restore rules so we can either
+-- pre-commit or commit them
+--
+local function ipt_generate()
+	--
+	-- Given a macro name run through getting the needed lines (which may involve
+	-- calling a series of functions)
+	--
+	function expand_macro(name)
+		local lines = {}
+		for line in each(macros[name]) do
+			if type(line) == "function" then
+				local rc, items = pcall(line)
+				assert(rc and items, "expand_macro failed: "..tostring(items))
+				add_to_list(lines, items)
+			else
+				table.insert(lines, line)
+			end
+		end
+		return lines
+	end
+
+	--
+	-- Return a hash with all variables set
+	--
+	function load_variables()
+		local vars = {}
+		for var in each(node_list("iptables/variable", CF_new)) do
+			local value = CF_new["iptables/variable/"..var.."/value"]
+			vars[var:gsub("^%*", "")] = value
+		end
+		return vars
+	end
+
+	--
+	-- For a given list of lines of text (iptables rule) we will return a list
+	-- of lines that represent the same lines with variables expanded, we cope
+	-- with multiple multi-value variables as well.
+	--
+	-- Referencing an unknown variable results in an error.
+	--
+	function variable_expand(lines, vars)
+		local inlist = lines
+		local outlist = {}
+
+		while #inlist > 0 do
+			local rule = table.remove(inlist, 1)
+			local var = rule:match("{{([^}]+)}}")
+			if var then
+				if vars[var] then
+					for newval in back_each(vars[var]) do
+						table.insert(inlist, 1, (rule:gsub("{{"..var.."}}", newval)))
+					end
+				else
+					return false, string.format("unknown variable: %s", var)
+				end
+			else
+				table.insert(outlist, rule)
+			end
+		end
+		return outlist
+	end
+
+	-- ------------------------------------------------------------------------------
+	-- IPT_GENERATE ENTRY POINT
+	-- ------------------------------------------------------------------------------
+    print("Hello From IPTABLES Generate")
 
 	--
 	-- Start building an iptables-restore format file
@@ -290,32 +302,36 @@ local function ipt_table(changes)
 		end
 		for chain in each(iptable.chains) do
 			local base = string.format("iptables/*%s/*%s/rule", iptable.name, chain)
-			local rules = {}
 
 			for rule in each(node_list(base, CF_new, true)) do
 				local value = CF_new[base.."/"..rule]
-				if macros[value] then
-					add_to_list(rules, expand_macro(value))
-				else
-					table.insert(rules, value)
+				local rules = (macros[value] and expand_macro(value)) or { value }
+				local vrules, err = variable_expand(rules, vars)	
+				if not vrules then
+					return false, string.format("iptables/%s/%s/rule/%s %s", iptable.name, chain, rule, err)
 				end
-
-				-- TODO: generic variable substitution concept??
-			end
-			for rule in each(variable_expand(rules, vars)) do
-				table.insert(output, string.format("-A %s %s", chain, rule))
+				add_to_list(output, vrules)
 			end
 		end
 		table.insert(output, "COMMIT")
 	end
+	return output
+end
 
-	for x in each(output) do
-		print(x)
+--
+-- If we need to make changes then call iptables-restore with the data
+--
+local function ipt_commit(changes)
+	if not needs_rebuild(changes) then return true end
+
+	local rules, err = ipt_generate()
+	if not rules then return false, err end
+	
+	for x in each(rules) do
+		print("RULE: "..x)
 	end
 	return true
 end
-
-
 
 
 
@@ -354,7 +370,7 @@ master["iptables"] = 					{}
 --
 -- The main tables/chains/rules definition
 --
-master["iptables/*"] = 					{ ["commit"] = ipt_table,
+master["iptables/*"] = 					{ ["commit"] = ipt_commit,
 										  ["style"] = "iptables_table" }
 master["iptables/*/*"] = 				{ ["style"] = "iptables_chain" }
 master["iptables/*/*/policy"] = 		{ ["type"] = "iptables_policy" }
