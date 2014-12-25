@@ -211,6 +211,11 @@ function interface_name(path)
 	local i = path:match("pppoe/%*?(%d+)$") or path:match("pppoe(%d)$")
 	if i then return string.format("pppoe%s", i) end
 end
+function interface_names(list)
+	local rc = {}
+	for interface in each(list) do table.insert(rc, interface_name(interface)) end
+	return rc
+end
 
 
 --

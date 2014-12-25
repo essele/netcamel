@@ -48,10 +48,10 @@ local function ntp_commit(changes)
 	--
 	-- Create the configfile dictionary, map listen-on to interface names
 	--
-	local cfdict = { ["server"] = cf.server, ["interface"] = {} }
-	for interface in each(cf["listen-on"]) do
-		table.insert(cfdict.interface, interface_name(interface))
-	end
+	local cfdict = { 
+		["server"] = cf.server, 	
+		["interface"] = interface_names(cf["listen-on"])
+	}
 
 	--
 	-- Build the configuration file...
