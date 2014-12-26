@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Buildroot 2015.02-git-ga1ee69e-dirty Configuration
+# Buildroot 2015.02-git-gc0e4acb-dirty Configuration
 #
 BR2_HAVE_DOT_CONFIG=y
 BR2_HOSTARCH_NEEDS_IA32_COMPILER=y
@@ -906,7 +906,7 @@ BR2_PACKAGE_LUAJIT=y
 BR2_PACKAGE_LUAFILESYSTEM=y
 # BR2_PACKAGE_LUAJSON is not set
 # BR2_PACKAGE_LUALOGGING is not set
-# BR2_PACKAGE_LUAPOSIX is not set
+BR2_PACKAGE_LUAPOSIX=y
 # BR2_PACKAGE_LUASEC is not set
 # BR2_PACKAGE_LUASOCKET is not set
 # BR2_PACKAGE_LUASQL_SQLITE3 is not set

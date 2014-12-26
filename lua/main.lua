@@ -17,13 +17,14 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
-package.path = "./lib/?.lua"
+package.path = "/usr/share/lua/5.1/?.lua;./lib/?.lua"
 package.cpath = "/usr/lib/lua/5.1/?.so;./lib/?.so"
 
 -- global level packages
 require("lfs")
 require("utils")
 require("config")
+require("execute")
 --require("api")
 
 -- different namespace packages
@@ -258,4 +259,9 @@ service.restart("ntpd")
 
 print("ST="..tostring(service.status("ntpd")))
 
+
+
+local rc, op = execute( { "/bin/cat" }, { "-fred", "from", "lee ok" })
+print("rc="..rc)
+for _,v in ipairs(op) do print("LINE: "..v) end
 
