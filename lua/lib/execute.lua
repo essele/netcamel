@@ -55,7 +55,7 @@ function lines_from_fd(fd)
 
 	return function()
 		while true do
-			local line, extra = __str:match("^([^\n]+)\n(.*)$")
+			local line, extra = __str:match("^([^\n]*)\n(.*)$")
 			if line then
 				__str = extra
 				return line

@@ -308,9 +308,13 @@ local function ipt_generate()
 				local rules = (macros[value] and expand_macro(value)) or { value }
 				local vrules, err = variable_expand(rules, vars)	
 				if not vrules then
-					return false, string.format("iptables/%s/%s/rule/%s %s", iptable.name, chain, rule, err)
+					return false, string.format("iptables/%s/%s/rule/%s %s", 
+								iptable.name, chain, rule, err)
 				end
-				add_to_list(output, vrules)
+				for vr in each(vrules) do
+					table.insert(output, string.format("-A %s %s -m comment --comment \"rule %s\"",
+								chain, vr, rule:gsub("^*", "")))
+				end
 			end
 		end
 		table.insert(output, "COMMIT")
@@ -319,7 +323,8 @@ local function ipt_generate()
 end
 
 --
--- If we need to make changes then call iptables-restore with the data
+-- If we need to make changes then call iptables-restore with the data and check
+-- what return code we get
 --
 local function ipt_commit(changes)
 	if not needs_rebuild(changes) then return true end
@@ -329,6 +334,20 @@ local function ipt_commit(changes)
 	
 	for x in each(rules) do
 		print("RULE: "..x)
+	end
+	local rc, stdout = execute( { "testing/iptables-restore" }, rules )
+	
+	--
+	-- Try to pull out the error line
+	--
+	print("TESTOUT: rc="..tostring(rc))
+	for x in each(stdout) do
+		line = x:match("Error occurred at line: (%d+)")
+		if line then
+			-- todo, go back to find the table, also pull out the chain name
+			print("ERROR LINE: " .. rules[tonumber(line)])
+		end
+		print(">> "..x)
 	end
 	return true
 end
