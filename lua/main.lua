@@ -148,11 +148,14 @@ new["dns/domain-match/*iplayer/group"] = "vpn-dst"
 new["dhcp/flag"] = "hello"
 
 
+new = nil
+current = nil
+
 CF_new = new
 CF_current = current
 
 
-
+--[[
 --rc, err = set(new, "interface/ethernet/0/mtu", "1234")
 --if not rc then print("ERROR: " .. err) end
 rc, err = set(new, "iptables/filter/INPUT/rule/0030", "-a -b -c")
@@ -180,88 +183,48 @@ show(current, new)
 --
 
 --print("\n\n")
---
--- Now run through and check the dependencies
---
-function execute_work_using_func(funcname, work_list)
-	while next(work_list) do
-		local activity = false
 
-		for key, fields in pairs(work_list) do
-			print("Work: " .. key)
-			for v in each(fields) do
-				print("\t" .. v)
-			end
-			for depend in each(master[key]["depends"]) do
-				print("\tDEPEND: " .. depend)
-				if work_list[depend] then
-					print("\tSKIP THIS ONE DUE TO DEPENDS")
-					goto continue
-				end
-			end
-			print("DOING " .. funcname .. " WORK for ["..key.."]\n")
-			local func = master[key][funcname]
-			if func then
-				local work_hash = values_to_keys(work_list[key])
+]]--
 
-				local ok, rc, err = pcall(func, work_hash)
-				if not ok then return false, string.format("[%s]: %s code error: %s", key, funcname, rc) end
-				if not rc then return false, string.format("[%s]: %s failed: %s", key, funcname, err) end
-
-			end
-			work_list[key] = nil
-			activity = true
-		::continue::
-		end
-
-		if not activity then return false, "some kind of dependency loop" end
-	end
-	return true
-end
 
 --
--- Build the work list
+-- INIT (commit)
 --
-work_list = build_work_list(current, new)
+-- current = empty (i.e. no config)
+-- new = saved_config (i.e. the last properly saved)
+-- execute, then write out current.
+--
+-- OTHER OPS (commit)
+--
+-- current = current
+-- new = based on changes
+-- execute, then write out current.
+--
+-- SAVE (save)
+--
+-- take current and write it out as saved.
+--
 
---
--- Copy worklist and run precommit
---
-pre_work_list = copy_table(work_list)
-local rc, err = execute_work_using_func("precommit", pre_work_list)
-if not rc then print(err) os.exit(1) end
 
---
--- Now the main event
---
-local rc, err = execute_work_using_func("commit", work_list)
+CF_current = {}
+CF_new = import("etc/current.cf")
+
+rc, err = commit(CF_current, CF_new)
 if not rc then print(err) os.exit(1) end
 
 
-service.define("ntpd", {
-    ["binary"] = "/home/essele/dev/netcamel/lua/testing/ntpd",
-    ["args"] = { "-g", "-p", "/var/run/ntpd.pid" },
-    ["name"] = "ntpd",
+--
+-- If we are successful then we can write out the new current list
+--
 
-    ["pidfile"] = "/tmp/leentpd.pid",
-    ["create_pidfile"] = true,
-
-	["restart_delay"] = 50,
-
-    ["start"] = service.start_as_daemon,
-    ["stop"] = service.kill_by_name,
-	["restart"] = service.stop_then_start,
-	["status"] = service.check_pid_by_name
-})
 
 --service.start("ntpd")
-service.restart("ntpd")
+--service.restart("ntpd")
 
-print("ST="..tostring(service.status("ntpd")))
+--print("ST="..tostring(service.status("ntpd")))
 
 
 
-local rc, op = execute( { "/bin/cat" }, { "-fred", "from", "lee ok" })
-print("rc="..rc)
-for _,v in ipairs(op) do print("LINE: "..v) end
+--dump("etc/current.cf", CF_new)
+
 

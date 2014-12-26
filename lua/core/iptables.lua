@@ -164,11 +164,8 @@ local function needs_rebuild(changes)
 	-- so we need to see which tables use the macro and add them
 	-- to the list
 	--
-	print("LOOKING FOR TRIGGERS")
 	for trigger in each(state.triggers) do
-		print("IPTABLES TRIGGER: "..trigger)
 		for macro in each(node_list("iptables/"..trigger, changes)) do
-			print("ADDING DUE TO TRIG: " .. table.concat(find_tables_with_macro(macro:gsub("^@", "")), ", "))
 			add_to_list(rebuild, find_tables_with_macro(macro:gsub("^@", "")))
 		end
 	end
@@ -184,7 +181,6 @@ local function needs_rebuild(changes)
 	-- tables to be reworked
 	--
 	for var in each(node_list("iptables/variable", changes)) do
-		print("Changed var: ["..var.."]")
 		add_to_list(rebuild, find_variable_references(var))
 	end
 
@@ -322,36 +318,65 @@ local function ipt_generate()
 	return output
 end
 
+
 --
 -- If we need to make changes then call iptables-restore with the data and check
 -- what return code we get
 --
-local function ipt_commit(changes)
-	if not needs_rebuild(changes) then return true end
+local function ipt_rebuild(testonly)
+	local ipt_restore = { "testing/iptables-restore" }
+	if testonly then table.insert(ipt_restore, "--test") end	
+
+	--
+	-- Map a line number in a set of iptables-restore inputs back into a table,
+	-- chain and rule.
+	-- 
+	local function map_to_details(num, rules)
+		local iptable = "unknown"
+
+		for i,v in ipairs(rules) do
+			if v:sub(1,1) == "*" then iptable = v:sub(2) end
+			if i == num then
+				local chain, rule = v:match("-A ([^ ]+) .* \"rule (.+)\"")
+				if chain then return iptable, chain, rule end
+			end
+		end
+		return nil
+	end
 
 	local rules, err = ipt_generate()
 	if not rules then return false, err end
 	
-	for x in each(rules) do
-		print("RULE: "..x)
-	end
-	local rc, stdout = execute( { "testing/iptables-restore" }, rules )
-	
+	local rc, stdout = execute(ipt_restore, rules)
+	if rc == 0 then return true end
+
 	--
 	-- Try to pull out the error line
 	--
-	print("TESTOUT: rc="..tostring(rc))
 	for x in each(stdout) do
 		line = x:match("Error occurred at line: (%d+)")
 		if line then
-			-- todo, go back to find the table, also pull out the chain name
-			print("ERROR LINE: " .. rules[tonumber(line)])
+			local iptable, chain, rule = map_to_details(tonumber(line), rules)
+			if iptable then
+				return false, string.format("iptables/%s/%s error in rule %s",
+								iptable, chain, rule)
+			end
 		end
-		print(">> "..x)
 	end
-	return true
+	return false, string.format("iptables unknown error trying to load rules")
 end
 
+--
+-- The commit and pre-commit routines do the same, except that pre-commit
+-- uses the iptables-restore -test mode.
+--
+local function ipt_commit(changes)
+	if not needs_rebuild(changes) then return true end
+	return ipt_rebuild()
+end
+local function ipt_precommit(changes)
+	return ipt_rebuild(true)
+end
 
 
 VALIDATOR["iptables_table"] = function(v, kp)
@@ -390,6 +415,7 @@ master["iptables"] = 					{}
 -- The main tables/chains/rules definition
 --
 master["iptables/*"] = 					{ ["commit"] = ipt_commit,
+										  ["precommit"] = ipt_precommit,
 										  ["style"] = "iptables_table" }
 master["iptables/*/*"] = 				{ ["style"] = "iptables_chain" }
 master["iptables/*/*/policy"] = 		{ ["type"] = "iptables_policy" }

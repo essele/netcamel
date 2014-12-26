@@ -252,6 +252,67 @@ function build_work_list(current, new)
 end
 
 --
+-- Run through the worklist created earlier and execute either the commit
+-- or precommit function on anything that needs work.
+--
+function execute_work_using_func(funcname, work_list)
+	while next(work_list) do
+		local activity = false
+
+		for key, fields in pairs(work_list) do
+			print("Work: " .. key)
+			for v in each(fields) do
+				print("\t" .. v)
+			end
+			for depend in each(master[key]["depends"]) do
+				print("\tDEPEND: " .. depend)
+				if work_list[depend] then
+					print("\tSKIP THIS ONE DUE TO DEPENDS")
+					goto continue
+				end
+			end
+			print("DOING " .. funcname .. " WORK for ["..key.."]\n")
+			local func = master[key][funcname]
+			if func then
+				local work_hash = values_to_keys(work_list[key])
+
+				local ok, rc, err = pcall(func, work_hash)
+				if not ok then return false, string.format("[%s]: %s code error: %s", key, funcname, rc) end
+				if not rc then return false, string.format("[%s]: %s failed: %s", key, funcname, err) end
+
+			end
+			work_list[key] = nil
+			activity = true
+		::continue::
+		end
+
+		if not activity then return false, "some kind of dependency loop" end
+	end
+	return true
+end
+
+function commit(current, new)
+	--
+	-- Build the work list
+	--
+	local work_list = build_work_list(current, new)
+
+	--
+	-- Copy worklist and run precommit
+	--
+	local pre_work_list = copy_table(work_list)
+	local rc, err = execute_work_using_func("precommit", pre_work_list)
+	if not rc then return rc, err end
+
+	--
+	-- Now the main event
+	--
+	local rc, err = execute_work_using_func("commit", work_list)
+	if not rc then return rc, err end
+	return true
+end
+
+--
 -- Given a list of changes, pull out nodes at the keypath level
 -- and work out if they are added, removed or changed.
 --
@@ -297,34 +358,39 @@ end
 --
 -- If we dump the config then we only write out the set items
 --
-function dump(config)
+function dump(filename, config)
+	local file = io.open(filename, "w+")
+	if not file then return false, "unable to create: "..filename end
+	
 	for k,v in pairs(config) do
 		local mc = master[find_master_key(k)] or {}
 
 		if mc["list"] then
-			io.write(string.format("%s: <list>\n", k))
+			file:write(string.format("%s: <list>\n", k))
 			for l in each(v) do
-				io.write(string.format("\t|%s\n", l))
+				file:write(string.format("\t|%s\n", l))
 			end
-			io.write("\t<end>\n")
+			file:write("\t<end>\n")
 		elseif mc["type"]:sub(1,5) == "file/" then
-			io.write(string.format("%s: <%s>\n", k, mc["type"]))
+			file:write(string.format("%s: <%s>\n", k, mc["type"]))
 			local ftype = mc["type"]:sub(6)
 			if ftype == "binary" then
 				local binary = base64.enc(v)
 				for i=1, #binary, 76 do
-					io.write(string.format("\t|%s\n", binary:sub(i, i+75)))
+					file:write(string.format("\t|%s\n", binary:sub(i, i+75)))
 				end
 			elseif ftype == "text" then
 				for line in (v .. "\n"):gmatch("(.-)\n") do
-					io.write(string.format("\t|%s\n", line))
+					file:write(string.format("\t|%s\n", line))
 				end
 			end
-			io.write("\t<end>\n")
+			file:write("\t<end>\n")
 		else 
-			io.write(string.format("%s: %s\n", k, v))
+			file:write(string.format("%s: %s\n", k, v))
 		end
 	end
+	file:close()
+	return true
 end
 
 --
@@ -345,7 +411,7 @@ function import(filename)
 	end
 
 	file = io.open(filename)
-	-- TODO: handle errors	
+	if not file then return false end
 	
 	while(true) do
 		line = file:read()
