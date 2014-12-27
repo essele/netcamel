@@ -205,6 +205,38 @@ show(current, new)
 -- take current and write it out as saved.
 --
 
+CF_current = {}
+CF_new = {}
+
+while true do
+	io.write("> ")
+	local cmdline = io.read("*l")
+	if not cmdline then break end
+
+	local cmd = cmdline:match("^%s*([^%s]+)")
+	if cmd == "show" then
+		show(CF_current, CF_new)
+	elseif cmd == "commit" then
+		local rc, err = commit(CF_current, CF_new)
+		if not rc then 
+			print("Error: " .. err)
+			goto continue
+		end
+		CF_current = copy_table(CF_new)
+	elseif cmd == "set" then
+		local item, value = cmdline:match("set%s+([^%s]+)%s+([^%s]+)")
+		if not item then
+			print("syntax error")
+			goto continue
+		end
+		print("Would set ["..item.."] to ["..value.."]")
+		local rc, err = set(CF_new, item, value)
+		if not rc then print("Error: " .. err) end
+	end
+::continue::
+end
+
+os.exit(0)
 
 CF_current = {}
 CF_new = import("etc/current.cf")

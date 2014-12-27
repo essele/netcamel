@@ -180,6 +180,10 @@ VALIDATOR["interface"] = function(v)
 	return OK
 end
 
+VALIDATOR["ipv4"] = function(v)
+	return OK
+end
+
 --
 -- Convert any format into a full keypath, this is used by any function that
 -- takes any interface as an argument. It allows complete flexibility in what
