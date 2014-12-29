@@ -273,14 +273,18 @@ ti.out(ti.keypad_xmit)
 --
 local __row = 0
 local __col = 0
+local __srow = 0
+local __scol = 0
 local __width = ti.columns
 local __height = ti.lines
+local __line = ""
+local __pos = 1
 
 function move_back()
 	if __col == 0 then
 		ti.out(ti.cursor_up)
-		if ti.have_multi_move then ti.out(ti.parm_right_cursor, __width)
-		else for i=1,#width do ti.out(ti.cursor_right) end end
+		if ti.have_multi_move then ti.out(ti.parm_right_cursor, __width-1)
+		else for i=1,#width-1 do ti.out(ti.cursor_right) end end
 		__col = __width - 1
 		__row = __row - 1
 	else
@@ -288,35 +292,137 @@ function move_back()
 		__col = __col -1
 	end
 end
-function move_on()
+function move_on(n)
+	n = n or 1
+
+	for i=1, n do
+		ti.out(ti.cursor_right)
+		__col = __col + 1
+		if __col == __width then
+			__col = 0
+			__row = __row + 1
+		end
+	end
+	if (__col == 0) and ti.auto_right_margin and ti.eat_newline_glitch then
+		ti.out(ti.carriage_return)
+		ti.out(ti.carriage_return)
+		ti.out(ti.cursor_down)
+	end
+--[[
 	__col = __col + 1
 	if __col < __width then
 		ti.out(ti.cursor_right)
 	else
 		if ti.auto_right_margin and ti.eat_newline_glitch then
 			ti.out(ti.carriage_return)
+			ti.out(ti.carriage_return)
 			ti.out(ti.cursor_down)
 		end
 		__col = 0
 		__row = __row + 1
 	end
+]]--
+end
+function move_to(r, c)
+	if ti.have_multi_move then
+		if r > __row then ti.out(ti.parm_down_cursor, r-__row) end
+		if r < __row then ti.out(ti.parm_up_cursor, __row-r) end
+		if c > __col then ti.out(ti.parm_right_cursor, c-__col) end
+		if c < __col then ti.out(ti.parm_left_cursor, __col-c) end
+		__row, __col = r, c
+	else
+		while r > __row do ti.out(ti.cursor_down) __row = __row + 1 end
+		while r < __row do ti.out(ti.cursor_up) __row = __row - 1 end
+		if math.abs(__col - c) then ti.out(ti.carriage_return) __col = 0 end
+		while c > __col do ti.out(ti.cursor_right) __col = __col + 1 end
+		while c < __col do ti.out(ti.cursor_left) __col = __col - 1 end
+	end
+end
+function save_pos()
+	__srow, __scol = __row, __col
+end
+function restore_pos()
+	move_to(__srow, __scol)
 end
 
+function show_line()
+	if __line:len() == 0 then return end
+	for i=1, __line:len() do
+		ti.out(__line:sub(i, i))
+		__col = __col + 1
+		if __col == __width then
+			__col = 0
+			__row = __row + 1
+		end
+	end
+	if (__col == 0) and ti.auto_right_margin and ti.eat_newline_glitch then
+		ti.out(ti.carriage_return)
+		ti.out(ti.carriage_return)
+		ti.out(ti.cursor_down)
+	end
+end
+function redraw_line()
+	save_pos()
+	move_to(0,0)
+	show_line()
+	restore_pos()
+end
 
+function string_insert(src, extra, pos)
+	return src:sub(1, pos-1) .. extra .. src:sub(pos)
+end
+function string_remove(src, pos, count)
+	return src:sub(1, pos-1) .. src:sub(pos+count)
+end
+
+--[[
+__line = string.rep("abcdefghijklmnopqrstuvwxyz ", 10)
+	save_pos()
+show_line()
+move_to(0,0)
+ti.out("XYZ")
+__col = __col + 3
+--restore_pos()
+move_to(0,0)
+io.flush()
+]]--
 while true do
 	local c = read_key()
 	if c == "q" then break end
 	if c == ffi.string(ti.key_up) then print("UP") 
 	elseif c == ffi.string(ti.key_left) then 
-		move_back()
-	elseif c == ffi.string(ti.key_right) then print("RIGHT")
+		if __pos > 1 then
+			move_back()
+			__pos = __pos - 1
+		end
+	elseif c == ffi.string(ti.key_right) then 
+		if __pos <= __line:len() then
+			move_on()
+			__pos = __pos + 1
+		end
 	elseif c == ffi.string(ti.key_down) then print("DOWN") 
+	elseif c == "\127" then
+		if __pos > 1 then
+			__line = string_remove(__line, __pos-1, 1)
+			__pos = __pos - 1
+			redraw_line()
+			move_back()
+		end
+	elseif c == "\009" then
+		--
+		-- TODO: tab completion here
+		--
+		if __line == "s" then
+			__line = string_insert(__line, "ave ", __pos)
+			__pos = __pos + 4
+			redraw_line()
+			move_on(4)
+		end
 	else
-	--	io.write(c)
-		ti.out(ti.enter_insert_mode)
-		ti.out(c)
-		ti.out(ti.exit_insert_mode)
-		__col = __col + 1
+		__line = string_insert(__line, c, __pos)
+		__pos = __pos + 1
+		redraw_line()
+		move_on()
 	end
 
 	io.flush()
