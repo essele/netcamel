@@ -17,15 +17,17 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -----------------------------------------------------------------------------
 package.path = "/usr/share/lua/5.1/?.lua"
-package.cpath = "/usr/lib/lua/5.1/?.so;./lib/?.so;./c/?.so"
+package.cpath = "/usr/lib/lua/5.1/?.so;/usr/lib64/lua/5.1/?.so;./lib/?.so;./c/?.so"
 
-package.path = "./lib/?.lua"
-package.cpath = "./lib/?.so;./c/?.so"
+--package.path = "./lib/?.lua"
+--package.cpath = "./lib/?.so;./c/?.so"
 
 --require("readline")
 
 ffi = require("ffi")
 bit = require("bit")
+posix = require("posix")
+sig = require("posix.signal")
 
 -- ------------------------------------------------------------------------------
 -- TERMINFO Bits...
@@ -133,30 +135,6 @@ end
 --
 
 ffi.cdef[[
-	typedef unsigned char   cc_t;
-	typedef unsigned int    speed_t;
-	typedef unsigned int    tcflag_t;
-
-	struct termios
-	  {
-		tcflag_t c_iflag;		/* input mode flags */
-		tcflag_t c_oflag;		/* output mode flags */
-		tcflag_t c_cflag;		/* control mode flags */
-		tcflag_t c_lflag;		/* local mode flags */
-		cc_t c_line;			/* line discipline */
-		cc_t c_cc[32];			/* control characters */
-		speed_t c_ispeed;		/* input speed */
-		speed_t c_ospeed;		/* output speed */
-	  };
-	enum {
-		ICANON = 2,
-		ECHO = 000010
-	};
-	enum {
-		TCGETS = 0x5401,
-		TCSETS = 0x5402,
-		TIOCGWINSZ = 0x5413
-	};
 	int ioctl(int d, int request, void *p);
 
 	struct winsize {
@@ -176,17 +154,6 @@ ffi.cdef[[
 		POLLIN = 0x0001
 	};
 	int poll(struct pollfd *fds, nfds_t nfds, int timeout);
-
-	typedef int		clockid_t;
-	typedef long		time_t;
-	struct timespec {
-		time_t	tv_sec;
-		long	tv_nsec;
-	};
-	int clock_gettime(clockid_t clk_id, struct timespec *tp);
-	enum {
-		CLOCK_MONOTONIC = 1
-	};
 
 	// This size could be wrong on 32bit??
 	typedef unsigned long 	size_t;
@@ -211,42 +178,47 @@ ffi.cdef[[
 		uint8_t pad[124];
 	};
 ]]
-local rt = ffi.load("rt")
 
 --
 -- For supporting save and restore of termios
 --
-local __tios = ffi.new("struct termios")
+local __saved_tios
 local __sigfd
 
 function init()
 	--
 	-- Make the required changes to the termios struct...
 	--
-	local __new_tios = ffi.new("struct termios")
-	local rc = ffi.C.ioctl(0, ffi.C.TCGETS, __tios)
-	assert(rc == 0, "unable to ioctl(TCGETS)")
-	ffi.copy(__new_tios, __tios, ffi.sizeof(__tios))
-	__new_tios.c_lflag = bit.band(__new_tios.c_lflag, bit.bnot(ffi.C.ECHO))
-	__new_tios.c_lflag = bit.band(__new_tios.c_lflag, bit.bnot(ffi.C.ICANON))
-	local rc = ffi.C.ioctl(0, ffi.C.TCSETS, __new_tios)
-	assert(rc == 0, "unable to ioctl(TCSETS)")
+	__saved_tios = posix.tcgetattr(0)
+	local tios = posix.tcgetattr(0)
+	tios.lflag = bit.band(tios.lflag, bit.bnot(posix.ECHO))
+	tios.lflag = bit.band(tios.lflag, bit.bnot(posix.ICANON))
+	posix.tcsetattr(0, 0, tios)
 
+	--
 	--
 	-- Setup the signal filehandle so we can receive
 	-- the window size change signal in the read loop...
 	--
+--[[
 	local set = ffi.new("sigset_t [1]")
 	ffi.C.sigemptyset(set)
 	ffi.C.sigaddset(set, ffi.C.SIGWINCH)
 	__sigfd = ffi.C.signalfd(-1, set, 0)
 	local rc = ffi.C.sigprocmask(ffi.C.SIG_BLOCK, set, nil)
 	print("SPM="..rc)
+]]--
+	function handler(sig) 
+		print("SIG"..sig)
+	end
+	-- SIGWINCH
+	sig.signal(28, hander)
 
 end
 function finish()
-	local rc = ffi.C.ioctl(0, ffi.C.TCSETS, __tios)
-	assert(rc == 0, "unable to ioctl(TCSETS)")
+--	local rc = ffi.C.ioctl(0, ffi.C.TCSETS, __tios)
+--	assert(rc == 0, "unable to ioctl(TCSETS)")
+	posix.tcsetattr(0, 0, __saved_tios)
 end
 
 
@@ -255,27 +227,29 @@ end
 -- and how much time is left (or nil if we didn't get one)
 --
 function getchar(ms)
-	local before = ffi.new("struct timespec")
-	local after = ffi.new("struct timespec")
-	local fds = ffi.new("struct pollfd [?]", 2)
+--	local fds = ffi.new("struct pollfd [?]", 2)
 	
-	fds[0].fd = 0
-	fds[0].events = ffi.C.POLLIN
-	fds[0].revents = 0
+--	fds[0].fd = 0
+--	fds[0].events = ffi.C.POLLIN
+--	fds[0].revents = 0
+--
+--	fds[1].fd = __sigfd
+--	fds[1].events = ffi.C.POLLIN
+--	fds[1].revents = 0
 
-	fds[1].fd = __sigfd
-	fds[1].events = ffi.C.POLLIN
-	fds[1].revents = 0
+	local fds = {
+		[0] = { events = { IN = true }},
+	}
 
-	rt.clock_gettime(ffi.C.CLOCK_MONOTONIC, before)
-	local rc = ffi.C.poll(fds, 2, ms)
+	local before = posix.gettimeofday()
+--	local rc = ffi.C.poll(fds, 2, ms)
+	local rc = posix.poll(fds, ms)
+	
 	if rc == 0 then return nil, 0 end
-	rt.clock_gettime(ffi.C.CLOCK_MONOTONIC, after)
+	local after = posix.gettimeofday()
 
-	local beforems = tonumber(before.tv_sec)*100 + 
-					math.floor(tonumber(before.tv_nsec)/1000000)
-	local afterms = tonumber(after.tv_sec)*100 + 
-					math.floor(tonumber(after.tv_nsec)/1000000)
+	local beforems = before.sec * 1000 + math.floor(before.usec/1000)
+	local afterms = after.sec * 1000 + math.floor(after.usec/1000)
 
 --	ms = ms - math.floor(((after.tv_sec - before.tv_sec)*100) + ((after.tv_nsec - before.tv_nsec)/1000000))
 	ms = ms - (afterms - beforems)
@@ -284,22 +258,23 @@ function getchar(ms)
 	--
 	-- If we have a window size event, then return "SIGWINCH"
 	--
+--[[
 	if fds[1].revents == ffi.C.POLLIN then
 		local sig = ffi.new("struct signalfd_siginfo")
 		local rc = ffi.C.read(__sigfd, sig, 128)
 		return "SIGWINCH"
 	end
-
+]]--
 	--
 	-- Otherwise it will be a key...
 	--
-	if fds[0].revents == ffi.C.POLLIN then
-		local char = ffi.new("char [1]")
-		local rc = ffi.C.read(0, char, 1)
-		if rc ~= 1 then
-			print("READ CHAR rc="..rc)
+	if fds[0].revents.IN then
+		local char, err = posix.read(0, 1)
+		if not char then
+			print("Error reading char: " .. err)
+			return nil
 		end
-		return ffi.string(char, 1), ms
+		return char, ms
 	end
 	return nil
 end
