@@ -178,7 +178,7 @@ ffi.cdef[[
 	int poll(struct pollfd *fds, nfds_t nfds, int timeout);
 
 	typedef int		clockid_t;
-	typedef long	time_t;
+	typedef long		time_t;
 	struct timespec {
 		time_t	tv_sec;
 		long	tv_nsec;
@@ -271,7 +271,14 @@ function getchar(ms)
 	local rc = ffi.C.poll(fds, 2, ms)
 	if rc == 0 then return nil, 0 end
 	rt.clock_gettime(ffi.C.CLOCK_MONOTONIC, after)
-	ms = ms - math.floor(((after.tv_sec - before.tv_sec)*100) + ((after.tv_nsec - before.tv_nsec)/1000000))
+
+	local beforems = tonumber(before.tv_sec)*100 + 
+					math.floor(tonumber(before.tv_nsec)/1000000)
+	local afterms = tonumber(after.tv_sec)*100 + 
+					math.floor(tonumber(after.tv_nsec)/1000000)
+
+--	ms = ms - math.floor(((after.tv_sec - before.tv_sec)*100) + ((after.tv_nsec - before.tv_nsec)/1000000))
+	ms = ms - (afterms - beforems)
 	ms = (ms < 0 and 0) or ms
 
 	--
