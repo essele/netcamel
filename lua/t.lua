@@ -49,7 +49,7 @@ ffi.cdef[[
 
 local __libtinfo = ffi.load("tinfo")
 local ti = {}
-
+local keymap = {}
 
 function ti.init()
 	local err = ffi.new("int [1]", 0)
@@ -88,6 +88,18 @@ function ti.init()
 	if ti.parm_up_cursor and ti.parm_down_cursor and ti.parm_left_cursor and ti.parm_right_cursor then
 		ti.have_multi_move = true
 	end
+
+	--
+	-- We can also build the keymap here
+	--
+	keymap = {
+		[ffi.string(ti.key_left)] = 		"LEFT",
+		[ffi.string(ti.key_right)] = 		"RIGHT",
+		[ffi.string(ti.key_up)] = 			"UP",
+		[ffi.string(ti.key_down)] = 		"DOWN",
+		["\009"] =							"TAB",
+		["\127"] =							"DELETE",
+	}
 end
 
 --
@@ -104,6 +116,13 @@ function ti.out(str, ...)
 		if type(arg) == "number" then args[i] = ffi.new("int", arg) end
 	end
 	__libtinfo.putp(__libtinfo.tparm(str, unpack(args)))
+end
+function ti.tparm(str, ...)
+	local args = {...}
+	for i,arg in ipairs(args) do
+		if type(arg) == "number" then args[i] = ffi.new("int", arg) end
+	end
+	return ffi.string(__libtinfo.tparm(str, unpack(args)))
 end
 
 --print("CAP: " .. __libtinfo_caps["set_a_foreground"])
@@ -135,10 +154,17 @@ ffi.cdef[[
 	};
 	enum {
 		TCGETS = 0x5401,
-		TCSETS = 0x5402
+		TCSETS = 0x5402,
+		TIOCGWINSZ = 0x5413
 	};
 	int ioctl(int d, int request, void *p);
 
+	struct winsize {
+		unsigned short ws_row;
+		unsigned short ws_col;
+		unsigned short ws_xpixel;
+		unsigned short ws_ypixel;
+	};
 
 	typedef unsigned long int nfds_t;
 	struct pollfd {
@@ -248,17 +274,18 @@ function getchar(ms)
 	ms = ms - math.floor(((after.tv_sec - before.tv_sec)*100) + ((after.tv_nsec - before.tv_nsec)/1000000))
 	ms = (ms < 0 and 0) or ms
 
-	print("1="..fds[1].revents.." rc="..rc)
-
-	-- WINSTUFF
+	--
+	-- If we have a window size event, then return "SIGWINCH"
+	--
 	if fds[1].revents == ffi.C.POLLIN then
 		local sig = ffi.new("struct signalfd_siginfo")
-		print("HERE")
 		local rc = ffi.C.read(__sigfd, sig, 128)
-		print("SIGREAD="..rc)
-		return nil
+		return "SIGWINCH"
 	end
 
+	--
+	-- Otherwise it will be a key...
+	--
 	if fds[0].revents == ffi.C.POLLIN then
 		local char = ffi.new("char [1]")
 		local rc = ffi.C.read(0, char, 1)
@@ -278,13 +305,13 @@ function read_key()
 	local remaining = 0
 	
 	local c, time = getchar(-1)
-	if c ~= "\027" then return c end
+	if c ~= "\027" then return keymap[c] or c end
 
 	buf = c
 	remaining = 300
 	while true do
 		local c, time = getchar(remaining)
-		if not c then return buf end
+		if not c then return keymap[buf] or buf end
 
 		remaining = time
 
@@ -293,7 +320,9 @@ function read_key()
 		if #buf == 2 and c == "O" then goto continue end
 
 		local b = string.byte(c)
-		if string.byte(c) >= 64 and string.byte(c) <= 126 then return buf end
+		if string.byte(c) >= 64 and string.byte(c) <= 126 then 
+			return keymap[buf] or buf
+		end
 ::continue::
 	end
 end
@@ -344,30 +373,76 @@ function move_back()
 		__col = __col -1
 	end
 end
---
--- Moves right n spaces (1 by default), but also supports outputting
--- a string since the code is identical (used by show_line)
---
-function move_on(n, string)
-	n = n or 1
-	if n == 0 then return end
 
-	for i=1, n do
-		ti.out((string and string:sub(i,i)) or ti.cursor_right)
-		__col = __col + 1
-		if __col == __width then
-			__col = 0
-			__row = __row + 1
-		end
+--
+-- If just n is specified then move right that amount (using ti.cursor right)
+-- If string is specified with n, then output the string and move right n.
+-- (That allows for embedded colour etc.)
+-- If nothing is specified then move right one.
+--
+function move_on(n, str)
+	n = n or 1
+
+	if not str then
+		if ti.have_multi_move then ti.out(ti.parm_right_cursor, n) else
+		ti.out(string.rep(ffi.string(ti.cursor_right), n)) end
+	else
+		ti.out(str)
 	end
+
+	local npos = __col + n
+	local extra_rows = math.floor(npos/__width)
+	local final_col = npos % __width
+
+	__col = final_col
+	__row = __row + extra_rows
+
 	if (__col == 0) and ti.auto_right_margin then
 		if ti.eat_newline_glitch then ti.out(ti.carriage_return) end
 		ti.out(ti.carriage_return)
 		ti.out(ti.cursor_down)
 	end
 end
-function show_line()
-	move_on(__line:len(), __line)
+
+--
+-- Output the list of tokens with relevant colour highlighting
+-- (make sure we re-create any whitespace gaps)
+--
+
+local FAIL = 0
+local PARTIAL = 1
+local OK = 2
+
+local __color = {
+	[OK] = 2,
+	[PARTIAL] = 3,
+	[FAIL] = 1
+}
+
+--
+-- Output each token in turn, making sure to recreate the appropriate
+-- amount of whitespace...
+--
+function show_line(tokens, input)
+	local p = 1
+	local out = ""
+
+	for n, token in ipairs(tokens) do
+		if p < token.start then 
+			out = out .. string.rep(" ", token.start - p)
+			p = token.start
+		end
+		p = p + token.value:len()
+		out = out .. ti.tparm(ti.set_a_foreground, __color[token.status])
+		out = out .. token.value
+		out = out .. ti.tparm(ti.set_a_foreground, 0)
+	end
+	p = p - 1
+	if p < input:len() then
+		out = out .. string.rep(" ", input:len() - p)
+		p = input:len()
+	end
+	if out:len() > 0 then move_on(p, out) end
 end
 
 function move_to(r, c)
@@ -392,10 +467,10 @@ function restore_pos()
 	move_to(__srow, __scol)
 end
 
-function redraw_line()
+function redraw_line(tokens, input)
 	save_pos()
 	move_to(0,0)
-	show_line()
+	show_line(tokens, input)
 	ti.out(ti.clr_eol)
 	restore_pos()
 end
@@ -407,57 +482,299 @@ function string_remove(src, pos, count)
 	return src:sub(1, pos-1) .. src:sub(pos+count)
 end
 
---[[
-__line = string.rep("abcdefghijklmnopqrstuvwxyz ", 10)
-	save_pos()
-show_line()
-move_to(0,0)
-ti.out("XYZ")
-__col = __col + 3
---restore_pos()
-move_to(0,0)
-io.flush()
-]]--
+--
+-- If we get a window resize event then we need to do something sensible
+-- to redraw the line
+--
+function winch_handler()
+	local ws = ffi.new("struct winsize [1]")
+	
+	local rc = ffi.C.ioctl(0, ffi.C.TIOCGWINSZ, ws)
+
+	__width = ws[0].ws_col
+	__height = ws[0].ws_row
+
+	--
+	-- TODO: we can do better than clear the screen, perhaps work out
+	-- how many rows down we were, move back up clear to eos, then redraw.
+	--
+	ti.out(ti.clear_screen)
+	__row, __col = 0, 0
+	redraw_line()
+	move_to(math.floor((__pos-1)/__width), (__pos-1)%__width)
+end
+
+
+--
+-- Sample initial tab completer
+-- 
+-- We need to continuously determin if the token is OK, PARTIAL or FAIL
+-- and if it's OK then we need to return a next tokens completer.
+--
+-- The token will always be anything up to (and including) a space
+-- (quoted stuff tbd)
+--
+local __cmds = {
+	["set"] = { desc = "blah blah" },
+	["aabbcc"] = {},
+	["aabdef"] = {},
+	["aabxxx"] = {},
+	["show"] = {},
+	["delete"] = {},
+	["commit"] = {},
+	["save"] = {},
+	["revert"] = {},
+}
+function match_list(t)
+	local rc = {}
+	for k,v in pairs(__cmds) do
+		if k:sub(1, t:len()) == t then table.insert(rc, k) end
+	end
+	table.sort(rc)
+	return rc
+end
+
+
+function syntax_level1(tokens, n, input)
+	local token = tokens[n]
+	local value = token.value
+
+	if __cmds[value] then 
+		status = OK 
+	elseif token.finish < input:len() then
+		status = FAIL
+	else
+		local matches = match_list(value)
+		if #matches > 0 then status = PARTIAL 
+		else status = FAIL end
+	end
+	return status
+end
+
+--
+-- The syntax checker needs to put a status on each token so that
+-- we can incorporate colour as we print the line out for syntax
+-- highlighting
+--
+-- Keep the previous setting if we have one since nothing would have
+-- changed. If we need to recalc then do so.
+--
+function syntax_checker(tokens, input)
+	local allfail = false
+
+	--
+	-- Make sure we have a base level validator
+	--
+	tokens[1].validator = syntax_level1
+
+	for n,token in ipairs(tokens) do
+		if allfail then
+			token.status = FAIL
+		else
+			if token.status ~= OK then
+				if not token.validator then
+					token.status = FAIL
+				else
+					local rc, status = pcall(token.validator, tokens, n, input)
+		--			print("Validator rc="..tostring(rc).." status="..tostring(status))
+					token.status = status
+				end
+			end
+			if token.status ~= OK then allfail = true end
+		end
+	end
+	return tokens[1].status
+end
+
+--
+-- Provide completion information against the system commands.
+--
+-- Completion routines can return a string where there is a full match
+-- or a partial common-prefix.
+--
+-- Or a list that will be output to the screen (and not used in any other
+-- way so the format is free)
+--
+function system_completer(tokens, n, prefix)
+	local matches = match_list(prefix)
+	local ppos = prefix:len() + 1
+
+	if #matches == 0 then return nil end
+
+	if #matches == 1 then
+		return matches[1]:sub(ppos) .. " "
+	end
+
+	if #matches > 1 then
+		local cp = common_prefix(matches)
+		if cp ~= prefix then
+			return cp:sub(ppos)
+		end
+	end
+	for i, m in ipairs(matches) do
+		matches[i] = string.format("%-20.20s %s", m, __cmds[m].desc or "-")
+	end
+
+	return matches
+end
+
+--
+-- The completer will work out which function to call
+-- to provide completion information
+--
+function initial_completer(tokens, input, pos)
+	--
+	-- Given out pos, we should be able to work out
+	-- which token we are in, return the token index and
+	-- valid prefix for that token.
+	--
+	-- pos is the cursor pos, so it's after the chars so we need
+	-- to check for finish + 1
+	--
+	-- If we are about to start a new token (i.e. as pos 0 or after
+	-- a space) then we return the pretend token number.
+	--
+	function which_token(tokens, pos)
+		for i,token in ipairs(tokens) do
+			if pos >= token.start and pos <= (token.finish+1) then
+				return i, token.value:sub(1, pos - token.start)
+			end
+		end
+		return #tokens + 1, ""
+	end
+
+	--
+	-- Given a list work out what the common prefix
+	-- is (if any)
+	--
+	function common_prefix(t)
+		local str = t[1] or ""
+		local n = str:len()
+
+		for _,s in ipairs(t) do
+			while s:sub(1, n) ~= str and n > 0 do
+				n = n - 1
+				str=str:sub(1, n)
+			end
+		end
+		return str
+	end
+
+	--
+	--
+	--
+	local n, prefix = which_token(tokens, pos)
+	local func = nil
+	if n == 1 then
+		--
+		-- This is the system command list...
+		--
+		func = system_completer
+	else
+		-- TODO: use the function from the token
+	end
+	if not func then 
+		ti.out(ti.bell)
+		return nil 
+	end
+	local rv, rc = pcall(func, tokens, n, prefix)
+	assert(rv, "unable to execute completer func: " .. tostring(rc))
+
+	return rc
+end
+
+
+dofile("x.lua")
+
+--
+--
+--
+--
+
+local __tokens = {}
+local needs_redraw = true
+
 while true do
 	local c = read_key()
-	if c == "q" then break end
-	if c == ffi.string(ti.key_up) then print("UP") 
-	elseif c == ffi.string(ti.key_left) then 
+	if c == nil then goto continue end
+
+	if c:len() == 1 then
+		if c == "q" then break end
+		__line = string_insert(__line, c, __pos)
+		__pos = __pos + 1
+		needs_redraw = true
+--		redraw_line()
+		move_on()
+
+
+	elseif c == "UP" then
+	elseif c == "LEFT" then 
 		if __pos > 1 then
 			move_back()
 			__pos = __pos - 1
 		end
-	elseif c == ffi.string(ti.key_right) then 
+	elseif c == "RIGHT" then 
 		if __pos <= __line:len() then
 			move_on()
 			__pos = __pos + 1
 		end
-	elseif c == ffi.string(ti.key_down) then print("DOWN") 
-	elseif c == "\127" then
+	elseif c == "DOWN" then print("DOWN") 
+	elseif c == "DELETE" then
 		if __pos > 1 then
 			__line = string_remove(__line, __pos-1, 1)
 			__pos = __pos - 1
-			redraw_line()
+			needs_redraw = true
+--			redraw_line()
 			move_back()
 		end
-	elseif c == "\009" then
+	elseif c == "TAB" then
 		--
 		-- TODO: tab completion here
 		--
-		if __line == "s" then
-			__line = string_insert(__line, "ave ", __pos)
-			__pos = __pos + 4
-			redraw_line()
-			move_on(4)
+		local rc = initial_completer(__tokens, __line, __pos)
+		if type(rc) == "string" then
+			__line = string_insert(__line, rc, __pos)
+			__pos = __pos + rc:len()
+			needs_redraw = true
+--			redraw_line()
+			move_on(rc:len())
+		elseif rc then
+			save_pos()
+			ti.out(ti.carriage_return)
+			ti.out(ti.cursor_down)
+			__col, __row = 0, 0
+			for _,m in ipairs(rc) do
+				ti.out(m .. "\n")
+			end
+			restore_pos()
+			needs_redraw = true
+--			redraw_line()
 		end
-	elseif c ~= nil then
-		__line = string_insert(__line, c, __pos)
-		__pos = __pos + 1
-		redraw_line()
-		move_on()
+	elseif c == "SIGWINCH" then
+		winch_handler()
 	end
 
+	if needs_redraw then
+		--
+		-- Build list of tokens
+		--
+		tokenise(__tokens, __line)
+
+		--
+		-- Handle completer tokenisation and syntax check
+		--
+		if __tokens[1] then
+			rc = syntax_checker(__tokens, __line)
+--			print("rc = "..rc)
+		end
+
+		redraw_line(__tokens, __line)
+		needs_redraw = false
+	end
+	
+
 	io.flush()
+::continue::
 end
 
 finish()

@@ -2,11 +2,10 @@
 
 
 function tokenise(tokens, input)
-	local tokens = {}
 	local token = nil
 	local inquote, backslash = false, false
 	local allow_inherit = true
-	local token_n = 1
+	local token_n = 0
 
 	for i=1, input:len()+1 do
 		local ch = input:sub(i,i)
@@ -17,7 +16,7 @@ function tokenise(tokens, input)
 		--
 		if ch == "" or (ch == " " and not backslash and not inquote) then
 			if token and token.value ~= "" then
-				print("TOKEN FOUND: [" .. token.value .. "]")
+--				print("TOKEN FOUND: [" .. token.value .. "]")
 
 				if allow_inherit and tokens[token_n] and 
 								tokens[token_n].value == token.value then
@@ -27,7 +26,6 @@ function tokenise(tokens, input)
 					allow_inherit = false
 					tokens[token_n] = token
 				end
-				token_n = token_n + 1
 				token = nil
 			end
 		else
@@ -38,6 +36,7 @@ function tokenise(tokens, input)
 				token = {}
 				token.value = ""
 				token.start = i
+				token_n = token_n + 1
 			end
 			token.value = token.value .. ch
 			token.finish = i
@@ -62,7 +61,6 @@ function tokenise(tokens, input)
 	-- Tidy up if we used to have more tokens...
 	--
 	while #tokens > token_n do table.remove(tokens) end
-
 	return tokens
 end
 
