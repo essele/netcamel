@@ -166,6 +166,24 @@ ffi.cdef[[
 	typedef unsigned long 	size_t;
 	typedef long			ssize_t;
 	ssize_t read(int fd, void *buf, size_t count);
+
+	typedef struct
+	  {
+		unsigned long int __val[(1024 / (8 * sizeof (unsigned long int)))];
+	  } __sigset_t;
+	typedef __sigset_t sigset_t;
+	int signalfd(int fd, const sigset_t *mask, int flags);
+	int sigemptyset(sigset_t *set);
+	int sigaddset(sigset_t *set, int signum);
+	int sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
+	enum {
+		SIG_BLOCK = 0,
+		SIGWINCH = 28
+	};
+	struct signalfd_siginfo {
+		uint32_t ssi_signo;
+		uint8_t pad[124];
+	};
 ]]
 local rt = ffi.load("rt")
 
@@ -173,8 +191,12 @@ local rt = ffi.load("rt")
 -- For supporting save and restore of termios
 --
 local __tios = ffi.new("struct termios")
+local __sigfd
 
 function init()
+	--
+	-- Make the required changes to the termios struct...
+	--
 	local __new_tios = ffi.new("struct termios")
 	local rc = ffi.C.ioctl(0, ffi.C.TCGETS, __tios)
 	assert(rc == 0, "unable to ioctl(TCGETS)")
@@ -183,6 +205,18 @@ function init()
 	__new_tios.c_lflag = bit.band(__new_tios.c_lflag, bit.bnot(ffi.C.ICANON))
 	local rc = ffi.C.ioctl(0, ffi.C.TCSETS, __new_tios)
 	assert(rc == 0, "unable to ioctl(TCSETS)")
+
+	--
+	-- Setup the signal filehandle so we can receive
+	-- the window size change signal in the read loop...
+	--
+	local set = ffi.new("sigset_t [1]")
+	ffi.C.sigemptyset(set)
+	ffi.C.sigaddset(set, ffi.C.SIGWINCH)
+	__sigfd = ffi.C.signalfd(-1, set, 0)
+	local rc = ffi.C.sigprocmask(ffi.C.SIG_BLOCK, set, nil)
+	print("SPM="..rc)
+
 end
 function finish()
 	local rc = ffi.C.ioctl(0, ffi.C.TCSETS, __tios)
@@ -197,25 +231,43 @@ end
 function getchar(ms)
 	local before = ffi.new("struct timespec")
 	local after = ffi.new("struct timespec")
-	local fds = ffi.new("struct pollfd [?]", 1)
+	local fds = ffi.new("struct pollfd [?]", 2)
 	
 	fds[0].fd = 0
-	fds[0].events = ffi.C.POLLIN;
-	fds[0].revents = 0;
+	fds[0].events = ffi.C.POLLIN
+	fds[0].revents = 0
+
+	fds[1].fd = __sigfd
+	fds[1].events = ffi.C.POLLIN
+	fds[1].revents = 0
 
 	rt.clock_gettime(ffi.C.CLOCK_MONOTONIC, before)
-	local rc = ffi.C.poll(fds, 1, ms)
+	local rc = ffi.C.poll(fds, 2, ms)
 	if rc == 0 then return nil, 0 end
 	rt.clock_gettime(ffi.C.CLOCK_MONOTONIC, after)
 	ms = ms - math.floor(((after.tv_sec - before.tv_sec)*100) + ((after.tv_nsec - before.tv_nsec)/1000000))
 	ms = (ms < 0 and 0) or ms
 
-	local char = ffi.new("char [1]")
-	local rc = ffi.C.read(0, char, 1)
-	if rc ~= 1 then
-		print("READ CHAR rc="..rc)
+	print("1="..fds[1].revents.." rc="..rc)
+
+	-- WINSTUFF
+	if fds[1].revents == ffi.C.POLLIN then
+		local sig = ffi.new("struct signalfd_siginfo")
+		print("HERE")
+		local rc = ffi.C.read(__sigfd, sig, 128)
+		print("SIGREAD="..rc)
+		return nil
 	end
-	return ffi.string(char, 1), ms
+
+	if fds[0].revents == ffi.C.POLLIN then
+		local char = ffi.new("char [1]")
+		local rc = ffi.C.read(0, char, 1)
+		if rc ~= 1 then
+			print("READ CHAR rc="..rc)
+		end
+		return ffi.string(char, 1), ms
+	end
+	return nil
 end
 
 --
@@ -292,37 +344,32 @@ function move_back()
 		__col = __col -1
 	end
 end
-function move_on(n)
+--
+-- Moves right n spaces (1 by default), but also supports outputting
+-- a string since the code is identical (used by show_line)
+--
+function move_on(n, string)
 	n = n or 1
+	if n == 0 then return end
 
 	for i=1, n do
-		ti.out(ti.cursor_right)
+		ti.out((string and string:sub(i,i)) or ti.cursor_right)
 		__col = __col + 1
 		if __col == __width then
 			__col = 0
 			__row = __row + 1
 		end
 	end
-	if (__col == 0) and ti.auto_right_margin and ti.eat_newline_glitch then
-		ti.out(ti.carriage_return)
+	if (__col == 0) and ti.auto_right_margin then
+		if ti.eat_newline_glitch then ti.out(ti.carriage_return) end
 		ti.out(ti.carriage_return)
 		ti.out(ti.cursor_down)
 	end
---[[
-	__col = __col + 1
-	if __col < __width then
-		ti.out(ti.cursor_right)
-	else
-		if ti.auto_right_margin and ti.eat_newline_glitch then
-			ti.out(ti.carriage_return)
-			ti.out(ti.carriage_return)
-			ti.out(ti.cursor_down)
-		end
-		__col = 0
-		__row = __row + 1
-	end
-]]--
 end
+function show_line()
+	move_on(__line:len(), __line)
+end
+
 function move_to(r, c)
 	if ti.have_multi_move then
 		if r > __row then ti.out(ti.parm_down_cursor, r-__row) end
@@ -345,26 +392,11 @@ function restore_pos()
 	move_to(__srow, __scol)
 end
 
-function show_line()
-	if __line:len() == 0 then return end
-	for i=1, __line:len() do
-		ti.out(__line:sub(i, i))
-		__col = __col + 1
-		if __col == __width then
-			__col = 0
-			__row = __row + 1
-		end
-	end
-	if (__col == 0) and ti.auto_right_margin and ti.eat_newline_glitch then
-		ti.out(ti.carriage_return)
-		ti.out(ti.carriage_return)
-		ti.out(ti.cursor_down)
-	end
-end
 function redraw_line()
 	save_pos()
 	move_to(0,0)
 	show_line()
+	ti.out(ti.clr_eol)
 	restore_pos()
 end
 
@@ -418,7 +450,7 @@ while true do
 			redraw_line()
 			move_on(4)
 		end
-	else
+	elseif c ~= nil then
 		__line = string_insert(__line, c, __pos)
 		__pos = __pos + 1
 		redraw_line()
