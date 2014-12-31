@@ -182,6 +182,14 @@ function tokenise(tokens, input)
 	-- Tidy up if we used to have more tokens...
 	--
 	while #tokens > token_n do table.remove(tokens) end
+
+	--
+	-- If we have nothing, or something with a trailing space then we add
+	-- a dummy token so that we can use it for 'next token' completion
+	--
+	if token_n == 0 or input:sub(-1) == " " then
+		table.insert(tokens, { value = "", start = input:len(), finish = input:len() })
+	end
 	return tokens
 end
 
@@ -389,16 +397,18 @@ function show_line(tokens, input)
 	local out = ""
 
 	for n, token in ipairs(tokens) do
-		if p < token.start then 
-			out = out .. string.rep(" ", token.start - p)
-			p = token.start
-		end
-		p = p + token.value:len()
-		if(ti.set_a_foreground) then
-			out = out .. ti.tparm(ti.set_a_foreground, __color[token.status]) .. token.value ..
-									ti.tparm(ti.set_a_foreground, 9)
-		else
-			out = out .. token.value
+		if token.value:len() > 0 then
+			if p < token.start then 
+				out = out .. string.rep(" ", token.start - p)
+				p = token.start
+			end
+			p = p + token.value:len()
+			if(ti.set_a_foreground) then
+				out = out .. ti.tparm(ti.set_a_foreground, __color[token.status]) .. token.value ..
+										ti.tparm(ti.set_a_foreground, 9)
+			else
+				out = out .. token.value
+			end
 		end
 	end
 	p = p - 1
@@ -499,13 +509,86 @@ local __cmds = {
 	["save"] = {},
 	["revert"] = {},
 }
-function match_list(t)
+function match_list(list, t)
 	local rc = {}
-	for k,v in pairs(__cmds) do
+	for k,v in pairs(list) do
 		if k:sub(1, t:len()) == t then table.insert(rc, k) end
 	end
 	table.sort(rc)
 	return rc
+end
+
+local possibles = {
+	["one/two/three"] = 1,
+	["one/two/four"] = 1,
+	["one/two/four/five"] = 1,
+	["one/two/six"] = 1,
+	["one/hello/seven"] = 1,
+	["interface/ethernet/0/ip"] = 1,
+	["interface/ethernet/0/mtu"] = 1,
+	["interface/ethernet/1/ip"] = 1,
+	["service/ntp/server"] = 1,
+	["service/ntp/enable"] = 1,
+}
+
+--
+-- We always want to work to the next slash (or the end)
+--
+function test_completer(tokens, n, prefix)
+	local orig_matches = match_list(possibles, prefix)
+
+	--
+	-- Remove anything after the last slash from the prefix
+	-- (so we can adjust properly)
+	--
+	local cutprefix, srch = prefix:match("^(.-/?)([^/]*)$")
+
+	--
+	-- Now remove that prefix and anything after the next slash
+	-- from the list
+	--
+	local keys = {}
+	for i,v in ipairs(orig_matches) do
+		v = v:sub(cutprefix:len()+1)
+		v = v:gsub("/.*$", "")
+		keys[v] = 1
+	end
+	local matches = {}
+	for k,_ in pairs(keys) do
+		table.insert(matches, k)
+	end
+
+	if #matches == 0 then return nil end
+	table.sort(matches)
+
+	local cutpoint = prefix:len() - cutprefix:len() + 1
+	if #matches == 1 then 
+		--
+		-- Now work out if we are at a terminal point and need a space
+		-- afterwards
+		--
+		local further_matches = match_list(possibles, cutprefix..matches[1].."/")
+		
+		if srch == matches[1] then
+			--
+			-- If we are trying to complete a completed item then check
+			-- if we have more (i.e. followed with slash)
+			--
+			return (#further_matches > 0 and "/") or " "
+		else
+			return matches[1]:sub(cutpoint) .. ((#further_matches == 0 and " ") or "")
+		end
+	end
+	return matches
+end
+
+function test_validator(tokens, n, input)
+	local token = tokens[n]
+	local value = token.value
+
+	if value == "one" or value == "two" then return OK end
+	if value == "three" then return PARTIAL end
+	return FAIL	
 end
 
 
@@ -515,10 +598,14 @@ function syntax_level1(tokens, n, input)
 
 	if __cmds[value] then 
 		status = OK 
+		if tokens[n+1] then 
+			tokens[n+1].validator = test_validator 
+			tokens[n+1].completer = test_completer
+		end
 	elseif token.finish < input:len() then
 		status = FAIL
 	else
-		local matches = match_list(value)
+		local matches = match_list(__cmds, value)
 		if #matches > 0 then status = PARTIAL 
 		else status = FAIL end
 	end
@@ -540,12 +627,13 @@ function syntax_checker(tokens, input)
 	-- Make sure we have a base level validator
 	--
 	tokens[1].validator = syntax_level1
+	tokens[1].completer = system_completer
 
 	for n,token in ipairs(tokens) do
 		if allfail then
 			token.status = FAIL
 		else
-			if token.status ~= OK then
+			if token.value ~= "" then
 				if not token.validator then
 					token.status = FAIL
 				else
@@ -557,7 +645,6 @@ function syntax_checker(tokens, input)
 			if token.status ~= OK then allfail = true end
 		end
 	end
-	return tokens[1].status
 end
 
 --
@@ -570,14 +657,12 @@ end
 -- way so the format is free)
 --
 function system_completer(tokens, n, prefix)
-	local matches = match_list(prefix)
+	local matches = match_list(__cmds, prefix)
 	local ppos = prefix:len() + 1
 
 	if #matches == 0 then return nil end
 
-	if #matches == 1 then
-		return matches[1]:sub(ppos) .. " "
-	end
+	if #matches == 1 then return matches[1]:sub(ppos) .. " " end
 
 	if #matches > 1 then
 		local cp = common_prefix(matches)
@@ -614,7 +699,7 @@ function initial_completer(tokens, input, pos)
 				return i, token.value:sub(1, pos - token.start)
 			end
 		end
-		return #tokens + 1, ""
+		assert(false, "cant figure out which token (pos="..pos..")")
 	end
 
 	--
@@ -638,15 +723,7 @@ function initial_completer(tokens, input, pos)
 	--
 	--
 	local n, prefix = which_token(tokens, pos)
-	local func = nil
-	if n == 1 then
-		--
-		-- This is the system command list...
-		--
-		func = system_completer
-	else
-		-- TODO: use the function from the token
-	end
+	local func = tokens[n].completer
 	if not func then 
 		ti.out(ti.bell)
 		return nil 
@@ -677,11 +754,8 @@ while true do
 		if c == "q" then break end
 		__line = string_insert(__line, c, __pos)
 		__pos = __pos + 1
-		needs_redraw = true
---		redraw_line()
 		move_on()
-
-
+		needs_redraw = true
 	elseif c == "UP" then
 	elseif c == "LEFT" then 
 		if __pos > 1 then
@@ -698,9 +772,8 @@ while true do
 		if __pos > 1 then
 			__line = string_remove(__line, __pos-1, 1)
 			__pos = __pos - 1
-			needs_redraw = true
---			redraw_line()
 			move_back()
+			needs_redraw = true
 		end
 	elseif c == "TAB" then
 		--
@@ -710,9 +783,8 @@ while true do
 		if type(rc) == "string" then
 			__line = string_insert(__line, rc, __pos)
 			__pos = __pos + rc:len()
-			needs_redraw = true
---			redraw_line()
 			move_on(rc:len())
+			needs_redraw = true
 		elseif rc then
 			save_pos()
 			ti.out(ti.carriage_return)
@@ -723,7 +795,6 @@ while true do
 			end
 			restore_pos()
 			needs_redraw = true
---			redraw_line()
 		end
 	elseif c == "SIGWINCH" then
 		winch_handler()
@@ -735,14 +806,7 @@ while true do
 		-- Build list of tokens
 		--
 		tokenise(__tokens, __line)
-
-		--
-		-- Handle completer tokenisation and syntax check
-		--
-		if __tokens[1] then
-			rc = syntax_checker(__tokens, __line)
---			print("rc = "..rc)
-		end
+		syntax_checker(__tokens, __line)
 
 		redraw_line(__tokens, __line)
 		needs_redraw = false
