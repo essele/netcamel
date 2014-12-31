@@ -27,7 +27,6 @@ package.cpath = "/usr/lib/lua/5.1/?.so;/usr/lib64/lua/5.1/?.so;./lib/?.so;./c/?.
 ffi = require("ffi")
 bit = require("bit")
 posix = require("posix")
-sig = require("posix.signal")
 
 -- ------------------------------------------------------------------------------
 -- TERMINFO Bits...
@@ -41,9 +40,9 @@ ffi.cdef[[
 	char *strnames[], *strcodes[], *strfnames[];
 
 	int setupterm(char *term, int fildes, int *errret);
-	char *tigetstr(char *capname);
-	int tigetflag(char *capname);
-	int tigetnum(char *capname);
+	char *tigetstr(const char *capname);
+	int tigetflag(const char *capname);
+	int tigetnum(const char *capname);
 	const char *tparm(const char *str, ...);
 	int putp(const char *str);
 ]]
@@ -193,7 +192,7 @@ function init()
 	local tios = posix.tcgetattr(0)
 	tios.lflag = bit.band(tios.lflag, bit.bnot(posix.ECHO))
 	tios.lflag = bit.band(tios.lflag, bit.bnot(posix.ICANON))
-	posix.tcsetattr(0, 0, tios)
+	posix.tcsetattr(0, posix.TCSANOW, tios)
 
 	--
 	--
@@ -210,15 +209,16 @@ function init()
 ]]--
 	function handler(sig) 
 		print("SIG"..sig)
+		winch_handler()
 	end
 	-- SIGWINCH
-	sig.signal(28, hander)
+	posix.signal(28, function() winch_handler() end)
 
 end
 function finish()
 --	local rc = ffi.C.ioctl(0, ffi.C.TCSETS, __tios)
 --	assert(rc == 0, "unable to ioctl(TCSETS)")
-	posix.tcsetattr(0, 0, __saved_tios)
+	posix.tcsetattr(0, posix.TCSANOW, __saved_tios)
 end
 
 
@@ -242,16 +242,21 @@ function getchar(ms)
 	}
 
 	local before = posix.gettimeofday()
---	local rc = ffi.C.poll(fds, 2, ms)
-	local rc = posix.poll(fds, ms)
-	
-	if rc == 0 then return nil, 0 end
+	local rc, err = posix.poll(fds, ms)
+
+	if not rc then
+		-- Interrupted system call probably, most likely
+		-- a window resize, so if we return nil then we will
+		-- cause a redraw
+		return nil, 0
+	end
+
+	if rc < 1 then return nil, 0 end
 	local after = posix.gettimeofday()
 
 	local beforems = before.sec * 1000 + math.floor(before.usec/1000)
 	local afterms = after.sec * 1000 + math.floor(after.usec/1000)
 
---	ms = ms - math.floor(((after.tv_sec - before.tv_sec)*100) + ((after.tv_nsec - before.tv_nsec)/1000000))
 	ms = ms - (afterms - beforems)
 	ms = (ms < 0 and 0) or ms
 
@@ -268,6 +273,9 @@ function getchar(ms)
 	--
 	-- Otherwise it will be a key...
 	--
+--	for k,v in pairs(fds[0]) do
+--		print("k="..k.." v="..tostring(v))
+--	end
 	if fds[0].revents.IN then
 		local char, err = posix.read(0, 1)
 		if not char then
@@ -327,7 +335,7 @@ end
 -- Initialise the terminal and make sure we are in app mode so
 -- the cursor keys work as expected.
 --
-ti.out(ti.init_2string)
+--ti.out(ti.init_2string)
 ti.out(ti.keypad_xmit)
 
 --
@@ -417,7 +425,7 @@ function show_line(tokens, input)
 		p = p + token.value:len()
 		out = out .. ti.tparm(ti.set_a_foreground, __color[token.status])
 		out = out .. token.value
-		out = out .. ti.tparm(ti.set_a_foreground, 0)
+		out = out .. ti.tparm(ti.set_a_foreground, 9)
 	end
 	p = p - 1
 	if p < input:len() then
@@ -466,23 +474,33 @@ end
 
 --
 -- If we get a window resize event then we need to do something sensible
--- to redraw the line
+-- to redraw the line. We'll re-call setupterm so that we get the size
+-- adjusted accordingly
 --
 function winch_handler()
-	local ws = ffi.new("struct winsize [1]")
-	
-	local rc = ffi.C.ioctl(0, ffi.C.TIOCGWINSZ, ws)
+	--
+	-- Re-setup and update the ti database accordingly
+	--
+	local rc = __libtinfo.setupterm(nil, 1, err)
+	assert(rc == 0, "unable to re-setupterm in winch_handler")
 
-	__width = ws[0].ws_col
-	__height = ws[0].ws_row
+	ti.columns = __libtinfo.tigetnum("cols")
+	ti.lines = __libtinfo.tigetnum("lines")
+
+	--
+	-- Update our view of the size
+	--
+	__width = ti.columns
+	__height = ti.lines
 
 	--
 	-- TODO: we can do better than clear the screen, perhaps work out
 	-- how many rows down we were, move back up clear to eos, then redraw.
 	--
-	ti.out(ti.clear_screen)
+--	ti.out(ti.clear_screen)
+	ti.out(ti.carriage_return)
 	__row, __col = 0, 0
-	redraw_line()
+--	redraw_line()
 	move_to(math.floor((__pos-1)/__width), (__pos-1)%__width)
 end
 
@@ -678,7 +696,10 @@ local needs_redraw = true
 
 while true do
 	local c = read_key()
-	if c == nil then goto continue end
+	if c == nil then 
+		needs_redraw = true
+		goto continue 
+	end
 
 	if c:len() == 1 then
 		if c == "q" then break end
@@ -736,6 +757,7 @@ while true do
 		winch_handler()
 	end
 
+::continue::
 	if needs_redraw then
 		--
 		-- Build list of tokens
@@ -753,10 +775,7 @@ while true do
 		redraw_line(__tokens, __line)
 		needs_redraw = false
 	end
-	
-
 	io.flush()
-::continue::
 end
 
 finish()
