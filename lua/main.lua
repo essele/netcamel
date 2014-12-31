@@ -21,7 +21,7 @@ package.path = "/usr/share/lua/5.1/?.lua;./lib/?.lua"
 package.cpath = "/usr/lib/lua/5.1/?.so;./lib/?.so"
 
 -- global level packages
-require("lfs")
+--require("lfs")
 require("utils")
 require("config")
 require("execute")
@@ -31,6 +31,7 @@ require("execute")
 base64 	= require("base64")
 ffi 	= require("ffi")
 service = require("service")
+posix   = require("posix")
 
 --
 -- global configuration spaces
@@ -43,8 +44,9 @@ new={}
 -- work out which are all of the core modules
 --
 local core_modules = {}
-for m in lfs.dir("core") do
-	local mname = m:match("^(.*)%.lua$")
+--for m in lfs.dir("core") do
+for _,m in ipairs(posix.glob("core/*.lua")) do
+	local mname = m:match("^core/(.*)%.lua$")
 	if mname then table.insert(core_modules, mname) end
 end
 table.sort(core_modules)

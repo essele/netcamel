@@ -19,7 +19,7 @@
 
 local NTPD = "/usr/sbin/ntpd"
 local NTPD_NAME = "ntpd"
-local NTPD_ARGS = "-g"
+local NTPD_ARGS = { "-g" }
 local NTPD_CONFIG = "/tmp/ntpd.conf"
 
 --
@@ -152,13 +152,11 @@ end
 -- daemon.
 --
 service.define("ntpd", {
-	["binary"] = "/home/essele/dev/netcamel/lua/testing/ntp",
-	["args"] = { "-g", "-p", "/tmp/ntpd.pid" },
-	["name"] = "ntpd",
-	["pidfile"] = "/tmp/ntpd.pid",
-	["generate_pidfile"] = true,
+	["binary"] = NTPD,
+	["args"] = NTPD_ARGS,
+	["name"] = NTPD_NAME,
 
-	["start"] = service.start_as_daemon,
+	["start"] = service.start_normally,
 	["stop"] = service.kill_by_name,
 })
 

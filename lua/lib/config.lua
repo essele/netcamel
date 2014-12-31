@@ -687,8 +687,14 @@ function set(config, kp, value)
 		-- Do we want to allow a validator to change the value
 		--   (i.e. from textual true/false to real boolean??
 		--
-		local rc, err = validate(master[mp]["type"], rkp, value)
-		if not rc then return false, err end
+		if master[mp]["type"] == "bool" then
+			if value == "true" or value == "TRUE" then value = true 
+			elseif value == "false" or value == "FALSE" then value = false
+			else return rc, "invalid bool type, should be true or false" end
+		else
+			local rc, err = validate(master[mp]["type"], rkp, value)
+			if not rc then return false, err end
+		end
 	else
 		return false, "not a settable configuration node: "..rkp
 	end

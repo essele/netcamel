@@ -18,38 +18,12 @@
 -----------------------------------------------------------------------------
 
 posix = require("posix")
-ffi = require("ffi")
-
-ffi.cdef[[
-	typedef int ssize_t;
-
-	int pipe(int pipefd[2]);
-	int dup2(int oldfd, int newfd);
-	ssize_t read(int fd, void *buf, size_t count);
-	ssize_t write(int fd, const void *buf, size_t count);
-	char *strstr(const char *haystack, const char *needle);
-]]
-
---
--- FFI based rework of pipe() and dup2() calls since they are not including
--- in the posix lib if LuaJIT is used.
---
-function posix.pipe()
-	local fds = ffi.new("int [2]")
-	local rc = ffi.C.pipe(fds)
-	return fds[0], fds[1]
-end
-function posix.dup2(old, new)
-	return ffi.C.dup2(old, new)
-end
 
 --
 -- Given a file descriptor, return an iterator that will return each line
 -- in turn, closing the filehandle at the end.
 --
 function lines_from_fd(fd)
-	local __bufsize = 1024
-	local __linebuf = ffi.new("char [?]", __bufsize)
 	local __str = ""
 	local __nomore = false
 
@@ -67,12 +41,12 @@ function lines_from_fd(fd)
 				return line
 			end
 
-			local c = ffi.C.read(fd, __linebuf, __bufsize)
-			if c < 1 then
+			local c = posix.read(fd, 1024)
+			if not c or c == "" then
 				__nomore = true
 				posix.close(fd)
 			else 
-				__str = __str .. ffi.string(__linebuf, c)
+				__str = __str .. c
 			end
 		end
 	end
@@ -107,7 +81,7 @@ function execute(cmdline, stdin)
 		-- Feed in the stdin if we have some
 		for _,line in ipairs(stdin or {}) do
 			line = line .. "\n"
-			ffi.C.write(inw, line, #line)
+			posix.write(inw, line)
 		end
 		posix.close(inw)
 		local pid, reason, status = posix.wait(cpid)
