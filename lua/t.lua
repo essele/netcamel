@@ -19,11 +19,6 @@
 package.path = "/usr/share/lua/5.1/?.lua"
 package.cpath = "/usr/lib/lua/5.1/?.so;/usr/lib64/lua/5.1/?.so;./lib/?.so;./c/?.so"
 
---package.path = "./lib/?.lua"
---package.cpath = "./lib/?.so;./c/?.so"
-
---require("readline")
-
 ffi = require("ffi")
 bit = require("bit")
 posix = require("posix")
@@ -48,15 +43,13 @@ ffi.cdef[[
 ]]
 
 
-local __libtinfo = ffi.load("tinfo")
+local __libtinfo = ffi.load("ncurses")
 local ti = {}
 local keymap = {}
 
 function ti.init()
-	local err = ffi.new("int [1]", 0)
-	local rc = __libtinfo.setupterm(nil, 1, err)
+	local rc = __libtinfo.setupterm(nil, 1, nil)
 	print("rc="..rc)
-	print("err="..err[0])
 
 	local i = 0
 	while true do
@@ -126,60 +119,75 @@ function ti.tparm(str, ...)
 	return ffi.string(__libtinfo.tparm(str, unpack(args)))
 end
 
---print("CAP: " .. __libtinfo_caps["set_a_foreground"])
 
---local p = ffi.new("int", 2)
---local x = __libtinfo.tparm(set_a_foreground, p)
---print(":" .. ffi.string(x))
---
+-- ------------------------------------------------------------------------------
+-- SIMPLE TOKENISER
+-- ------------------------------------------------------------------------------
 
-ffi.cdef[[
-	int ioctl(int d, int request, void *p);
+function tokenise(tokens, input)
+	local token = nil
+	local inquote, backslash = false, false
+	local allow_inherit = true
+	local token_n = 0
 
-	struct winsize {
-		unsigned short ws_row;
-		unsigned short ws_col;
-		unsigned short ws_xpixel;
-		unsigned short ws_ypixel;
-	};
+	for i=1, input:len()+1 do
+		local ch = input:sub(i,i)
 
-	typedef unsigned long int nfds_t;
-	struct pollfd {
-		int fd;
-		short events;
-		short revents;
-	};
-	enum {
-		POLLIN = 0x0001
-	};
-	int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+		--
+		-- If we get a space outside of backslash or quote then
+		-- we have found a token
+		--
+		if ch == "" or (ch == " " and not backslash and not inquote) then
+			if token and token.value ~= "" then
+				if allow_inherit and tokens[token_n] and 
+								tokens[token_n].value == token.value then
+					tokens[token_n].start = token.start
+					tokens[token_n].finish = token.finish
+				else
+					allow_inherit = false
+					tokens[token_n] = token
+				end
+				token = nil
+			end
+		else
+			--
+			-- Any other character now is part of the token
+			--
+			if not token then
+				token = {}
+				token.value = ""
+				token.start = i
+				token_n = token_n + 1
+			end
+			token.value = token.value .. ch
+			token.finish = i
 
-	// This size could be wrong on 32bit??
-	typedef unsigned long 	size_t;
-	typedef long			ssize_t;
-	ssize_t read(int fd, void *buf, size_t count);
+			--
+			-- If we get a quote, then it's either in our out of
+			-- quoted mode (unless its after a backslash)
+			--
+			if ch == "\"" and not backslash then
+				inquote = not inquote
+			end
 
-	typedef struct
-	  {
-		unsigned long int __val[(1024 / (8 * sizeof (unsigned long int)))];
-	  } __sigset_t;
-	typedef __sigset_t sigset_t;
-	int signalfd(int fd, const sigset_t *mask, int flags);
-	int sigemptyset(sigset_t *set);
-	int sigaddset(sigset_t *set, int signum);
-	int sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
-	enum {
-		SIG_BLOCK = 0,
-		SIGWINCH = 28
-	};
-	struct signalfd_siginfo {
-		uint32_t ssi_signo;
-		uint8_t pad[124];
-	};
-]]
+			if backslash then
+				backslash = false
+			end
 
---
+			if ch == "\\" then backslash = true end
+		end
+	end
+
+	--
+	-- Tidy up if we used to have more tokens...
+	--
+	while #tokens > token_n do table.remove(tokens) end
+	return tokens
+end
+
+-- ------------------------------------------------------------------------------
 -- For supporting save and restore of termios
+-- ------------------------------------------------------------------------------
 --
 local __saved_tios
 local __sigfd
@@ -197,27 +205,13 @@ function init()
 	--
 	--
 	-- Setup the signal filehandle so we can receive
-	-- the window size change signal in the read loop...
+	-- the window size change signal and adjust accordingly
 	--
---[[
-	local set = ffi.new("sigset_t [1]")
-	ffi.C.sigemptyset(set)
-	ffi.C.sigaddset(set, ffi.C.SIGWINCH)
-	__sigfd = ffi.C.signalfd(-1, set, 0)
-	local rc = ffi.C.sigprocmask(ffi.C.SIG_BLOCK, set, nil)
-	print("SPM="..rc)
-]]--
-	function handler(sig) 
-		print("SIG"..sig)
-		winch_handler()
-	end
 	-- SIGWINCH
 	posix.signal(28, function() winch_handler() end)
 
 end
 function finish()
---	local rc = ffi.C.ioctl(0, ffi.C.TCSETS, __tios)
---	assert(rc == 0, "unable to ioctl(TCSETS)")
 	posix.tcsetattr(0, posix.TCSANOW, __saved_tios)
 end
 
@@ -227,16 +221,6 @@ end
 -- and how much time is left (or nil if we didn't get one)
 --
 function getchar(ms)
---	local fds = ffi.new("struct pollfd [?]", 2)
-	
---	fds[0].fd = 0
---	fds[0].events = ffi.C.POLLIN
---	fds[0].revents = 0
---
---	fds[1].fd = __sigfd
---	fds[1].events = ffi.C.POLLIN
---	fds[1].revents = 0
-
 	local fds = {
 		[0] = { events = { IN = true }},
 	}
@@ -261,21 +245,8 @@ function getchar(ms)
 	ms = (ms < 0 and 0) or ms
 
 	--
-	-- If we have a window size event, then return "SIGWINCH"
+	-- If we get here it will be a key...
 	--
---[[
-	if fds[1].revents == ffi.C.POLLIN then
-		local sig = ffi.new("struct signalfd_siginfo")
-		local rc = ffi.C.read(__sigfd, sig, 128)
-		return "SIGWINCH"
-	end
-]]--
-	--
-	-- Otherwise it will be a key...
-	--
---	for k,v in pairs(fds[0]) do
---		print("k="..k.." v="..tostring(v))
---	end
 	if fds[0].revents.IN then
 		local char, err = posix.read(0, 1)
 		if not char then
@@ -423,9 +394,12 @@ function show_line(tokens, input)
 			p = token.start
 		end
 		p = p + token.value:len()
-		out = out .. ti.tparm(ti.set_a_foreground, __color[token.status])
-		out = out .. token.value
-		out = out .. ti.tparm(ti.set_a_foreground, 9)
+		if(ti.set_a_foreground) then
+			out = out .. ti.tparm(ti.set_a_foreground, __color[token.status]) .. token.value ..
+									ti.tparm(ti.set_a_foreground, 9)
+		else
+			out = out .. token.value
+		end
 	end
 	p = p - 1
 	if p < input:len() then
@@ -481,7 +455,7 @@ function winch_handler()
 	--
 	-- Re-setup and update the ti database accordingly
 	--
-	local rc = __libtinfo.setupterm(nil, 1, err)
+	local rc = __libtinfo.setupterm(nil, 1, nil)
 	assert(rc == 0, "unable to re-setupterm in winch_handler")
 
 	ti.columns = __libtinfo.tigetnum("cols")
@@ -683,8 +657,6 @@ function initial_completer(tokens, input, pos)
 	return rc
 end
 
-
-dofile("x.lua")
 
 --
 --
