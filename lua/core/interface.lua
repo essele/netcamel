@@ -157,6 +157,13 @@ VALIDATOR["ethernet_if"] = function(v)
 	return FAIL, err
 end
 
+VALIDATOR["pppoe_if"] = function(v)
+	local err = "interface numbers should be [nnn] only"
+	if v:len() == 0 then return PARTIAL end
+	if v:match("^%d+$") then return OK end
+	return FAIL, err
+end
+
 --
 -- The MTU needs to be a sensible number
 --

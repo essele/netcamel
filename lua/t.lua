@@ -137,8 +137,9 @@ function tokenise(tokens, input)
 		-- If we get a space outside of backslash or quote then
 		-- we have found a token
 		--
-		if ch == "" or (ch == " " and not backslash and not inquote) then
+		if ch == "" or ((ch == " " or ch == "/") and not backslash and not inquote) then
 			if token and token.value ~= "" then
+				if ch == "" then token.sep = nil else token.sep = ch end
 				if allow_inherit and tokens[token_n] and 
 								tokens[token_n].value == token.value then
 					tokens[token_n].start = token.start
@@ -396,7 +397,7 @@ function show_line(tokens, input)
 	for n, token in ipairs(tokens) do
 		if token.value:len() > 0 then
 			if p < token.start then 
-				out = out .. string.rep(" ", token.start - p)
+				out = out .. string.sub(input, p, token.start-1)
 				p = token.start
 			end
 			p = p + token.value:len()
@@ -410,7 +411,7 @@ function show_line(tokens, input)
 	end
 	p = p - 1
 	if p < input:len() then
-		out = out .. string.rep(" ", input:len() - p)
+		out = out .. string.sub(input, p+1, input:len())
 		p = input:len()
 	end
 	if out:len() > 0 then move_on(p, out) end
@@ -603,63 +604,60 @@ function test_completer(tokens, n, prefix)
 	return matches
 end
 
-__tv_cache = {}
+--
+-- We will be called for each token in the list so we can be sure
+-- the previous one is ok (n=2 onwards)
+--
 function test_validator(tokens, n, input)
 	local token = tokens[n]
 	local value = token.value
+	local state
 
-	local elems = split(value, "/")
-	local mp, kp = "", ""
-	local slash = ""
-	local state = OK
-
-	for i, elem in ipairs(elems) do
-		slash = (mp == "" and "") or "/"
-		kp = kp..slash..elem
+	print("n="..n.." tokstat="..tostring(token.status))
 	
-		--
-		-- Check if we have cached previously...
-		--
-		if __tv_cache[kp] then 	
-			mp = __tv_cache[kp][1]
-			state = __tv_cache[kp][2]
-			goto continue
-		end
+	--
+	-- if we are number 2 then we need to setup 
+	--
+	local mp = ((n==2 and "") or tokens[n-1].mp)
+	local slash = (mp == "" and "") or "/"
+	local kp = ((n==2 and "") or tokens[n-1].kp)
 
-		--
-		--
-		--
-		if node_exists(mp..slash..elem, master) then
-			mp = mp..slash..elem
-			-- this is all fine, we are a complete match
-		elseif node_exists(mp..slash.."*", master) then
-			mp = mp..slash.."*"
-			-- here we need to check the validator
-			local rc, err = raw_validate(master[mp]["style"], kp, elem)
-			if rc == PARTIAL and i == #elems then 
-				state = PARTIAL 
-			else 
-				state = rc
-			end
+	kp = kp..slash..value
+	print("mk="..mp)
+	if node_exists(mp..slash..value, master) then
+		mp = mp..slash..value
+		state = OK
+	elseif node_exists(mp..slash.."*", master) then
+		mp = mp..slash.."*"
+		local rc, err = raw_validate(master[mp]["style"], kp, value)
+		state = rc
+	end
+
+	--
+	-- If no state then we might be a partial match...
+	--
+	print("sep=["..tostring(token.sep).."]")
+	if not state then
+		if not token.sep then
+			local m = matching_list(mp..slash..value.."%", master)
+			if #m > 0 then state = PARTIAL else state = FAIL end
 		else
-			if i == #elems then
-				--
-				-- we are the last element so we can support a partial
-				-- match
-				--
-				local m = matching_list(mp..slash..elem.."%", master)
-				if #m > 0 then 
-					state = PARTIAL
-				else
-					state = FAIL
-				end
-			else
-				state = FAIL
-			end
+			state = FAIL
 		end
-		__tv_cache[kp] = { mp, state }
-::continue::
-		if state ~= OK then return state end
+	end
+
+	--
+	-- We can only support a partial if we are the last
+	--
+	if state == PARTIAL and token.sep then state = FAIL end
+
+	--
+	-- Prepare the token for other uses...
+	--
+	if state == OK then
+		token.kp = kp
+		token.mp = mp
+		if tokens[n+1] then tokens[n+1].validator = test_validator end
 	end
 	return state
 end
