@@ -296,11 +296,6 @@ function read_key()
 	end
 end
 
-ti.init()
-for k,v in pairs(ti) do
---	print("k="..k.." v="..tostring(v))
-end
-init()
 
 function hex(s) 
 	for i=1,s:len() do
@@ -314,6 +309,8 @@ end
 -- Initialise the terminal and make sure we are in app mode so
 -- the cursor keys work as expected.
 --
+ti.init()
+init()
 --ti.out(ti.init_2string)
 ti.out(ti.keypad_xmit)
 
@@ -379,8 +376,8 @@ end
 --
 
 local FAIL = 0
-local PARTIAL = 1
-local OK = 2
+local OK = 1
+local PARTIAL = 2
 
 local __color = {
 	[OK] = 2,
@@ -535,7 +532,31 @@ local possibles = {
 -- We always want to work to the next slash (or the end)
 --
 function test_completer(tokens, n, prefix)
-	local orig_matches = match_list(possibles, prefix)
+
+	local elems = split(prefix, "/")
+	local path = ""
+	local slash = ""
+	for elem in each(elems) do
+		slash = (path == "" and "") or "/"
+		if node_exists(path..slash..elem, master) then
+			path = path..slash..elem
+			print("found valid path: "..path)
+		elseif node_exists(path..slash.."*", master) then
+			path = path..slash.."*"
+			print("found valid wild: "..path)
+		end
+	end
+	if true then return nil end
+
+
+	local rkp = rework_kp(nil, prefix)
+	print("prefix="..prefix.." rkp="..tostring(rkp))
+
+	if not rkp then return nil end
+
+--	local orig_matches = match_list(possibles, prefix)
+	local matches = node_list(rkp, master)
+	if true then return matches end
 
 	--
 	-- Remove anything after the last slash from the prefix
@@ -582,13 +603,65 @@ function test_completer(tokens, n, prefix)
 	return matches
 end
 
+__tv_cache = {}
 function test_validator(tokens, n, input)
 	local token = tokens[n]
 	local value = token.value
 
-	if value == "one" or value == "two" then return OK end
-	if value == "three" then return PARTIAL end
-	return FAIL	
+	local elems = split(value, "/")
+	local mp, kp = "", ""
+	local slash = ""
+	local state = OK
+
+	for i, elem in ipairs(elems) do
+		slash = (mp == "" and "") or "/"
+		kp = kp..slash..elem
+	
+		--
+		-- Check if we have cached previously...
+		--
+		if __tv_cache[kp] then 	
+			mp = __tv_cache[kp][1]
+			state = __tv_cache[kp][2]
+			goto continue
+		end
+
+		--
+		--
+		--
+		if node_exists(mp..slash..elem, master) then
+			mp = mp..slash..elem
+			-- this is all fine, we are a complete match
+		elseif node_exists(mp..slash.."*", master) then
+			mp = mp..slash.."*"
+			-- here we need to check the validator
+			local rc, err = raw_validate(master[mp]["style"], kp, elem)
+			if rc == PARTIAL and i == #elems then 
+				state = PARTIAL 
+			else 
+				state = rc
+			end
+		else
+			if i == #elems then
+				--
+				-- we are the last element so we can support a partial
+				-- match
+				--
+				local m = matching_list(mp..slash..elem.."%", master)
+				if #m > 0 then 
+					state = PARTIAL
+				else
+					state = FAIL
+				end
+			else
+				state = FAIL
+			end
+		end
+		__tv_cache[kp] = { mp, state }
+::continue::
+		if state ~= OK then return state end
+	end
+	return state
 end
 
 
@@ -638,7 +711,7 @@ function syntax_checker(tokens, input)
 					token.status = FAIL
 				else
 					local rc, status = pcall(token.validator, tokens, n, input)
-		--			print("Validator rc="..tostring(rc).." status="..tostring(status))
+					if not rc then print("Validator rc="..tostring(rc).." status="..tostring(status)) end
 					token.status = status
 				end
 			end
@@ -743,88 +816,80 @@ end
 local __tokens = {}
 local needs_redraw = true
 
-while true do
-	local c = read_key()
-	if c == nil then 
-		needs_redraw = true
-		goto continue 
-	end
-
-	if c:len() == 1 then
-		if c == "q" then break end
-		__line = string_insert(__line, c, __pos)
-		__pos = __pos + 1
-		move_on()
-		needs_redraw = true
-	elseif c == "UP" then
-	elseif c == "LEFT" then 
-		if __pos > 1 then
-			move_back()
-			__pos = __pos - 1
+function readline()
+	while true do
+		local c = read_key()
+		if c == nil then 
+			needs_redraw = true
+			goto continue 
 		end
-	elseif c == "RIGHT" then 
-		if __pos <= __line:len() then
-			move_on()
+
+		if c:len() == 1 then
+			if c == "q" then break end
+			__line = string_insert(__line, c, __pos)
 			__pos = __pos + 1
-		end
-	elseif c == "DOWN" then print("DOWN") 
-	elseif c == "DELETE" then
-		if __pos > 1 then
-			__line = string_remove(__line, __pos-1, 1)
-			__pos = __pos - 1
-			move_back()
+			move_on()
 			needs_redraw = true
-		end
-	elseif c == "TAB" then
-		--
-		-- TODO: tab completion here
-		--
-		local rc = initial_completer(__tokens, __line, __pos)
-		if type(rc) == "string" then
-			__line = string_insert(__line, rc, __pos)
-			__pos = __pos + rc:len()
-			move_on(rc:len())
-			needs_redraw = true
-		elseif rc then
-			save_pos()
-			ti.out(ti.carriage_return)
-			ti.out(ti.cursor_down)
-			__col, __row = 0, 0
-			for _,m in ipairs(rc) do
-				ti.out(m .. "\n")
+		elseif c == "UP" then
+		elseif c == "LEFT" then 
+			if __pos > 1 then
+				move_back()
+				__pos = __pos - 1
 			end
-			restore_pos()
-			needs_redraw = true
+		elseif c == "RIGHT" then 
+			if __pos <= __line:len() then
+				move_on()
+				__pos = __pos + 1
+			end
+		elseif c == "DOWN" then print("DOWN") 
+		elseif c == "DELETE" then
+			if __pos > 1 then
+				__line = string_remove(__line, __pos-1, 1)
+				__pos = __pos - 1
+				move_back()
+				needs_redraw = true
+			end
+		elseif c == "TAB" then
+			--
+			-- TODO: tab completion here
+			--
+			local rc = initial_completer(__tokens, __line, __pos)
+			if type(rc) == "string" then
+				__line = string_insert(__line, rc, __pos)
+				__pos = __pos + rc:len()
+				move_on(rc:len())
+				needs_redraw = true
+			elseif rc then
+				save_pos()
+				ti.out(ti.carriage_return)
+				ti.out(ti.cursor_down)
+				__col, __row = 0, 0
+				for _,m in ipairs(rc) do
+					ti.out(m .. "\n")
+				end
+				restore_pos()
+				needs_redraw = true
+			end
+		elseif c == "SIGWINCH" then
+			winch_handler()
 		end
-	elseif c == "SIGWINCH" then
-		winch_handler()
+
+	::continue::
+		if needs_redraw then
+			--
+			-- Build list of tokens
+			--
+			tokenise(__tokens, __line)
+			syntax_checker(__tokens, __line)
+
+			redraw_line(__tokens, __line)
+			needs_redraw = false
+		end
+		io.flush()
 	end
 
-::continue::
-	if needs_redraw then
-		--
-		-- Build list of tokens
-		--
-		tokenise(__tokens, __line)
-		syntax_checker(__tokens, __line)
-
-		redraw_line(__tokens, __line)
-		needs_redraw = false
-	end
-	io.flush()
+	finish()
 end
 
-finish()
 
---[[
-print("\027[6n")
-local c = read_key()
-print("c=["..c.."] .. " .. #c)
-]]--
-
---tout("set_a_foreground", 2)
---ti.out(ti.set_a_foreground, 2)
-
-
---print("INT:" .. ffi.string(__libtinfo.tparm(set_a_forground, 2)) .. "..ok")
-
+--readline()

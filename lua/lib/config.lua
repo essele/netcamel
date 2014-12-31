@@ -83,7 +83,8 @@ end
 function matching_list(prefix,kv)
 	local rc = {}
 
-	match = "^" .. prefix:gsub("([%-%+%.%*])", "\001%1"):gsub("%%", "[^/]+"):gsub("\001(.)", "%%%1")
+--	match = "^" .. prefix:gsub("([%-%+%.%*])", "\001%1"):gsub("%%", "[^/]+"):gsub("\001(.)", "%%%1")
+	match = "^" .. prefix:gsub("([%-%+%.%*])", "\001%1"):gsub("%%", "[^/]*"):gsub("\001(.)", "%%%1")
 	for k,_ in pairs(kv) do
 		if k:match(match) then table.insert(rc, k) end
 	end
@@ -624,6 +625,13 @@ function validate(vtype, kp, value)
 
 	if rc ~= OK then return false, "validation failed for "..vtype.." ["..value.."]: "..err end
 	return true
+end
+function raw_validate(vtype, kp, value)
+	local validator = VALIDATOR[vtype]
+	
+	if not validator then return false, "undefined validator for "..vtype.." ["..value.."]" end
+	local rc, err = validator(value, kp)
+	return rc, err
 end
 
 --

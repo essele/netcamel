@@ -150,8 +150,9 @@ VALIDATOR["ethernet_if"] = function(v)
 	--       interface.
 	--
 	local err = "interface numbers should be [nnn] or [nnn:nnn] only"
+	if v:len() == 0 then return PARTIAL end
 	if v:match("^%d+$") then return OK end
-	if v:match("^%d+:$") then return PARTIAL, err end
+	if v:match("^%d+:$") then return PARTIAL end
 	if v:match("^%d+:%d+$") then return OK end
 	return FAIL, err
 end
