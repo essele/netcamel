@@ -93,6 +93,24 @@ function in_list(list, item)
 end
 
 --
+-- Run a function for each element in a list, if true then
+-- add the element to the results
+--
+function ifilter(list, func)
+	local rc = {}
+	for i, v in ipairs(list) do
+		if func(v) then table.insert(rc, v) end
+	end
+	return rc
+end
+
+function imap(list, func)
+	for i, v in ipairs(list) do
+		list[i] = func(v)
+	end
+end
+
+--
 -- Return only the uniq items in a list (keep order)
 --
 function uniq(t)

@@ -197,6 +197,7 @@ function tokenise(tokens, input, sep, offset)
 	if token_n == 0 or input:sub(-1) == sep then
 		table.insert(tokens, { value = "", start = offset+input:len()+1, finish = offset+input:len()+1 })
 	end
+
 	return tokens
 end
 
@@ -370,7 +371,7 @@ function move_on(n, str)
 	__col = final_col
 	__row = __row + extra_rows
 
-	if (__col == 0) and ti.auto_right_margin then
+	if (n > 0 and __col == 0) and ti.auto_right_margin then
 		if ti.eat_newline_glitch then ti.out(ti.carriage_return) end
 		ti.out(ti.carriage_return)
 		ti.out(ti.cursor_down)
@@ -628,6 +629,33 @@ function cfpath_completer(tokens, n, prefix)
 	return matches
 end
 
+function cfsetitem_completer(tokens, n, prefix)
+	local token = tokens[n]
+	local pos = token.start + prefix:len()
+	local mp = tokens[2].mp
+
+	--
+	-- Remap the values to the subtokens...
+	--
+	tokens = token.subtokens
+	n, prefix = which_token(tokens, pos)
+	local value = token.value
+
+	if n == 1 then
+		--
+		-- Get a list of possible items
+		--
+		local matches = matching_list(mp.."/"..prefix.."%", master)
+		imap(matches, function(v) return v:sub(#mp+2) end)
+		if #matches == 0 then return nil end
+		if #matches == 1 then return matches[1]:sub(#prefix+1).."=" end
+		local cp = common_prefix(matches)
+		if cp ~= prefix then return cp:sub(#prefix+1) end
+		return matches
+	else
+	end
+end
+
 --
 -- We get called for the path token (usually token 2) so we can 
 -- re-tokenise and then run through each token that needs validating
@@ -669,30 +697,69 @@ function cfpath_validator(tokens, n, input)
 ::continue::
 		slash = "/"
 	end
-	-- propogate the status back from the last subtoken
+	-- propogate the status, mp and kp back from the last subtoken
 	tokens[n].status = ptoken.subtokens[#ptoken.subtokens].status
+	tokens[n].kp = ptoken.subtokens[#ptoken.subtokens].kp
+	tokens[n].mp = ptoken.subtokens[#ptoken.subtokens].mp
 end
 
 function tv2(tokens, n, input)
 	local ptoken = tokens[n]
 	local value = ptoken.value
+	local mp = tokens[2].mp
+	local kp = tokens[2].kp
 
 	if not ptoken.subtokens then ptoken.subtokens = {} end
+
 	tokenise(ptoken.subtokens, value, "=", ptoken.start-1)
 
-	if #ptoken.subtokens == 2 then
-		ptoken.subtokens[1].status = OK
-		ptoken.subtokens[2].status = OK
-		ptoken.status = OK
+	--
+	-- Left hand side of the equals (valid item?)
+	-- TODO: check master [type]
+	--
+	local token = ptoken.subtokens[1]
+	local v1 = token.value
+
+	if master[mp.."/"..v1] then
+		token.status = OK
 	else
-		if ptoken.subtokens[1] then ptoken.subtokens[1].status = FAIL end
-		ptoken.status = FAIL
+		local matches = matching_list(mp.."/"..v1.."%", master)
+		token.status = (#matches > 0 and PARTIAL) or FAIL
 	end
+	ptoken.status = token.status
+
+	--
+	-- Right hand side, need to run the validator
+	--
+	local token = ptoken.subtokens[2]
+	local v2 = token and token.value
+	if not token then return end
+
+	if ptoken.status ~= OK then
+		token.status = FAIL
+	elseif #ptoken.subtokens > 2 then
+		mark_all_failed(ptoken.subtokens, 2)
+	else
+		local m = master[mp.."/"..v1]
+		local mtype = m["type"]
+		kp = kp .. "/" .. v1
+
+		print("type="..mtype)
+		token.status = VALIDATOR[mtype](v2, kp)
+		print("st="..token.status)
+	end
+	ptoken.status = token.status
 end
 
+--
+-- Flag all following as failed, also clear the subtokens since
+-- they won't be valid unless we know what we are doing.
+--
 function mark_all_failed(tokens, n)
 	while tokens[n] do
 		tokens[n].status = FAIL
+		tokens[n].subtokens = nil
+		tokens[n].completer = nil
 		n =n + 1
 	end
 end
@@ -700,29 +767,31 @@ end
 
 function syntax_set(tokens)
 	--
-	-- Allow out completers to work
+	-- Only allow the cfpath completer unless the cfpath
+	-- gets properly validated
 	--
 	tokens[2].completer = cfpath_completer
-	-- TODO: default completer?
-	--TODO: 3+
+	tokens[1].default_completer = nil
 
 	--
 	-- Make sure the cfpath is ok
 	--
 	if tokens[2].status ~= OK then
 		cfpath_validator(tokens, 2)
-		print("t2s="..tostring(tokens[2].status))
 	end
 	if tokens[2].status ~= OK then
-		print("X")
 		mark_all_failed(tokens, 3)
 		return
 	end
+
+	--
+	-- Setup the completer for all other fields
+	--
+	tokens[1].default_completer = cfsetitem_completer
 	--
 	-- Check all other fields are correct
 	--
 	n = 3
-	print("here")
 	while tokens[n] do
 		tv2(tokens, n)
 		n = n + 1
@@ -807,9 +876,8 @@ function initial_completer(tokens, input, pos)
 	if n == 1 then
 		return system_completer(tokens, n, prefix)
 	else
-		if tokens[n].completer then
-			return tokens[n].completer(tokens, n, prefix)
-		end
+		if tokens[n].completer then return tokens[n].completer(tokens, n, prefix) end
+		if tokens[1].default_completer then return tokens[1].default_completer(tokens, n, prefix) end
 		return nil
 	end
 end

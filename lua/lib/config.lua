@@ -621,17 +621,17 @@ function validate(vtype, kp, value)
 	local validator = VALIDATOR[vtype]
 	
 	if not validator then return false, "undefined validator for "..vtype.." ["..value.."]" end
-	local rc, err = validator(value, kp)
+	local rc, newval = validator(value, kp)
 
 	if rc ~= OK then return false, "validation failed for "..vtype.." ["..value.."]: "..err end
-	return true
+	return true, newval
 end
 function raw_validate(vtype, kp, value)
 	local validator = VALIDATOR[vtype]
 	
 	if not validator then return false, "undefined validator for "..vtype.." ["..value.."]" end
-	local rc, err = validator(value, kp)
-	return rc, err
+	local rc, newval = validator(value, kp)
+	return rc, newval
 end
 
 --
@@ -690,19 +690,9 @@ function set(config, kp, value)
 	local mp = find_master_key(rkp)
 
 	if master[mp]["type"] then
-		--
-		-- Support the standard types (boolean, string etc)
-		-- Do we want to allow a validator to change the value
-		--   (i.e. from textual true/false to real boolean??
-		--
-		if master[mp]["type"] == "bool" then
-			if value == "true" or value == "TRUE" then value = true 
-			elseif value == "false" or value == "FALSE" then value = false
-			else return rc, "invalid bool type, should be true or false" end
-		else
-			local rc, err = validate(master[mp]["type"], rkp, value)
-			if not rc then return false, err end
-		end
+		local rc, newval = validate(master[mp]["type"], rkp, value)
+		if not rc then return false, err end
+		if newval then value = newval end
 	else
 		return false, "not a settable configuration node: "..rkp
 	end

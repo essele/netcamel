@@ -25,6 +25,7 @@ package.cpath = "/usr/lib/lua/5.1/?.so;./lib/?.so"
 require("utils")
 require("config")
 require("execute")
+require("validators")
 --require("api")
 
 -- different namespace packages
