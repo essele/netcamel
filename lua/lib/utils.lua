@@ -104,9 +104,29 @@ function ifilter(list, func)
 	return rc
 end
 
+--
+-- For a given list, run a function against each element
+-- and replace the list element with the return from the func
+--
 function imap(list, func)
 	for i, v in ipairs(list) do
 		list[i] = func(v)
+	end
+end
+
+--
+-- Find an item within a list and insert items from a second list
+--
+function ireplace(list, item, new)
+	for i, v in ipairs(list) do
+		if v == item then
+			table.remove(list, i)
+			for _,n in ipairs(new) do
+				table.insert(list, i, n)
+				i = i + 1
+			end
+			return
+		end
 	end
 end
 

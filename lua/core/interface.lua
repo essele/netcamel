@@ -240,7 +240,8 @@ master["interface/ethernet"] = {
 	["with_children"] = 1
 }
 
-master["interface/ethernet/*"] = 			{ ["style"] = "ethernet_if" }
+master["interface/ethernet/*"] = 			{ ["style"] = "ethernet_if",
+											  ["options"] = { "0", "1", "2" } }
 master["interface/ethernet/*/ip"] = 		{ ["type"] = "ipv4" }
 master["interface/ethernet/*/ipx"] = 		{ ["type"] = "ipv4" }
 master["interface/ethernet/*/mtu"] = 		{ ["type"] = "mtu" }

@@ -598,8 +598,24 @@ function cfpath_completer(tokens, n, prefix)
 		kp, mp, slash = tokens[n-1].kp, tokens[n-1].mp, "/"
 	end
 
+	--
+	-- See what matches ... if we don't get any then we could be a valid wildcard
+	-- so we check and potentially output the slash.
+	--
 	local matches = match_list(values_to_keys(node_list(mp, master)), prefix)
+	if token.status == OK and #matches == 0 then
+		local wcmatches = node_list(mp.."/*", master)
+		if #wcmatches > 0 then return "/" end
+	end
 
+	--
+	-- Remove the * and replace it with options (if they are defined)
+	--
+	local matchkeys = values_to_keys(matches)
+	for k,v in ipairs(matches) do print("k="..k.." v="..v) end
+	if in_list(matches, "*") then
+		ireplace(matches, "*", master[mp.."/*"].options or {}) 
+	end
 	--
 	-- TODO: if we are returning some text for a full match then do we need a space?
 	-- or a slash?
@@ -677,7 +693,12 @@ function cfpath_validator(tokens, n, input)
 
 		kp = kp..slash..value
 
-		if node_exists(mp..slash..value, master) then
+		--
+		-- We can't have a * or start with a *
+		--
+		if value:sub(1,1) == "*" then
+			token.status = FAIL
+		elseif node_exists(mp..slash..value, master) then
 			mp = mp..slash..value
 			token.status = OK
 		elseif node_exists(mp..slash.."*", master) then
