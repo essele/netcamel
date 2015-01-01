@@ -546,6 +546,18 @@ function common_prefix(t)
 	end
 	return str
 end
+--
+-- Given a set of tokens and a position return the index and
+-- prefix for the token
+--
+function which_token(tokens, pos)
+	for i,token in ipairs(tokens) do
+		if pos >= token.start and pos <= (token.finish+1) then
+			return i, token.value:sub(1, pos - token.start)
+		end
+	end
+	assert(false, "cant figure out which token (pos="..pos..")")
+end
 
 local possibles = {
 	["one/two/three"] = 1,
@@ -561,20 +573,30 @@ local possibles = {
 }
 
 --
--- We always want to work to the next slash (or the end)
+-- We handle the token containing paths, so we first need to
+-- work out which subtoken we are being referenced from.
 --
-function test_completer(tokens, n, prefix)
+function cfpath_completer(tokens, n, prefix)
 	local token = tokens[n]
 	local value = token.value
+	local pos = token.start + prefix:len()
+
+	--
+	-- Remap the values to the subtokens...
+	--
+	tokens = token.subtokens
+	n, prefix = which_token(tokens, pos)
+	token = tokens[n]
+	value = token.value
+
 	local kp, mp, slash
 
-	if n==2 then
+	if n==1 then
 		kp, mp, slash = "", "", ""
 	else
 		kp, mp, slash = tokens[n-1].kp, tokens[n-1].mp, "/"
 	end
 
-	print("comp prefix="..prefix)
 	local matches = match_list(values_to_keys(node_list(mp, master)), prefix)
 
 	--
@@ -591,14 +613,14 @@ function test_completer(tokens, n, prefix)
 	if #matches == 1 then 
 		local trail = ""
 		-- TODO: if a single match with no more, then do the space right away
-		if prefix == matches[1] then 
-			local more = node_list(mp..slash..prefix, master)
+--		if prefix == matches[1] then 
+			local more = node_list(mp..slash..matches[1], master)
 			if #more > 0 then
 				trail = "/"
 			else
 				trail = " "
 			end
-		end
+--		end
 		return matches[1]:sub(#prefix+1) .. trail
 	end
 	local cp = common_prefix(matches)
@@ -610,7 +632,7 @@ end
 -- We get called for the path token (usually token 2) so we can 
 -- re-tokenise and then run through each token that needs validating
 --
-function test_validator(tokens, n, input)
+function cfpath_validator(tokens, n, input)
 	local ptoken = tokens[n]
 	local value = ptoken.value
 	local allfail = false
@@ -626,8 +648,6 @@ function test_validator(tokens, n, input)
 		if token.status == OK then mp, kp = token.mp, token.kp goto continue end
 
 		kp = kp..slash..value
---		print("i="..i.." value="..value.." kp="..kp)
-
 
 		if node_exists(mp..slash..value, master) then
 			mp = mp..slash..value
@@ -649,27 +669,86 @@ function test_validator(tokens, n, input)
 ::continue::
 		slash = "/"
 	end
+	-- propogate the status back from the last subtoken
+	tokens[n].status = ptoken.subtokens[#ptoken.subtokens].status
+end
+
+function tv2(tokens, n, input)
+	local ptoken = tokens[n]
+	local value = ptoken.value
+
+	if not ptoken.subtokens then ptoken.subtokens = {} end
+	tokenise(ptoken.subtokens, value, "=", ptoken.start-1)
+
+	if #ptoken.subtokens == 2 then
+		ptoken.subtokens[1].status = OK
+		ptoken.subtokens[2].status = OK
+		ptoken.status = OK
+	else
+		if ptoken.subtokens[1] then ptoken.subtokens[1].status = FAIL end
+		ptoken.status = FAIL
+	end
+end
+
+function mark_all_failed(tokens, n)
+	while tokens[n] do
+		tokens[n].status = FAIL
+		n =n + 1
+	end
 end
 
 
-function syntax_level1(tokens, n, input)
-	local token = tokens[n]
+function syntax_set(tokens)
+	--
+	-- Allow out completers to work
+	--
+	tokens[2].completer = cfpath_completer
+	-- TODO: default completer?
+	--TODO: 3+
+
+	--
+	-- Make sure the cfpath is ok
+	--
+	if tokens[2].status ~= OK then
+		cfpath_validator(tokens, 2)
+		print("t2s="..tostring(tokens[2].status))
+	end
+	if tokens[2].status ~= OK then
+		print("X")
+		mark_all_failed(tokens, 3)
+		return
+	end
+	--
+	-- Check all other fields are correct
+	--
+	n = 3
+	print("here")
+	while tokens[n] do
+		tv2(tokens, n)
+		n = n + 1
+	end
+end
+
+
+
+function syntax_level1(tokens)
+	local token = tokens[1]
 	local value = token.value
+	local status
 
 	if __cmds[value] then 
-		status = OK 
-		if tokens[n+1] then 
-			tokens[n+1].validator = test_validator 
-			tokens[n+1].completer = test_completer
+		token.status = OK
+		if value == "set" and tokens[2] then
+			syntax_set(tokens, input)
 		end
-	elseif token.finish < input:len() then
-		status = FAIL
+	elseif tokens[2] then
+		token.status = FAIL
 	else
 		local matches = match_list(__cmds, value)
-		if #matches > 0 then status = PARTIAL 
-		else status = FAIL end
+		if #matches > 0 then token.status = PARTIAL 
+		else token.status = FAIL end
 	end
-	token.status = status
+	if token.status == FAIL then mark_all_failed(tokens, 2) end
 end
 
 --
@@ -683,28 +762,8 @@ end
 function syntax_checker(tokens, input)
 	local allfail = false
 
-	--
-	-- Make sure we have a base level validator
-	--
-	tokens[1].validator = syntax_level1
-	tokens[1].completer = system_completer
-
-	for n,token in ipairs(tokens) do
-		if allfail then
-			token.status = FAIL
-		else
-			if token.value ~= "" then
-				if not token.validator then
-					token.status = FAIL
-				else
-					local rc, status = pcall(token.validator, tokens, n, input)
-					if not rc then print("Validator rc="..tostring(rc).." status="..tostring(status)) end
---					token.status = status
-				end
-			end
-			if token.status ~= OK then allfail = true end
-		end
-	end
+	syntax_level1(tokens)
+	return
 end
 
 --
@@ -742,42 +801,17 @@ end
 -- to provide completion information
 --
 function initial_completer(tokens, input, pos)
-	--
-	-- Given out pos, we should be able to work out
-	-- which token we are in, return the token index and
-	-- valid prefix for that token.
-	--
-	-- pos is the cursor pos, so it's after the chars so we need
-	-- to check for finish + 1
-	--
-	-- If we are about to start a new token (i.e. as pos 0 or after
-	-- a space) then we return the pretend token number.
-	--
-	function which_token(tokens, pos)
-		print("TC="..#tokens)
-		for i,token in ipairs(tokens) do
-			print("wt: i="..i.." ts="..token.start.." tf="..token.finish)
-			if pos >= token.start and pos <= (token.finish+1) then
-				return i, token.value:sub(1, pos - token.start)
-			end
-		end
-		assert(false, "cant figure out which token (pos="..pos..")")
-	end
-
-
-	--
-	--
-	--
 	local n, prefix = which_token(tokens, pos)
-	local func = tokens[n].completer
-	if not func then 
-		ti.out(ti.bell)
-		return nil 
-	end
-	local rv, rc = pcall(func, tokens, n, prefix)
-	assert(rv, "unable to execute completer func: " .. tostring(rc))
 
-	return rc
+	print("Compelter: n="..n.." =="..tostring(tokens[n].completer))
+	if n == 1 then
+		return system_completer(tokens, n, prefix)
+	else
+		if tokens[n].completer then
+			return tokens[n].completer(tokens, n, prefix)
+		end
+		return nil
+	end
 end
 
 

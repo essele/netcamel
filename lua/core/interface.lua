@@ -242,6 +242,7 @@ master["interface/ethernet"] = {
 
 master["interface/ethernet/*"] = 			{ ["style"] = "ethernet_if" }
 master["interface/ethernet/*/ip"] = 		{ ["type"] = "ipv4" }
+master["interface/ethernet/*/ipx"] = 		{ ["type"] = "ipv4" }
 master["interface/ethernet/*/mtu"] = 		{ ["type"] = "mtu" }
 master["interface/ethernet/*/disabled"] = 	{ ["type"] = "boolean" }
 
