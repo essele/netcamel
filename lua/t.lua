@@ -124,7 +124,8 @@ end
 -- SIMPLE TOKENISER
 -- ------------------------------------------------------------------------------
 
-function tokenise(tokens, input)
+function tokenise(tokens, input, sep, offset)
+	offset = offset or 0
 	local token = nil
 	local inquote, backslash = false, false
 	local allow_inherit = true
@@ -137,15 +138,20 @@ function tokenise(tokens, input)
 		-- If we get a space outside of backslash or quote then
 		-- we have found a token
 		--
-		if ch == "" or ((ch == " " or ch == "/") and not backslash and not inquote) then
+		if ch == "" or (ch == sep and not backslash and not inquote) then
 			if token and token.value ~= "" then
+			
+				-- do we need?
 				if ch == "" then token.sep = nil else token.sep = ch end
-				if allow_inherit and tokens[token_n] and 
-								tokens[token_n].value == token.value then
+
+				if tokens[token_n] then
+					if tokens[token_n].value ~= token.value then
+						tokens[token_n].status = nil
+						tokens[token_n].value = token.value
+					end
 					tokens[token_n].start = token.start
 					tokens[token_n].finish = token.finish
 				else
-					allow_inherit = false
 					tokens[token_n] = token
 				end
 				token = nil
@@ -157,11 +163,11 @@ function tokenise(tokens, input)
 			if not token then
 				token = {}
 				token.value = ""
-				token.start = i
+				token.start = i + offset
 				token_n = token_n + 1
 			end
 			token.value = token.value .. ch
-			token.finish = i
+			token.finish = i + offset
 
 			--
 			-- If we get a quote, then it's either in our out of
@@ -188,8 +194,8 @@ function tokenise(tokens, input)
 	-- If we have nothing, or something with a trailing space then we add
 	-- a dummy token so that we can use it for 'next token' completion
 	--
-	if token_n == 0 or input:sub(-1) == " " then
-		table.insert(tokens, { value = "", start = input:len(), finish = input:len() })
+	if token_n == 0 or input:sub(-1) == sep then
+		table.insert(tokens, { value = "", start = offset+input:len()+1, finish = offset+input:len()+1 })
 	end
 	return tokens
 end
@@ -388,33 +394,42 @@ local __color = {
 
 --
 -- Output each token in turn, making sure to recreate the appropriate
--- amount of whitespace...
+-- amount of whitespace... we also handle subtokens recursively.
 --
 function show_line(tokens, input)
-	local p = 1
-	local out = ""
+	function show_token(token, pos, master)
+		local rc = ""
 
-	for n, token in ipairs(tokens) do
-		if token.value:len() > 0 then
-			if p < token.start then 
-				out = out .. string.sub(input, p, token.start-1)
-				p = token.start
-			end
-			p = p + token.value:len()
-			if(ti.set_a_foreground) then
-				out = out .. ti.tparm(ti.set_a_foreground, __color[token.status]) .. token.value ..
-										ti.tparm(ti.set_a_foreground, 9)
-			else
-				out = out .. token.value
-			end
+		--
+		-- Use colors if we can, and if the status is set
+		--
+		local color = ti.set_a_foreground and token.status and 
+									ti.tparm(ti.set_a_foreground, __color[token.status])
+		local stdcolor = (color and ti.tparm(ti.set_a_foreground, 9)) or ""
+		color = color or ""
+
+		if pos < token.start then
+			-- this will be the sepator for the next token so should coloured
+			rc = color .. string.sub(master, pos, token.start-1) .. stdcolor
+			pos = token.start
 		end
+		if token.subtokens then
+			for i,t in ipairs(token.subtokens) do
+				local nrc
+				nrc, pos = show_token(t, pos, master)
+				rc = rc .. nrc
+			end
+		else
+			rc = rc .. color .. token.value .. stdcolor
+			pos = pos + token.value:len()
+		end
+		return rc, pos
 	end
-	p = p - 1
-	if p < input:len() then
-		out = out .. string.sub(input, p+1, input:len())
-		p = input:len()
-	end
-	if out:len() > 0 then move_on(p, out) end
+
+	local token = { start=1, finish=input:len(), subtokens=tokens }
+	local out, pos = show_token(token, 1, input)
+
+	if out:len() > 0 then move_on(input:len(), out) end
 end
 
 function move_to(r, c)
@@ -515,6 +530,22 @@ function match_list(list, t)
 	table.sort(rc)
 	return rc
 end
+--
+-- Given a list work out what the common prefix
+-- is (if any)
+--
+function common_prefix(t)
+	local str = t[1] or ""
+	local n = str:len()
+
+	for _,s in ipairs(t) do
+		while s:sub(1, n) ~= str and n > 0 do
+			n = n - 1
+			str=str:sub(1, n)
+		end
+	end
+	return str
+end
 
 local possibles = {
 	["one/two/three"] = 1,
@@ -533,133 +564,91 @@ local possibles = {
 -- We always want to work to the next slash (or the end)
 --
 function test_completer(tokens, n, prefix)
+	local token = tokens[n]
+	local value = token.value
+	local kp, mp, slash
 
-	local elems = split(prefix, "/")
-	local path = ""
-	local slash = ""
-	for elem in each(elems) do
-		slash = (path == "" and "") or "/"
-		if node_exists(path..slash..elem, master) then
-			path = path..slash..elem
-			print("found valid path: "..path)
-		elseif node_exists(path..slash.."*", master) then
-			path = path..slash.."*"
-			print("found valid wild: "..path)
-		end
+	if n==2 then
+		kp, mp, slash = "", "", ""
+	else
+		kp, mp, slash = tokens[n-1].kp, tokens[n-1].mp, "/"
 	end
-	if true then return nil end
 
-
-	local rkp = rework_kp(nil, prefix)
-	print("prefix="..prefix.." rkp="..tostring(rkp))
-
-	if not rkp then return nil end
-
---	local orig_matches = match_list(possibles, prefix)
-	local matches = node_list(rkp, master)
-	if true then return matches end
+	print("comp prefix="..prefix)
+	local matches = match_list(values_to_keys(node_list(mp, master)), prefix)
 
 	--
-	-- Remove anything after the last slash from the prefix
-	-- (so we can adjust properly)
+	-- TODO: if we are returning some text for a full match then do we need a space?
+	-- or a slash?
 	--
-	local cutprefix, srch = prefix:match("^(.-/?)([^/]*)$")
-
+	-- Don't do anythign by default
+	-- If we then do a search where prefix==match then decide what to add
+	-- If there are more options (i.e. other stuff with a slash) then add a slash otherwise
+	-- add a space
 	--
-	-- Now remove that prefix and anything after the next slash
-	-- from the list
-	--
-	local keys = {}
-	for i,v in ipairs(orig_matches) do
-		v = v:sub(cutprefix:len()+1)
-		v = v:gsub("/.*$", "")
-		keys[v] = 1
-	end
-	local matches = {}
-	for k,_ in pairs(keys) do
-		table.insert(matches, k)
-	end
 
 	if #matches == 0 then return nil end
-	table.sort(matches)
-
-	local cutpoint = prefix:len() - cutprefix:len() + 1
 	if #matches == 1 then 
-		--
-		-- Now work out if we are at a terminal point and need a space
-		-- afterwards
-		--
-		local further_matches = match_list(possibles, cutprefix..matches[1].."/")
-		
-		if srch == matches[1] then
-			--
-			-- If we are trying to complete a completed item then check
-			-- if we have more (i.e. followed with slash)
-			--
-			return (#further_matches > 0 and "/") or " "
-		else
-			return matches[1]:sub(cutpoint) .. ((#further_matches == 0 and " ") or "")
+		local trail = ""
+		-- TODO: if a single match with no more, then do the space right away
+		if prefix == matches[1] then 
+			local more = node_list(mp..slash..prefix, master)
+			if #more > 0 then
+				trail = "/"
+			else
+				trail = " "
+			end
 		end
+		return matches[1]:sub(#prefix+1) .. trail
 	end
+	local cp = common_prefix(matches)
+	if cp ~= prefix then return cp:sub(#prefix+1) end
 	return matches
 end
 
 --
--- We will be called for each token in the list so we can be sure
--- the previous one is ok (n=2 onwards)
+-- We get called for the path token (usually token 2) so we can 
+-- re-tokenise and then run through each token that needs validating
 --
 function test_validator(tokens, n, input)
-	local token = tokens[n]
-	local value = token.value
-	local state
-
-	print("n="..n.." tokstat="..tostring(token.status))
+	local ptoken = tokens[n]
+	local value = ptoken.value
+	local allfail = false
+	local mp, kp, slash = "", "", ""
 	
-	--
-	-- if we are number 2 then we need to setup 
-	--
-	local mp = ((n==2 and "") or tokens[n-1].mp)
-	local slash = (mp == "" and "") or "/"
-	local kp = ((n==2 and "") or tokens[n-1].kp)
+	if not ptoken.subtokens then ptoken.subtokens = {} end
+	tokenise(ptoken.subtokens, value, "/", ptoken.start-1)
 
-	kp = kp..slash..value
-	print("mk="..mp)
-	if node_exists(mp..slash..value, master) then
-		mp = mp..slash..value
-		state = OK
-	elseif node_exists(mp..slash.."*", master) then
-		mp = mp..slash.."*"
-		local rc, err = raw_validate(master[mp]["style"], kp, value)
-		state = rc
-	end
+	for i,token in ipairs(ptoken.subtokens) do
+		local value = token.value
 
-	--
-	-- If no state then we might be a partial match...
-	--
-	print("sep=["..tostring(token.sep).."]")
-	if not state then
-		if not token.sep then
-			local m = matching_list(mp..slash..value.."%", master)
-			if #m > 0 then state = PARTIAL else state = FAIL end
+		if allfail then token.status = FAIL goto continue end
+		if token.status == OK then mp, kp = token.mp, token.kp goto continue end
+
+		kp = kp..slash..value
+--		print("i="..i.." value="..value.." kp="..kp)
+
+
+		if node_exists(mp..slash..value, master) then
+			mp = mp..slash..value
+			token.status = OK
+		elseif node_exists(mp..slash.."*", master) then
+			mp = mp..slash.."*"
+			local rc, err = raw_validate(master[mp].style, kp, value)
+			token.status = rc
 		else
-			state = FAIL
+			local m = matching_list(mp..slash..value.."%", master)
+			if #m > 0 then token.status = PARTIAL else token.status = FAIL end
 		end
+		-- We can only be PARTIAL if we are the last of the last...
+		if token.status == PARTIAL then
+			if i ~= #ptoken.subtokens or n ~= #tokens then token.status = FAIL end
+		end
+		if token.status == FAIL then allfail = true end
+		if token.status == OK then token.mp, token.kp = mp, kp end
+::continue::
+		slash = "/"
 	end
-
-	--
-	-- We can only support a partial if we are the last
-	--
-	if state == PARTIAL and token.sep then state = FAIL end
-
-	--
-	-- Prepare the token for other uses...
-	--
-	if state == OK then
-		token.kp = kp
-		token.mp = mp
-		if tokens[n+1] then tokens[n+1].validator = test_validator end
-	end
-	return state
 end
 
 
@@ -680,7 +669,7 @@ function syntax_level1(tokens, n, input)
 		if #matches > 0 then status = PARTIAL 
 		else status = FAIL end
 	end
-	return status
+	token.status = status
 end
 
 --
@@ -710,7 +699,7 @@ function syntax_checker(tokens, input)
 				else
 					local rc, status = pcall(token.validator, tokens, n, input)
 					if not rc then print("Validator rc="..tostring(rc).." status="..tostring(status)) end
-					token.status = status
+--					token.status = status
 				end
 			end
 			if token.status ~= OK then allfail = true end
@@ -765,7 +754,9 @@ function initial_completer(tokens, input, pos)
 	-- a space) then we return the pretend token number.
 	--
 	function which_token(tokens, pos)
+		print("TC="..#tokens)
 		for i,token in ipairs(tokens) do
+			print("wt: i="..i.." ts="..token.start.." tf="..token.finish)
 			if pos >= token.start and pos <= (token.finish+1) then
 				return i, token.value:sub(1, pos - token.start)
 			end
@@ -773,22 +764,6 @@ function initial_completer(tokens, input, pos)
 		assert(false, "cant figure out which token (pos="..pos..")")
 	end
 
-	--
-	-- Given a list work out what the common prefix
-	-- is (if any)
-	--
-	function common_prefix(t)
-		local str = t[1] or ""
-		local n = str:len()
-
-		for _,s in ipairs(t) do
-			while s:sub(1, n) ~= str and n > 0 do
-				n = n - 1
-				str=str:sub(1, n)
-			end
-		end
-		return str
-	end
 
 	--
 	--
@@ -877,7 +852,7 @@ function readline()
 			--
 			-- Build list of tokens
 			--
-			tokenise(__tokens, __line)
+			tokenise(__tokens, __line, " ")
 			syntax_checker(__tokens, __line)
 
 			redraw_line(__tokens, __line)
