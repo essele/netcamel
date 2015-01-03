@@ -93,15 +93,18 @@ function in_list(list, item)
 end
 
 --
--- Run a function for each element in a list, if true then
--- add the element to the results
+-- Run a function for each element in a list, if not true then
+-- remove the element from the list
 --
 function ifilter(list, func)
-	local rc = {}
-	for i, v in ipairs(list) do
-		if func(v) then table.insert(rc, v) end
+	local i = 1
+	while list[i] do
+		if not func(list[i]) then
+			table.remove(list, i)
+		else
+			i = i + 1
+		end
 	end
-	return rc
 end
 
 --
@@ -128,6 +131,17 @@ function ireplace(list, item, new)
 			return
 		end
 	end
+end
+
+--
+-- Find if a table contains any items matching the given prefix
+--
+function iprefixmatches(list, prefix)
+	local rc = {}
+	for _,v in ipairs(list) do
+		if v:sub(1,#prefix) == prefix then table.insert(rc, v) end
+	end
+	return rc
 end
 
 --

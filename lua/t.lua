@@ -590,8 +590,49 @@ function cfpath_completer(tokens, n, prefix)
 	token = tokens[n]
 	value = token.value
 
+	--
+	-- Get our values of mp and kp
+	--
 	local kp, mp, slash
+	if n==1 then kp, mp, slash = "", "", ""
+	else kp, mp, slash = tokens[n-1].kp, tokens[n-1].mp, "/" end
 
+	--
+	-- Retrieve matches from our pre-cached list
+	--
+	local matches = iprefixmatches(token.options_m, prefix)
+
+	--
+	-- Wildcard replacement???
+	--
+	if in_list(matches, "*") then ireplace(matches, "*", master[mp.."/*"].options or {}) end
+
+	if #matches == 0 then return nil end
+	if #matches == 1 then 
+		local trail = ""
+		-- TODO: if a single match with no more, then do the space right away
+--		if prefix == matches[1] then 
+--		TODO: what if we are a wildcard?
+			local more = node_list(mp..slash..matches[1], master)
+			print("More: " .. table.concat(more, ", "))
+			
+-- TODO: more should only be containers
+			if #more > 0 then
+				trail = "/"
+			else
+				trail = " "
+			end
+--		end
+		return matches[1]:sub(#prefix+1) .. trail
+	end
+	local cp = common_prefix(matches)
+	if cp ~= prefix then return cp:sub(#prefix+1) end
+	if true then return matches end
+	
+
+
+
+	local kp, mp, slash
 	if n==1 then
 		kp, mp, slash = "", "", ""
 	else
@@ -611,7 +652,6 @@ function cfpath_completer(tokens, n, prefix)
 	--
 	-- Remove the * and replace it with options (if they are defined)
 	--
-	local matchkeys = values_to_keys(matches)
 	for k,v in ipairs(matches) do print("k="..k.." v="..v) end
 	if in_list(matches, "*") then
 		ireplace(matches, "*", master[mp.."/*"].options or {}) 
@@ -681,40 +721,69 @@ function cfpath_validator(tokens, n, input)
 	local value = ptoken.value
 	local allfail = false
 	local mp, kp, slash = "", "", ""
-	
+
 	if not ptoken.subtokens then ptoken.subtokens = {} end
 	tokenise(ptoken.subtokens, value, "/", ptoken.start-1)
 
 	for i,token in ipairs(ptoken.subtokens) do
 		local value = token.value
-
 		if allfail then token.status = FAIL goto continue end
 		if token.status == OK then mp, kp = token.mp, token.kp goto continue end
 
 		kp = kp..slash..value
 
 		--
-		-- We can't have a * or start with a *
+		-- If we don't have a set of potential options loaded then we should do
+		-- that here, it will simplify both validator and completion code.
 		--
-		if value:sub(1,1) == "*" then
-			token.status = FAIL
-		elseif node_exists(mp..slash..value, master) then
+		-- options_m are all nodes within master
+		--
+		if not token.options_m then
+			local options_m = node_list(mp, master)
+			ifilter(options_m, function(v) return master[mp..slash..v]["type"] == nil end)
+			if in_list(options_m, "*") then
+				token.has_wildcard = true
+			end
+			token.options_m = options_m
+		end
+
+		--
+		-- * is not allowed, so instant fail.
+		--
+		if value:sub(1,1) == "*" then token.status = FAIL goto done end
+		--
+		-- try match against full values
+		--
+		if in_list(token.options_m, value) then
 			mp = mp..slash..value
 			token.status = OK
-		elseif node_exists(mp..slash.."*", master) then
-			mp = mp..slash.."*"
-			local rc, err = raw_validate(master[mp].style, kp, value)
-			token.status = rc
-		else
-			local m = matching_list(mp..slash..value.."%", master)
-			if #m > 0 then token.status = PARTIAL else token.status = FAIL end
+			goto done
 		end
+		--
+		-- try wildcard match
+		--
+		if token.has_wildcard then
+			mp = mp..slash.."*"
+			local rc, err = VALIDATOR[master[mp].style](value)
+			if rc ~= FAIL then token.status = rc goto done end
+		end
+		--
+		-- if we are still failed, then try partial matches
+		--
+		if #iprefixmatches(token.options_m, value) > 0 then
+			token.status = PARTIAL
+			goto done
+		end
+		token.status = FAIL
+
+::done::
 		-- We can only be PARTIAL if we are the last of the last...
 		if token.status == PARTIAL then
 			if i ~= #ptoken.subtokens or n ~= #tokens then token.status = FAIL end
 		end
 		if token.status == FAIL then allfail = true end
 		if token.status == OK then token.mp, token.kp = mp, kp end
+
 ::continue::
 		slash = "/"
 	end
