@@ -144,7 +144,7 @@ end
 -- For ethernet interfaces we expect a simple number, but it needs
 -- to map to a real interface (or be a virtual)
 --
-VALIDATOR["ethernet_if"] = function(v)
+VALIDATOR["ethernet_if"] = function(v, kp)
 	--
 	-- TODO: once we know the numbers are ok, we need to test for a real
 	--       interface.
@@ -157,7 +157,7 @@ VALIDATOR["ethernet_if"] = function(v)
 	return FAIL, err
 end
 
-VALIDATOR["pppoe_if"] = function(v)
+VALIDATOR["pppoe_if"] = function(v, kp)
 	local err = "interface numbers should be [nnn] only"
 	if v:len() == 0 then return PARTIAL end
 	if v:match("^%d+$") then return OK end
@@ -167,7 +167,7 @@ end
 --
 -- The MTU needs to be a sensible number
 --
-VALIDATOR["mtu"] = function(v)
+VALIDATOR["mtu"] = function(v, kp)
 	--
 	-- TODO: check the proper range of MTU numbers, may need to support
 	--       jumbo frames
@@ -183,12 +183,12 @@ end
 --
 -- Where we expect an interface name...
 --
-VALIDATOR["interface"] = function(v)
+VALIDATOR["interface"] = function(v, kp)
 	-- TODO
 	return OK
 end
 
-VALIDATOR["ipv4"] = function(v)
+VALIDATOR["ipv4"] = function(v, kp)
 	return OK
 end
 

@@ -106,6 +106,11 @@ function ifilter(list, func)
 		end
 	end
 end
+function filter(list, func)
+	for k,v in list do
+		if not func(k) then list[k] = nil end
+	end
+end
 
 --
 -- For a given list, run a function against each element
@@ -142,6 +147,18 @@ function iprefixmatches(list, prefix)
 		if v:sub(1,#prefix) == prefix then table.insert(rc, v) end
 	end
 	return rc
+end
+function prefixmatches(list, prefix)
+	local rc = {}
+	for k,v in pairs(list) do
+		if k:sub(1,#prefix) == prefix then rc[k]=v end
+	end
+	return rc
+end
+function count(hash)
+	local i = 0
+	for k,v in pairs(hash) do i = i + 1 end
+	return i
 end
 
 --

@@ -394,11 +394,13 @@ end
 
 VALIDATOR["iptables_chain"] = function(v, kp)
 	print("Validating chain ("..v..") for keypath ("..kp..")")
+	if v:len() < 1 then return PARTIAL end
 	return OK
 end
 
 VALIDATOR["iptables_rule"] = function(v, kp)
 	print("Validating rule ("..v..") for keypath ("..kp..")")
+	if v:len() < 1 then return PARTIAL end
 	return OK
 end
 
@@ -416,6 +418,7 @@ master["iptables"] = 					{}
 --
 master["iptables/*"] = 					{ ["commit"] = ipt_commit,
 										  ["precommit"] = ipt_precommit,
+										  ["options"] = { "filter", "nat", "mangle", "raw" },
 										  ["style"] = "iptables_table" }
 master["iptables/*/*"] = 				{ ["style"] = "iptables_chain" }
 master["iptables/*/*/policy"] = 		{ ["type"] = "iptables_policy" }

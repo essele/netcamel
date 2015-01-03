@@ -153,8 +153,8 @@ new["dns/domain-match/*iplayer/group"] = "vpn-dst"
 new["dhcp/flag"] = "hello"
 
 
-new = nil
-current = nil
+--new = nil
+--current = nil
 
 CF_new = new
 CF_current = current
@@ -211,7 +211,7 @@ show(current, new)
 --
 
 CF_current = {}
-CF_new = {}
+--CF_new = {}
 
 readline()
 os.exit(0)
