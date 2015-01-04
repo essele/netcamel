@@ -674,9 +674,15 @@ local function readline(prompt, history, syntax_func, completer_func)
 			__pos = #line + 1
 			needs_redraw = true
 		elseif c == "EOF" then
-			ti.out(ti.carriage_return)
-			ti.out(ti.cursor_down)
-			break
+			if __pos == 1 and line == "" then 
+				ti.out(ti.carriage_return)
+				ti.out(ti.cursor_down) 
+				return nil 
+			end
+			if __pos <= line:len() then
+				line = string_remove(line, __pos, 1)
+				needs_redraw = true
+			end
 		end
 
 ::continue::
