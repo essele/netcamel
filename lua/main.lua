@@ -36,6 +36,7 @@ posix   = require("posix")
 
 require("t")
 
+
 --
 -- global configuration spaces
 --
@@ -213,7 +214,7 @@ show(current, new)
 CF_current = {}
 --CF_new = {}
 
-readline()
+readline.readline(syntax_checker, initial_completer)
 os.exit(0)
 
 while true do

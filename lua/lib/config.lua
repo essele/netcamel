@@ -21,6 +21,7 @@
 -- Globals for the validation routines
 --
 VALIDATOR = {}
+TYPEOPTS = {}
 FAIL=0
 OK=1
 PARTIAL=2

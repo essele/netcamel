@@ -8,14 +8,14 @@
 #------------------------------------------------------------------------------
 
 BUILDROOT=./buildroot
-QEMU=qemu-system-mips
+QEMU=./qemu-system-mips
 QEMU_OPTIONS=-nographic
 KERNEL=${BUILDROOT}/output/images/vmlinux
 ROOTFS=${BUILDROOT}/output/images/rootfs.ext2
 LINUX_ARGS="root=/dev/hda console=ttyS0"
 BASE_NET="-netdev user,id=main,host=10.1.0.1,net=10.1.0.0/24,dhcpstart=10.1.0.16 -device pcnet,netdev=main"
 EXTRA_NET="-device pcnet"
-FS="-fsdev local,id=joe,security_model=none,path=/tmp -device virtio-9p-pci,fsdev=joe,mount_tag=/dev/joetag"
+FS="-fsdev local,id=joe,security_model=none,path=/tmp -device virtio-9p-pci,fsdev=joe,mount_tag=joetag"
 
 
 ${QEMU} ${QEMU_OPTIONS} \

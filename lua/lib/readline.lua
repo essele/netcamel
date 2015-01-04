@@ -16,12 +16,37 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -----------------------------------------------------------------------------
-package.path = "/usr/share/lua/5.1/?.lua"
-package.cpath = "/usr/lib/lua/5.1/?.so;/usr/lib64/lua/5.1/?.so;./lib/?.so;./c/?.so"
+
+require("utils")
 
 ffi = require("ffi")
 bit = require("bit")
 posix = require("posix")
+
+
+
+local __row = 0
+local __col = 0
+local __srow = 0
+local __scol = 0
+local __width = 0
+local __height = 0
+local __line = ""
+local __pos = 1
+
+local __saved_tios
+local __sigfd
+
+local FAIL = 0
+local OK = 1
+local PARTIAL = 2
+
+local __color = {
+	[OK] = 2,
+	[PARTIAL] = 3,
+	[FAIL] = 1
+}
+
 
 -- ------------------------------------------------------------------------------
 -- TERMINFO Bits...
@@ -47,7 +72,7 @@ local __libtinfo = ffi.load("ncurses")
 local ti = {}
 local keymap = {}
 
-local function ti.init()
+function ti.init()
 	local rc = __libtinfo.setupterm(nil, 1, nil)
 	print("rc="..rc)
 
@@ -100,7 +125,7 @@ end
 -- Equivalent of putp(tparm(...)) but we need to convert any numbers
 -- into proper ints.
 --
-local function ti.out(str, ...)
+function ti.out(str, ...)
 	if not ... then
 		__libtinfo.putp(str)
 		return
@@ -111,7 +136,7 @@ local function ti.out(str, ...)
 	end
 	__libtinfo.putp(__libtinfo.tparm(str, unpack(args)))
 end
-local function ti.tparm(str, ...)
+function ti.tparm(str, ...)
 	local args = {...}
 	for i,arg in ipairs(args) do
 		if type(arg) == "number" then args[i] = ffi.new("int", arg) end
@@ -205,8 +230,6 @@ end
 -- For supporting save and restore of termios
 -- ------------------------------------------------------------------------------
 --
-local __saved_tios
-local __sigfd
 
 local function init()
 	--
@@ -228,6 +251,9 @@ local function init()
 
 	ti.init()
 	ti.out(ti.keypad_xmit)
+
+	__width = ti.columns
+	__height = ti.lines
 end
 local function finish()
 	posix.tcsetattr(0, posix.TCSANOW, __saved_tios)
@@ -307,19 +333,10 @@ local function read_key()
 end
 
 
-
 --
 -- We need to track our position relative to the start of the line
 -- where the input started.
 --
-local __row = 0
-local __col = 0
-local __srow = 0
-local __scol = 0
-local __width = ti.columns
-local __height = ti.lines
-local __line = ""
-local __pos = 1
 
 local function move_back()
 	if __col == 0 then
@@ -368,16 +385,6 @@ end
 -- Output the list of tokens with relevant colour highlighting
 -- (make sure we re-create any whitespace gaps)
 --
-
-local FAIL = 0
-local OK = 1
-local PARTIAL = 2
-
-local __color = {
-	[OK] = 2,
-	[PARTIAL] = 3,
-	[FAIL] = 1
-}
 
 --
 -- Output each token in turn, making sure to recreate the appropriate
@@ -515,7 +522,9 @@ end
 local __tokens = {}
 local needs_redraw = true
 
-local function readline()
+local function readline(syntax_func, completer_func)
+	init()
+
 	while true do
 		local c = read_key()
 		if c == nil then 
@@ -549,25 +558,24 @@ local function readline()
 				needs_redraw = true
 			end
 		elseif c == "TAB" then
-			--
-			-- TODO: tab completion here
-			--
-			local rc = initial_completer(__tokens, __line, __pos)
-			if type(rc) == "string" then
-				__line = string_insert(__line, rc, __pos)
-				__pos = __pos + rc:len()
-				move_on(rc:len())
-				needs_redraw = true
-			elseif rc then
-				save_pos()
-				ti.out(ti.carriage_return)
-				ti.out(ti.cursor_down)
-				__col, __row = 0, 0
-				for _,m in ipairs(rc) do
-					ti.out(m .. "\n")
+			if completer_func then
+				local rc = completer_func(__tokens, __line, __pos)
+				if type(rc) == "string" then
+					__line = string_insert(__line, rc, __pos)
+					__pos = __pos + rc:len()
+					move_on(rc:len())
+					needs_redraw = true
+				elseif rc then
+					save_pos()
+					ti.out(ti.carriage_return)
+					ti.out(ti.cursor_down)
+					__col, __row = 0, 0
+					for _,m in ipairs(rc) do
+						ti.out(m .. "\n")
+					end
+					restore_pos()
+					needs_redraw = true
 				end
-				restore_pos()
-				needs_redraw = true
 			end
 		elseif c == "SIGWINCH" then
 			winch_handler()
@@ -579,7 +587,8 @@ local function readline()
 			-- Build list of tokens
 			--
 			tokenise(__tokens, __line, " ")
-			syntax_checker(__tokens, __line)
+			if syntax_func then syntax_func(__tokens, __line) end
+--			syntax_checker(__tokens, __line)
 
 			redraw_line(__tokens, __line)
 			needs_redraw = false
@@ -591,8 +600,9 @@ local function readline()
 end
 
 return {
-	init = init,
-	finish = init,
-	readline = readline
+	readline = readline,
+	mark_all = mark_all,
+	which_token = which_token,
+	tokenise = tokenise,
 }
 

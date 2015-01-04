@@ -17,6 +17,22 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -----------------------------------------------------------------------------
 
+--
+-- For TYPEOPTS we support fixed entries or function calls using @type
+--
+setmetatable(TYPEOPTS, TYPEOPTS)
+TYPEOPTS["__index"] = function(t, k)
+	local func = rawget(t, "@"..k)
+	if func then
+		return func(k)
+	else
+		return nil
+	end
+end
+
+--
+-- Standard validator and type options for boolean
+--
 VALIDATOR["boolean"] = function(v,kp)
 	local partials = { "true", "false", "yes", "no" }
 
@@ -28,4 +44,6 @@ VALIDATOR["boolean"] = function(v,kp)
 	end
 	return FAIL, "boolean can be true or false"
 end
+TYPEOPTS["Xboolean"] = { "true", "false" }
+
 
