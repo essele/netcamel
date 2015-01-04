@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-BUSYBOX_VERSION = 1.22.1
+BUSYBOX_VERSION = 1.23.0
 BUSYBOX_SITE = http://www.busybox.net/downloads
 BUSYBOX_SOURCE = busybox-$(BUSYBOX_VERSION).tar.bz2
 BUSYBOX_LICENSE = GPLv2
@@ -212,6 +212,8 @@ define BUSYBOX_INSTALL_TARGET_CMDS
 	$(BUSYBOX_MAKE_ENV) $(MAKE) $(BUSYBOX_MAKE_OPTS) -C $(@D) install
 	$(INSTALL) -m 0755 -D package/busybox/udhcpc.script \
 		$(TARGET_DIR)/usr/share/udhcpc/default.script
+	$(INSTALL) -m 0755 -d \
+		$(TARGET_DIR)/usr/share/udhcpc/default.script.d
 	$(BUSYBOX_INSTALL_MDEV_CONF)
 endef
 

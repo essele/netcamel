@@ -8,16 +8,17 @@ SUDO_VERSION = 1.8.10p3
 SUDO_SITE = http://www.sudo.ws/sudo/dist
 SUDO_LICENSE = ISC BSD-3c
 SUDO_LICENSE_FILES = doc/LICENSE
-# Ships a non-release libtool that isn't patch-friendly
+# Ships a beta libtool version hence our patch doesn't apply.
+# Run autoreconf to regenerate ltmain.sh.
 SUDO_AUTORECONF = YES
 SUDO_CONF_OPTS = \
-		--without-lecture \
-		--without-sendmail \
-		--without-umask \
-		--with-logging=syslog \
-		--without-interfaces \
-		--without-pam \
-		--with-env-editor
+	--without-lecture \
+	--without-sendmail \
+	--without-umask \
+	--with-logging=syslog \
+	--without-interfaces \
+	--without-pam \
+	--with-env-editor
 
 # mksigname/mksiglist needs to run on build host to generate source files
 define SUDO_BUILD_MKSIGNAME_MKSIGLIST_HOST
