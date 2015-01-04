@@ -188,10 +188,6 @@ VALIDATOR["interface"] = function(v, kp)
 	return OK
 end
 
-VALIDATOR["ipv4"] = function(v, kp)
-	return OK
-end
-
 --
 -- Convert any format into a full keypath, this is used by any function that
 -- takes any interface as an argument. It allows complete flexibility in what
@@ -242,7 +238,7 @@ master["interface/ethernet"] = {
 
 master["interface/ethernet/*"] = 			{ ["style"] = "ethernet_if",
 											  ["options"] = { "0", "1", "2" } }
-master["interface/ethernet/*/ip"] = 		{ ["type"] = "ipv4" }
+master["interface/ethernet/*/ip"] = 		{ ["type"] = "ipv4_nm" }
 master["interface/ethernet/*/ipx"] = 		{ ["type"] = "ipv4" }
 master["interface/ethernet/*/mtu"] = 		{ ["type"] = "mtu" }
 master["interface/ethernet/*/disabled"] = 	{ ["type"] = "boolean" }

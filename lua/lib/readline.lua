@@ -120,9 +120,13 @@ function ti.init()
 		["\009"] =							"TAB",
 		["\127"] =							"DELETE",
 		["\n"] =							"ENTER",
-		["\003"] =							"INT",
-		["\004"] =							"EOF",
-		["\001"] =							"RESIZE",
+		["\003"] =							"INT",			-- Ctr-C
+		["\004"] =							"EOF",			-- Ctrl-D
+		["\028"] =							"RESIZE",		-- Window Resize
+		["\001"] =							"GO_BOL",		-- Ctrl-A beginning of line
+		["\002"] =							"LEFT",			-- Ctrl-B back one char
+		["\005"] =							"GO_EOL",		-- Ctrl-E end of line
+		["\006"] =							"RIGHT",		-- Ctrl-F forward one char
 	}
 end
 
@@ -284,7 +288,7 @@ local function getchar(ms)
 		-- a window resize, so if we return nil then we will
 		-- cause a redraw
 		if __sigint then __sigint = false return "\003" end
-		if __sigwinch then __sigwinch = false return "\001" end
+		if __sigwinch then __sigwinch = false return "\028" end
 		print("nil")
 		return nil, 0
 	end
@@ -662,6 +666,12 @@ local function readline(prompt, history, syntax_func, completer_func)
 			needs_redraw = true
 		elseif c == "RESIZE" then
 			handle_resize()
+			needs_redraw = true
+		elseif c == "GO_BOL" then
+			__pos = 1
+			needs_redraw = true
+		elseif c == "GO_EOL" then
+			__pos = #line + 1
 			needs_redraw = true
 		elseif c == "EOF" then
 			ti.out(ti.carriage_return)

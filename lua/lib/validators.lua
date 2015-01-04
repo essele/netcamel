@@ -17,6 +17,8 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -----------------------------------------------------------------------------
 
+require("utils")
+
 --
 -- For TYPEOPTS we support fixed entries or function calls using @type
 --
@@ -45,5 +47,48 @@ VALIDATOR["boolean"] = function(v,kp)
 	return FAIL, "boolean can be true or false"
 end
 TYPEOPTS["Xboolean"] = { "true", "false" }
+
+
+--
+-- Validator for an ipv4 address
+--
+VALIDATOR["ipv4"] = function(v, kp)
+	local err = "ipv4 must be nnn.nnn.nnn.nnn"
+
+	if not v:match("^[%d%.]+$") then return FAIL, err end
+	local nums = split(v, "%.")
+	if #nums > 4 then return FAIL, err end
+
+	for i,num in ipairs(nums) do
+		if num == "" then
+			if i ~= #nums then return FAIL, err end
+		else
+			num = tonumber(num)
+			if i == 1 and num == 0 then return FAIL, err end
+			if num > 255 then return FAIL, err end
+		end
+	end
+	if #nums < 4 then return PARTIAL end
+	return OK
+end
+--
+-- Validator for ipv4 with a /netmask on the end
+--
+VALIDATOR["ipv4_nm"] = function(v, kp)
+	local err = "ipv4_nm must be nnn.nnn.nnn.nnn/nn"
+	local ipv4, slash, n = v:match("^([%d%.]+)(/?)(%d-)$")
+	local rc
+
+	if(not ipv4) then return FAIL, err end
+	rc = VALIDATOR["ipv4"](ipv4, kp)
+	if rc == FAIL then return FAIL, err end
+	if rc == PARTIAL then if n=="" and slash=="" then return PARTIAL else return FAIL, err end end
+	if slash == "" or n == "" then return PARTIAL end
+		
+	n = tonumber(n)
+	if n < 1 or n > 32 then return FAIL end
+	return OK
+end
+
 
 

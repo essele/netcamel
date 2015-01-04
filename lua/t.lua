@@ -288,7 +288,7 @@ function tv2(tokens, n, input)
 	local mtype = m["type"]
 
 --	print("type="..tostring(mtype))
---	ptoken.status = VALIDATOR[mtype](value, kp)
+	ptoken.status = VALIDATOR[mtype](value, kp)
 --	print("st="..ptoken.status)
 end
 
