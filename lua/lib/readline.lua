@@ -458,6 +458,10 @@ local function move_to(r, c)
 	end
 end
 
+local function row_and_col_from_pos(pos)
+	return math.floor(pos/__width), pos%__width
+end
+
 local function redraw_line(tokens, input)
 	ti.out(ti.cursor_invisible)
 	move_to(0,0)
