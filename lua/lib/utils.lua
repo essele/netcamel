@@ -17,6 +17,13 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
+function string_insert(src, extra, pos)
+	return src:sub(1, pos-1) .. extra .. src:sub(pos)
+end
+function string_remove(src, pos, count)
+	return src:sub(1, pos-1) .. src:sub(pos+count)
+end
+
 --
 -- Create a copy of the key/value list (or table)
 --
@@ -136,6 +143,33 @@ function ireplace(list, item, new)
 			return
 		end
 	end
+end
+
+--
+-- Find a common prefix from a list or keys
+--
+function icommon_prefix(t)
+	local str = t[1] or ""
+	local n = str:len()
+
+	for _,s in ipairs(t) do
+		while s:sub(1, n) ~= str and n > 0 do
+			n = n - 1
+			str=str:sub(1, n)
+		end
+	end
+	return str
+end
+function common_prefix(t)
+	local str = next(t) or ""
+	local n = str:len()
+	for s,_ in pairs(t) do
+		while s:sub(1, n) ~= str and n > 0 do
+			n = n - 1
+			str=str:sub(1, n)
+		end
+	end
+	return str
 end
 
 --
