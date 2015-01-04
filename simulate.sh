@@ -15,6 +15,7 @@ ROOTFS=${BUILDROOT}/output/images/rootfs.ext2
 LINUX_ARGS="root=/dev/hda console=ttyS0"
 BASE_NET="-netdev user,id=main,host=10.1.0.1,net=10.1.0.0/24,dhcpstart=10.1.0.16 -device pcnet,netdev=main"
 EXTRA_NET="-device pcnet"
+NO_CLOCK="-rtc base=1970-01-01T12:00:00,clock=vm"
 FS="-fsdev local,id=joe,security_model=none,path=/tmp -device virtio-9p-pci,fsdev=joe,mount_tag=joetag"
 
 
@@ -24,6 +25,7 @@ ${QEMU} ${QEMU_OPTIONS} \
 	-append "${LINUX_ARGS}" \
 	${BASE_NET} \
 	${EXTRA_NET} \
-	${FS}
+	${FS} \
+	${NO_CLOCK}
 
 #qemu-system-mips -nographic -kernel output/images/vmlinux -drive file=output/images/rootfs.ext2 -append "root=/dev/hda console=ttyS0" -netdev user,id=fred -device pcnet,netdev=fred
