@@ -27,15 +27,17 @@ posix = require("posix")
 
 local __row = 0
 local __col = 0
-local __srow = 0
-local __scol = 0
 local __width = 0
 local __height = 0
-local __line = ""
 local __pos = 1
+
+local __prompt
+local __promptlen
 
 local __saved_tios
 local __sigfd
+local __sigint = false
+local __sigwinch = false
 
 local FAIL = 0
 local OK = 1
@@ -74,7 +76,6 @@ local keymap = {}
 
 function ti.init()
 	local rc = __libtinfo.setupterm(nil, 1, nil)
-	print("rc="..rc)
 
 	local i = 0
 	while true do
@@ -118,6 +119,10 @@ function ti.init()
 		[ffi.string(ti.key_down)] = 		"DOWN",
 		["\009"] =							"TAB",
 		["\127"] =							"DELETE",
+		["\n"] =							"ENTER",
+		["\003"] =							"INT",
+		["\004"] =							"EOF",
+		["\001"] =							"RESIZE",
 	}
 end
 
@@ -235,6 +240,7 @@ local function init()
 	--
 	-- Make the required changes to the termios struct...
 	--
+	print("INIT")
 	__saved_tios = posix.tcgetattr(0)
 	local tios = posix.tcgetattr(0)
 	tios.lflag = bit.band(tios.lflag, bit.bnot(posix.ECHO))
@@ -247,7 +253,8 @@ local function init()
 	-- the window size change signal and adjust accordingly
 	--
 	-- SIGWINCH
-	posix.signal(28, function() winch_handler() end)
+	posix.signal(28, function() __sigwinch = true end)
+	posix.signal(2, function() __sigint = true end)
 
 	ti.init()
 	ti.out(ti.keypad_xmit)
@@ -276,9 +283,12 @@ local function getchar(ms)
 		-- Interrupted system call probably, most likely
 		-- a window resize, so if we return nil then we will
 		-- cause a redraw
+		if __sigint then __sigint = false return "\003" end
+		if __sigwinch then __sigwinch = false return "\001" end
+		print("nil")
 		return nil, 0
 	end
-
+	
 	if rc < 1 then return nil, 0 end
 	local after = posix.gettimeofday()
 
@@ -359,6 +369,8 @@ end
 --
 local function move_on(n, str)
 	n = n or 1
+
+	if n == 0 then return end
 
 	if not str then
 		if ti.have_multi_move then ti.out(ti.parm_right_cursor, n) else
@@ -441,27 +453,30 @@ local function move_to(r, c)
 		while c < __col do ti.out(ti.cursor_left) __col = __col - 1 end
 	end
 end
-local function save_pos()
-	__srow, __scol = __row, __col
-end
-local function restore_pos()
-	move_to(__srow, __scol)
-end
 
 local function redraw_line(tokens, input)
-	save_pos()
 	move_to(0,0)
+
+	move_on(__promptlen, __prompt)
+
 	show_line(tokens, input)
 	ti.out(ti.clr_eol)
-	restore_pos()
+
+	local pp = (__pos-1) + __promptlen
+	local r = math.floor(pp/__width)
+	local c = pp % __width
+	move_to(r, c)
 end
 
---
--- If we get a window resize event then we need to do something sensible
--- to redraw the line. We'll re-call setupterm so that we get the size
--- adjusted accordingly
---
-local function winch_handler()
+local function clear_line(input)
+	local lastrow = math.floor(input:len()/__width)
+	for i = lastrow, 0, -1 do
+		move_to(i,0)
+		ti.out(ti.clr_eol)
+	end
+end
+
+local function handle_resize()
 	--
 	-- Re-setup and update the ti database accordingly
 	--
@@ -487,6 +502,7 @@ local function winch_handler()
 --	redraw_line()
 	move_to(math.floor((__pos-1)/__width), (__pos-1)%__width)
 end
+
 
 --
 -- Given a set of tokens and a position return the index and
@@ -519,13 +535,43 @@ end
 --
 --
 
-local __tokens = {}
-local needs_redraw = true
 
-local function readline(syntax_func, completer_func)
-	init()
+local function readline(prompt, history, syntax_func, completer_func)
+	table.insert(history, "")
+	local hindex = #history
+	local line = ""
+	local tokens = {}
+	local needs_redraw = true
+	__row, __col, __pos = 0, 0, 1
+
+	--
+	-- Build the prompt
+	--
+	__prompt, __promptlen = "", 0
+	for pelem in each(prompt) do
+		__prompt = __prompt .. ti.tparm(ti.set_a_foreground, pelem.clr) .. pelem.txt
+		__promptlen = __promptlen + pelem.txt:len()
+	end
 
 	while true do
+		--
+		-- we will redraw up front...
+		--
+		if needs_redraw then
+			--
+			-- Build list of tokens
+			--
+			tokenise(tokens, line, " ")
+			if syntax_func then syntax_func(tokens, line) end
+
+			redraw_line(tokens, line)
+			needs_redraw = false
+		end
+		io.flush()
+
+		--
+		-- Now process key presses...
+		--
 		local c = read_key()
 		if c == nil then 
 			needs_redraw = true
@@ -534,69 +580,97 @@ local function readline(syntax_func, completer_func)
 
 		if c:len() == 1 then
 			if c == "q" then break end
-			__line = string_insert(__line, c, __pos)
+			line = string_insert(line, c, __pos)
 			__pos = __pos + 1
-			move_on()
 			needs_redraw = true
 		elseif c == "UP" then
+			--
+			-- Keep our edits for the last in history
+			--
+			if hindex == #history then
+				history[hindex] = line
+			end
+			--
+			-- Move back...
+			--
+			if hindex > 1 then
+				clear_line(line)
+				hindex = hindex - 1
+				tokens = {}
+				line = history[hindex]
+				__pos = #line + 1
+				needs_redraw = true
+			end
+		elseif c == "DOWN" then
+			if hindex < #history then
+				clear_line(line)
+				hindex = hindex + 1
+				tokens = {}
+				line = history[hindex]
+				__pos = #line + 1
+				needs_redraw = true
+			end
 		elseif c == "LEFT" then 
 			if __pos > 1 then
 				move_back()
 				__pos = __pos - 1
 			end
 		elseif c == "RIGHT" then 
-			if __pos <= __line:len() then
+			if __pos <= line:len() then
 				move_on()
 				__pos = __pos + 1
 			end
 		elseif c == "DOWN" then print("DOWN") 
 		elseif c == "DELETE" then
 			if __pos > 1 then
-				__line = string_remove(__line, __pos-1, 1)
+				line = string_remove(line, __pos-1, 1)
 				__pos = __pos - 1
-				move_back()
 				needs_redraw = true
 			end
 		elseif c == "TAB" then
 			if completer_func then
-				local rc = completer_func(__tokens, __line, __pos)
+				local rc = completer_func(tokens, line, __pos)
 				if type(rc) == "string" then
-					__line = string_insert(__line, rc, __pos)
+					line = string_insert(line, rc, __pos)
 					__pos = __pos + rc:len()
-					move_on(rc:len())
 					needs_redraw = true
 				elseif rc then
-					save_pos()
 					ti.out(ti.carriage_return)
 					ti.out(ti.cursor_down)
 					__col, __row = 0, 0
 					for _,m in ipairs(rc) do
 						ti.out(m .. "\n")
 					end
-					restore_pos()
 					needs_redraw = true
 				end
 			end
-		elseif c == "SIGWINCH" then
-			winch_handler()
+		elseif c == "ENTER" then
+			--
+			-- Remove history (we process outside)
+			--
+			table.remove(history)
+			ti.out(ti.carriage_return)
+			ti.out(ti.cursor_down)
+			return line, tokens
+		elseif c == "INT" then
+			ti.out("^C")
+			ti.out(ti.carriage_return)
+			ti.out(ti.cursor_down)
+			__row, __col = 0, 0
+			__pos = 1
+			line = ""
+			needs_redraw = true
+		elseif c == "RESIZE" then
+			handle_resize()
+			needs_redraw = true
+		elseif c == "EOF" then
+			ti.out(ti.carriage_return)
+			ti.out(ti.cursor_down)
+			break
 		end
 
-	::continue::
-		if needs_redraw then
-			--
-			-- Build list of tokens
-			--
-			tokenise(__tokens, __line, " ")
-			if syntax_func then syntax_func(__tokens, __line) end
---			syntax_checker(__tokens, __line)
-
-			redraw_line(__tokens, __line)
-			needs_redraw = false
-		end
-		io.flush()
+::continue::
 	end
-
-	finish()
 end
 
 return {
@@ -604,5 +678,8 @@ return {
 	mark_all = mark_all,
 	which_token = which_token,
 	tokenise = tokenise,
+	
+	init = init,
+	finish = finish,
 }
 

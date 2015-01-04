@@ -212,9 +212,35 @@ show(current, new)
 --
 
 CF_current = {}
---CF_new = {}
+CF_new = {}
 
-readline.readline(syntax_checker, initial_completer)
+history = { }
+
+prompt = {
+	{ txt = "[", clr = 7 },
+	{ txt = "hello", clr = 6 },
+	{ txt = "] ", clr = 7 },
+	{ txt = "", clr = 9 } }
+
+readline.init()
+while true do
+	local cmdline, tags = readline.readline(prompt, history, syntax_checker, initial_completer)
+	if not cmdline then break end
+	if cmdline:match("^%s*$") then goto continue end
+	table.insert(history, cmdline)
+
+	if tags[1].value == "show" then
+		show(CF_current, CF_new)
+	elseif tags[1].value == "set" then
+		print("2="..tags[2].value)
+		print("3="..tags[3].value)
+		local rc, err = set(CF_new, tags[2].value, tags[3].value)
+		if not rc then print("Error: " .. tostring(err)) end
+	end
+
+::continue::
+end
+readline.finish()
 os.exit(0)
 
 while true do

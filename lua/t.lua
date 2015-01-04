@@ -92,11 +92,17 @@ function cfpath_completer(tokens, n, prefix)
 	end
 
 	--
-	-- Find out if we have more after this one
+	-- Find out if we have more after this one ... if we don't get any options then just
+	-- check if we are a wildcard and add a dummy entry.
 	--
 	local more = {}
 	populate_options(more, mtoken.use_master and mp..slash..node.mp, 
 								mtoken.use_new and kp..slash..node.kp, mtoken.containeronly)
+	if #more == 0 then
+		local wc = node_list(mp..slash..node.mp, master)
+-- TODO: containeronly check here???
+		if #wc > 0 then table.insert(more, "dummy") end
+	end
 
 	local match, more = next(matches), next(more)
 	return ((match and match:sub(#prefix+1)) or "") .. ((more and "/") or " ")

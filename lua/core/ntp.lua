@@ -169,8 +169,8 @@ master["service/ntp"] = {
 	["precommit"] = ntp_precommit 
 }
 
-master["service/ntp/enable"] = { ["type"] = "bool" }
-master["service/ntp/provide-service"] = { ["type"] = "bool" }
+master["service/ntp/enable"] = { ["type"] = "boolean" }
+master["service/ntp/provide-service"] = { ["type"] = "boolean" }
 master["service/ntp/listen-on"] = { ["type"] = "interface", ["list"] = 1 }
 master["service/ntp/server"] = { ["type"] = "OK", ["list"] = 1 }
 
