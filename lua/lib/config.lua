@@ -624,7 +624,7 @@ function validate(vtype, kp, value)
 	if not validator then return false, "undefined validator for "..vtype.." ["..value.."]" end
 	local rc, newval = validator(value, kp)
 
-	if rc ~= OK then return false, "validation failed for "..vtype.." ["..value.."]: "..err end
+	if rc ~= OK then return false, "validation failed for "..vtype.." ["..value.."]: "..newval end
 	return true, newval
 end
 function raw_validate(vtype, kp, value)

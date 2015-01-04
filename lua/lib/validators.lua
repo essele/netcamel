@@ -68,7 +68,7 @@ VALIDATOR["ipv4"] = function(v, kp)
 			if num > 255 then return FAIL, err end
 		end
 	end
-	if #nums < 4 then return PARTIAL end
+	if #nums < 4 then return PARTIAL, err end
 	return OK
 end
 --
@@ -82,8 +82,8 @@ VALIDATOR["ipv4_nm"] = function(v, kp)
 	if(not ipv4) then return FAIL, err end
 	rc = VALIDATOR["ipv4"](ipv4, kp)
 	if rc == FAIL then return FAIL, err end
-	if rc == PARTIAL then if n=="" and slash=="" then return PARTIAL else return FAIL, err end end
-	if slash == "" or n == "" then return PARTIAL end
+	if rc == PARTIAL then if n=="" and slash=="" then return PARTIAL, err else return FAIL, err end end
+	if slash == "" or n == "" then return PARTIAL, err end
 		
 	n = tonumber(n)
 	if n < 1 or n > 32 then return FAIL end
