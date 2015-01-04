@@ -459,6 +459,7 @@ local function move_to(r, c)
 end
 
 local function redraw_line(tokens, input)
+	ti.out(ti.cursor_invisible)
 	move_to(0,0)
 
 	move_on(__promptlen, __prompt)
@@ -470,6 +471,7 @@ local function redraw_line(tokens, input)
 	local r = math.floor(pp/__width)
 	local c = pp % __width
 	move_to(r, c)
+	ti.out(ti.cursor_normal)
 end
 
 local function clear_line(input)
@@ -553,9 +555,14 @@ local function readline(prompt, history, syntax_func, completer_func)
 	--
 	__prompt, __promptlen = "", 0
 	for pelem in each(prompt) do
-		__prompt = __prompt .. ti.tparm(ti.set_a_foreground, pelem.clr) .. pelem.txt
+		if ti.set_a_foreground then
+			__prompt = __prompt .. ti.tparm(ti.set_a_foreground, pelem.clr) .. pelem.txt
+		else
+			__prompt = __prompt .. pelem.txt
+		end
 		__promptlen = __promptlen + pelem.txt:len()
 	end
+	if ti.set_a_foreground then __prompt = __prompt .. ti.tparm(ti.set_a_foreground, 9) end
 
 	while true do
 		--
@@ -624,7 +631,6 @@ local function readline(prompt, history, syntax_func, completer_func)
 				move_on()
 				__pos = __pos + 1
 			end
-		elseif c == "DOWN" then print("DOWN") 
 		elseif c == "DELETE" then
 			if __pos > 1 then
 				line = string_remove(line, __pos-1, 1)
