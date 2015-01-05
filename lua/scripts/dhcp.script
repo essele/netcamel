@@ -1,0 +1,95 @@
+#!/usr/bin/luajit
+--
+-- This script is called by udhcpc when a lease is granted, fails or is renewed.
+--
+-- The role of this script is to configure the interface, setup the default
+-- route and configure the resolvers.
+--
+package.path = "/netcamel/lib/?.lua;"..package.path
+
+--
+-- We need to access the database
+--
+db = require("db")
+
+--
+-- Just for string split
+--
+require("utils")
+
+--
+-- Pull out all of the environment variables
+--
+local interface = os.getenv("interface")
+local ip		= os.getenv("ip")
+local mask		= os.getenv("mask")
+local broadcast = os.getenv("broadcast") or "+"
+local routers 	= split(os.getenv("router") or "", " ")
+local dns 		= split(os.getenv("dns") or "", " ")
+local priority 	= os.getenv("priority") or "99"
+local action 	= arg[1]
+
+
+print("Action="..action)
+
+if action == "deconfig" then
+	--
+	-- Remove the prior entries from the database
+	--
+	db.query("resolvers", "remove_with_key", interface)
+	db.query("defaultroutes", "remove_with_key", interface)
+
+	--
+	-- Make sure the interface is up but unconfigured
+	--
+	os.execute(string.format("ip link set %s up", interface))
+	os.execute(string.format("ip addr flush dev %s", interface))
+end
+
+if action == "leasefail" or action == "nak" then
+end
+
+if action == "renew" or action == "bound" then
+	--
+	-- Replace any entries with the new ones
+	--
+	db.query("resolvers", "remove_with_key", interface)
+	db.query("defaultroutes", "remove_with_key", interface)
+	for resolver in each(dns) do
+		db.insert("resolvers", { key = interface, priority = priority, value = resolver })
+	end
+	for router in each(routers) do
+		db.insert("defaultroutes", { key = interface, priority = priority, value = router })
+	end
+
+	--
+	-- Configure the interface
+	--
+	os.execute(string.format("ip addr flush dev %s", interface))
+	os.execute(string.format("ip addr add %s/%s broadcast %s dev %s", ip, mask, broadcast, interface))
+end
+
+--
+-- Now work out what the correct route and resolvers are
+--
+local resolver_rows = db.query("resolvers", "priority_resolvers")
+local file = io.open("/etc/resolv.conf", "w")
+for _,res in ipairs(resolver_rows) do
+	file:write(string.format("nameserver %s # %s\n", res.value, interface))
+end
+file:close()
+
+--
+-- Remove the default route, and then add from the prioritised records
+--
+-- We can only support one router at this stage, so just pick the first one
+-- we get back.
+--
+os.execute(string.format("ip route del default dev %s 2>/dev/null", interface))
+local router_rows = db.query("defaultroutes", "priority_defaultroutes")
+if router_rows[1] then
+	local router = router_rows[1].value
+	os.execute(string.format("ip route add default via %s dev %s", router, interface))
+end
+
+os.exit(0)

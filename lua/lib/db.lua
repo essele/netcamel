@@ -26,7 +26,46 @@
 TABLE = {}
 
 local sqlite3 = require("lsqlite3")
-local db = sqlite3.open("lee.sqlite3")
+local db = sqlite3.open("/tmp/netcamel_t.sqlite3")
+
+local function init()
+	local rc = db:exec[[
+		drop table if exists __queries;
+		create table __queries ( name string, query string, sql string );
+	]]
+	print("init== rc="..rc.." err="..db:errmsg())
+	return true
+end
+
+--
+-- Create a table given the spec from the TABLE table.
+--
+local function create_table(name)
+	local sql, rc
+	local tabdef = TABLE[name] and TABLE[name].schema
+	if not tabdef then return false, "unknown table" end
+
+	local fields = {}
+	for k,v in pairs(tabdef) do
+		table.insert(fields, k.." "..v)
+	end
+	rc = db:exec("drop table if exists "..name)
+	if rc ~= 0 then return false, "unable to drop table" end
+	rc = db:exec("create table " .. name .. " (" .. table.concat(fields, ", ") .. ")")
+	if rc ~= 0 then return false, "unable to create table" end
+
+	for k, v in pairs(TABLE[name]) do
+		local stmt = db:prepare("insert into __queries values (?, ?, ?)")
+		if not stmt then return false, "queryadd: "..db:errmsg() end
+		if k ~= "schema" then
+			stmt:bind_values(name, k, v)
+			stmt:step()
+			stmt:finalize()
+		end
+	end
+
+	return true
+end
 
 --
 -- Insert items into a table based on the fields provided in a hash
@@ -63,52 +102,42 @@ end
 -- TABLE list
 --
 local function query(name, qname, ...)
-	local sql = TABLE[name] and TABLE[name][qname]
-	if not sql then return false, "unknown table or query" end
+	--
+	-- Find the query from the __queries table...
+	--
+	local sql = "select sql from __queries where name = ? and query = ?"
+	local stmt = db:prepare(sql)
+	if not stmt then return false, "pre-query prep failed: "..db:errmsg() end
+	if stmt:bind_values(name, qname) ~= sqlite3.OK then return false, "pre-bind failed: "..db:errmsg() end
+	local res = (stmt:nrows()(stmt))
+	if not res or not res.sql then return false, "unable to find query: "..db:errmsg() end
 
+	sql = res.sql
 	local stmt = db:prepare(sql)
 	if not stmt then return false, "query failed: "..db:errmsg() end
 
 	if select('#', ...) > 0 then
-		print("would bind")
 		if type(select(1, ...)) == "table" then
-			print("table")
 			if stmt:bind_names(select(1, ...)) ~= sqlite3.OK then return false, "bind failed: "..db:errmsg() end
 		else
-			print("non table")
 			if stmt:bind_values(...) ~= sqlite3.OK then return false, "bind failed: "..db:errmsg() end
 		end
 	end
 
 	local rc = {}
-	for row in stmt:nrows(sql) do
-		table.insert(rc, row)
-	end
+	for row in stmt:nrows(sql) do table.insert(rc, row) end
 	stmt:finalize()
 	return rc
 end
 
---
--- Create a table given the spec from the TABLE table.
---
-local function create_table(name)
-	local sql, rc
-	local tabdef = TABLE[name] and TABLE[name].schema
-	if not tabdef then return false, "unknown table" end
-
-	local fields = {}
-	for k,v in pairs(tabdef) do
-		table.insert(fields, k.." "..v)
-	end
-	rc = db:exec("drop table if exists "..name)
-	if rc ~= 0 then return false, "unable to drop table" end
-	rc = db:exec("create table " .. name .. " (" .. table.concat(fields, ", ") .. ")")
-	if rc ~= 0 then return false, "unable to create table" end
-	return true
+local function close()
+	db:close()
 end
 
 return {
+	init = init,
 	create = create_table,
 	query = query,
-	insert = insert_into_table
+	insert = insert_into_table,
+	close = close,
 }

@@ -25,11 +25,21 @@ TABLE["resolvers"] = {
 	priority_resolvers = "select * from resolvers where priority = (select min(priority) from resolvers)",
 	remove_with_key = "delete from resolvers where key = :key"
 }
+TABLE["defaultroutes"] = {
+	schema = { key="string key", priority="integer", value="sring" },
+	priority_defaultroutes = "select * from defaultroutes where priority = (select min(priority) from defaultroutes)",
+	remove_with_key = "delete from defaultroutes where key = :key"
+}
+
+local rc, err = db.init()
 
 local rc, err = db.create("resolvers")
-
-local rc, err = db.insert("resolvers", { key = "mykey", priority = 34, value = "myval" })
 if not rc then print("INSERT ERR: " .. err ) os.exit(1) end
+local rc, err = db.create("defaultroutes")
+if not rc then print("INSERT ERR: " .. err ) os.exit(1) end
+
+--local rc, err = db.insert("resolvers", { key = "mykey", priority = 34, value = "myval" })
+--if not rc then print("INSERT ERR: " .. err ) os.exit(1) end
 
 --local rc, err = query("resolvers", "remove_with_key", "mykey")
 
@@ -46,6 +56,6 @@ print("V="..resolvers[1].value)
 --	print("key="..row.key.." pri="..row.priority.." value="..row.value)
 --end
 
---db:close()
+db.close()
 
 
