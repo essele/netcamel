@@ -218,7 +218,14 @@ show(current, new)
 CF_current = {}
 CF_new = {}
 
-history = { }
+history = {}
+
+-- Read History
+local file = io.open("etc/__history", "r")
+if file then
+	for h in file:lines() do table.insert(history, h) end
+end
+
 
 prompt = {
 	{ txt = "[", clr = 7 },
@@ -240,11 +247,26 @@ while true do
 		print("3="..tags[3].value)
 		local rc, err = set(CF_new, tags[2].value, tags[3].value)
 		if not rc then print("Error: " .. tostring(err)) end
+	elseif tags[1].value == "commit" then
+		local rc, err = commit(CF_current, CF_new)
+		if not rc then 
+			print("Error: " .. err)
+		else
+			CF_current = copy_table(CF_new)
+		end
 	end
 
 ::continue::
 end
 readline.finish()
+
+-- Save history
+local file = io.open("etc/__history", "w")
+if file then
+	for h in each(history) do file:write(h .. "\n") end
+	file:close()
+end
+
 os.exit(0)
 
 while true do

@@ -19,8 +19,8 @@
 
 local NTPD = "/usr/sbin/ntpd"
 local NTPD_NAME = "ntpd"
-local NTPD_ARGS = { "-g" }
 local NTPD_CONFIG = "/tmp/ntpd.conf"
+local NTPD_ARGS = { "-c", NTPD_CONFIG, "-g" }
 
 --
 -- NTP has a number of configuration options which we need to worry about,
@@ -68,10 +68,19 @@ local function ntp_commit(changes)
 		restrict 127.0.0.1
 		restrict -6 ::1
 
-		interface ignore wildcard
-		interface listen 127.0.0.1
-
-		interface listen {{interface}}
+		#
+		# We will listen on all interfaces by default
+		# since it makes it easier to control where the
+		# packets with be received from.
+		#
+		# The iptables rules will limit the service if
+		# listen-on interfaces are not configured.
+		#
+		# interface ignore wildcard
+		# interface listen 127.0.0.1
+		#
+		# interface listen {{interface}}
+		#
 	]]
 	create_config_file(NTPD_CONFIG, cfdata, cfdict)
 

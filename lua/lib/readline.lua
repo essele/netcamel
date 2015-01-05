@@ -653,7 +653,6 @@ local function readline(prompt, history, syntax_func, completer_func)
 		end
 
 		if c:len() == 1 then
-			if c == "q" then break end
 			line = string_insert(line, c, __pos)
 			__pos = __pos + 1
 			needs_redraw = true
@@ -753,6 +752,7 @@ local function readline(prompt, history, syntax_func, completer_func)
 				line = string_remove(line, __pos, 1)
 				needs_redraw = true
 			elseif c == "EOF" and __pos == 1 and line == "" then 
+				table.remove(history)
 				ti.out(ti.carriage_return)
 				ti.out(ti.cursor_down) 
 				return nil 
