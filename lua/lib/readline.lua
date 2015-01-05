@@ -117,7 +117,6 @@ function ti.init()
 		[ffi.string(ti.key_right)] = 		"RIGHT",
 		[ffi.string(ti.key_up)] = 			"UP",
 		[ffi.string(ti.key_down)] = 		"DOWN",
-		[ffi.string(ti.key_dc)] = 			"DELETE",
 		["\009"] =							"TAB",
 		["\127"] =							"BACKSPACE",
 		["\n"] =							"ENTER",
@@ -129,6 +128,12 @@ function ti.init()
 		["\005"] =							"GO_EOL",		-- Ctrl-E end of line
 		["\006"] =							"RIGHT",		-- Ctrl-F forward one char
 	}
+	--
+	-- VT100 doesn't have a delete key???
+	--
+	if ti.key_dc then
+		keymap[ffi.string(ti.key_dc)] = "DELETE"
+	end
 end
 
 --
