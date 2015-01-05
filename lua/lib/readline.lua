@@ -127,6 +127,8 @@ function ti.init()
 		["\002"] =							"LEFT",			-- Ctrl-B back one char
 		["\005"] =							"GO_EOL",		-- Ctrl-E end of line
 		["\006"] =							"RIGHT",		-- Ctrl-F forward one char
+		["\027f"] =							"GO_FWORD",		-- Alt-F forward one word
+		["\027b"] = 						"GO_BWORD",		-- Alt-B backward one work
 	}
 	--
 	-- VT100 doesn't have a delete key???
@@ -567,6 +569,33 @@ local function mark_all(tokens, n, value)
 end
 
 --
+-- Going backwards a word, find a alpha immediately after the nearest
+-- none alpha (or start)
+--
+local function bword(line, pos)
+	if pos <= 2 then return 1 end
+
+	pos = pos - 1
+	while pos >= 2 do
+		if line:sub(pos, pos):match("%w") and not line:sub(pos-1, pos-1):match("%w") then return pos end
+		pos = pos - 1
+	end
+	return 1
+end
+--
+-- Go to the next non-alpha after an alpha
+--
+local function fword(line, pos)
+	if pos > line:len()-1 then return pos end
+	pos = pos + 1
+	while pos < line:len() do
+		if not line:sub(pos, pos):match("%w") and line:sub(pos-1, pos-1):match("%w") then return pos end
+		pos = pos + 1
+	end
+	return line:len()+1
+end
+
+--
 --
 --
 --
@@ -712,6 +741,12 @@ local function readline(prompt, history, syntax_func, completer_func)
 			needs_redraw = true
 		elseif c == "GO_EOL" then
 			__pos = #line + 1
+			needs_redraw = true
+		elseif c == "GO_FWORD" then
+			__pos = fword(line, __pos)
+			needs_redraw = true
+		elseif c == "GO_BWORD" then
+			__pos = bword(line, __pos)
 			needs_redraw = true
 		elseif c == "DELETE" or c == "EOF" then
 			if __pos <= line:len() then
