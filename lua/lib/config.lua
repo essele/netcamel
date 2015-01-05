@@ -446,7 +446,11 @@ function import(filename)
 				data = data .. line
 			end
 		else
-			rc[kp] = value
+			if vtype == "boolean" then
+				rc[kp] = (value == "true")
+			else
+				rc[kp] = value
+			end
 		end
 	end
 	return rc
@@ -679,6 +683,17 @@ function rework_kp(config, kp)
 	end
 	return rkp
 end
+
+--
+-- Save the current config
+--
+-- TODO: needs to be more configurable, filename etc
+--
+function save(config)
+	print("saving...")
+	return dump("etc/boot.conf", config)
+end
+
 
 --
 -- Convert and validate the provided path, then check the validator

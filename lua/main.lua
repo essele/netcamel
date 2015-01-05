@@ -226,6 +226,13 @@ if file then
 	for h in file:lines() do table.insert(history, h) end
 end
 
+-- Read current config
+CF_current = import("etc/boot.conf")
+if not CF_current then
+	print("Failed to load config, starting with nothing")
+	CF_current = {}
+end
+CF_new = copy_table(CF_current)
 
 prompt = {
 	{ txt = "[", clr = 7 },
@@ -245,6 +252,12 @@ while true do
 	elseif tags[1].value == "set" then
 		print("2="..tags[2].value)
 		print("3="..tags[3].value)
+
+		local has_quotes = tags[3].value:match("^\"(.*)\"$")
+		if has_quotes then
+			tags[3].value = has_quotes
+		end
+	
 		local rc, err = set(CF_new, tags[2].value, tags[3].value)
 		if not rc then print("Error: " .. tostring(err)) end
 	elseif tags[1].value == "commit" then
@@ -254,6 +267,11 @@ while true do
 		else
 			CF_current = copy_table(CF_new)
 		end
+	elseif tags[1].value == "save" then
+		-- TODO
+		-- Save current config
+		local rc, err = save(CF_current)
+		if not rc then print("Error: " .. err) end
 	end
 
 ::continue::

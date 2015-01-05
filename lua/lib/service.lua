@@ -166,7 +166,7 @@ local function start_normally(name)
 
 	print("would run (normally): " .. tostring(svc.binary))
 
-	local rc, err = execute( { svc.binary, unpack(svc.args) }, nil )
+	local rc, err = execute(svc.binary, svc.args, nil )
 	print("rc="..tostring(rc))
 	for _,x in ipairs(err) do
 		print("> "..x)

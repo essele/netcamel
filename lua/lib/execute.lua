@@ -56,7 +56,7 @@ end
 -- Execute some other binary, but allow us to pipe in to stdin and
 -- collect stdout and stderr
 --
-function execute(cmdline, stdin)
+function execute(cmd, args, stdin)
 	local outr, outw = posix.pipe()
 	local pid = posix.fork()
 	if pid == 0 then
@@ -73,7 +73,7 @@ function execute(cmdline, stdin)
 			posix.close(inw)
 			posix.dup2(inr, 0)
 		
-			posix.execp(unpack(cmdline))
+			posix.execp(cmd, args)
 			print("unable to exec")
 			os.exit(1)
 		end

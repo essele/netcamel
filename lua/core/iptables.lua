@@ -324,8 +324,8 @@ end
 -- what return code we get
 --
 local function ipt_rebuild(testonly)
-	local ipt_restore = { "testing/iptables-restore" }
-	if testonly then table.insert(ipt_restore, "--test") end	
+	local ipt_restore = "/usr/sbin/iptables-restore"
+	local ipt_restore_args = (testonly and {"--test"}) or {}
 
 	--
 	-- Map a line number in a set of iptables-restore inputs back into a table,
@@ -347,7 +347,7 @@ local function ipt_rebuild(testonly)
 	local rules, err = ipt_generate()
 	if not rules then return false, err end
 	
-	local rc, stdout = execute(ipt_restore, rules)
+	local rc, stdout = execute(ipt_restore, ipt_restore_args, rules)
 	if rc == 0 then return true end
 
 	--

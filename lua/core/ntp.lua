@@ -146,8 +146,13 @@ local function ntp_iptables_rules()
 
 	print("AT NTP_IPTABLES_RULES")
 
+	print("eable="..tostring(CF_new["service/ntp/enable"]))
+	print("prov-svc="..tostring(CF_new["service/ntp/provide-service"]))
+
 	if CF_new["service/ntp/enable"] == true and CF_new["service/ntp/provide-service"] == true then
+		print("We are enabled")
 		for interface in each(CF_new["service/ntp/listen-on"] or {}) do
+			print("Interface is: "..interface)
 			interface = interface_name(interface)
 			table.insert(rules, string.format("-i %s -p udp --dport 123 -j ACCEPT", interface))
 		end
