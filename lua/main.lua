@@ -34,7 +34,9 @@ ffi 	= require("ffi")
 service = require("service")
 posix   = require("posix")
 
-require("t")
+-- bring in our syntax checkers and completers
+-- this also brings in readline
+require("cmdline")
 
 
 --
