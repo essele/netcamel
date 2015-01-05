@@ -117,8 +117,9 @@ function ti.init()
 		[ffi.string(ti.key_right)] = 		"RIGHT",
 		[ffi.string(ti.key_up)] = 			"UP",
 		[ffi.string(ti.key_down)] = 		"DOWN",
+		[ffi.string(ti.key_dc)] = 			"DELETE",
 		["\009"] =							"TAB",
-		["\127"] =							"DELETE",
+		["\127"] =							"BACKSPACE",
 		["\n"] =							"ENTER",
 		["\003"] =							"INT",			-- Ctr-C
 		["\004"] =							"EOF",			-- Ctrl-D
@@ -346,6 +347,21 @@ local function read_key()
 	end
 end
 
+local function move_to(r, c)
+	if ti.have_multi_move then
+		if r > __row then ti.out(ti.parm_down_cursor, r-__row) end
+		if r < __row then ti.out(ti.parm_up_cursor, __row-r) end
+		if c > __col then ti.out(ti.parm_right_cursor, c-__col) end
+		if c < __col then ti.out(ti.parm_left_cursor, __col-c) end
+		__row, __col = r, c
+	else
+		while r > __row do ti.out(ti.cursor_down) __row = __row + 1 end
+		while r < __row do ti.out(ti.cursor_up) __row = __row - 1 end
+		if math.abs(__col - c) then ti.out(ti.carriage_return) __col = 0 end
+		while c > __col do ti.out(ti.cursor_right) __col = __col + 1 end
+		while c < __col do ti.out(ti.cursor_left) __col = __col - 1 end
+	end
+end
 
 --
 -- We need to track our position relative to the start of the line
@@ -363,6 +379,10 @@ local function move_back()
 		ti.out(ti.cursor_left)
 		__col = __col -1
 	end
+end
+
+local function row_and_col_from_pos(pos)
+	return math.floor(pos/__width), pos%__width
 end
 
 --
@@ -383,12 +403,15 @@ local function move_on(n, str)
 		ti.out(str)
 	end
 
+--[[
 	local npos = __col + n
 	local extra_rows = math.floor(npos/__width)
 	local final_col = npos % __width
 
 	__col = final_col
 	__row = __row + extra_rows
+--]]
+	__row, __col = row_and_col_from_pos(__col + n)
 
 	if (n > 0 and __col == 0) and ti.auto_right_margin then
 		if ti.eat_newline_glitch then ti.out(ti.carriage_return) end
@@ -398,83 +421,77 @@ local function move_on(n, str)
 end
 
 --
--- Output the list of tokens with relevant colour highlighting
--- (make sure we re-create any whitespace gaps)
+-- If we have color support then work out what colours are needed for the
+-- given token
 --
+local function colourise_token(token, sep)
+	local color = ti.set_a_foreground and token.status and 
+								ti.tparm(ti.set_a_foreground, __color[token.status])
+	local stdcolor = (color and ti.tparm(ti.set_a_foreground, 9)) or ""
+	color = color or ""
 
---
--- Output each token in turn, making sure to recreate the appropriate
--- amount of whitespace... we also handle subtokens recursively.
---
-local function show_line(tokens, input)
-	function show_token(token, pos, master)
-		local rc = ""
-
-		--
-		-- Use colors if we can, and if the status is set
-		--
-		local color = ti.set_a_foreground and token.status and 
-									ti.tparm(ti.set_a_foreground, __color[token.status])
-		local stdcolor = (color and ti.tparm(ti.set_a_foreground, 9)) or ""
-		color = color or ""
-
-		if pos < token.start then
-			-- this will be the sepator for the next token so should coloured
-			rc = color .. string.sub(master, pos, token.start-1) .. stdcolor
-			pos = token.start
-		end
-		if token.subtokens then
-			for i,t in ipairs(token.subtokens) do
-				local nrc
-				nrc, pos = show_token(t, pos, master)
-				rc = rc .. nrc
-			end
-		else
-			rc = rc .. color .. token.value .. stdcolor
-			pos = pos + token.value:len()
-		end
-		return rc, pos
-	end
-
-	local token = { start=1, finish=input:len(), subtokens=tokens }
-	local out, pos = show_token(token, 1, input)
-
-	if out:len() > 0 then move_on(input:len(), out) end
-end
-
-local function move_to(r, c)
-	if ti.have_multi_move then
-		if r > __row then ti.out(ti.parm_down_cursor, r-__row) end
-		if r < __row then ti.out(ti.parm_up_cursor, __row-r) end
-		if c > __col then ti.out(ti.parm_right_cursor, c-__col) end
-		if c < __col then ti.out(ti.parm_left_cursor, __col-c) end
-		__row, __col = r, c
+	local rc = ""
+	if ti.set_a_foreground and token.status then
+		return ti.tparm(ti.set_a_foreground, __color[token.status])..sep..token.value..ti.tparm(ti.set_a_foreground, 9)
 	else
-		while r > __row do ti.out(ti.cursor_down) __row = __row + 1 end
-		while r < __row do ti.out(ti.cursor_up) __row = __row - 1 end
-		if math.abs(__col - c) then ti.out(ti.carriage_return) __col = 0 end
-		while c > __col do ti.out(ti.cursor_right) __col = __col + 1 end
-		while c < __col do ti.out(ti.cursor_left) __col = __col - 1 end
+		return sep..token.value
 	end
 end
 
-local function row_and_col_from_pos(pos)
-	return math.floor(pos/__width), pos%__width
+--
+-- Try to efficiently show a line based on which tokens have changed and therefore need to be
+-- redrawn.
+--
+local function show_line(tokens, input, offset, force)
+	function show_token_list(tokens, input, offset, force, p, lop)
+		for i, token in ipairs(tokens) do
+			if token.subtokens then 
+				p, lop = show_token_list(token.subtokens, input, offset, force, p, lop)
+			else
+				local hash = string.format("%d/%d/%s", token.start, token.status, token.value)
+				if token.hash ~= hash or force then
+					-- 
+					-- If we are not sequential then we need to go the the right place
+					--
+					if p > lop+1 then 
+						local r, c = row_and_col_from_pos((p-1)+offset)
+						move_to(r, c)
+					end
+					--
+					-- We will output the separator if needed
+					--
+					local sep = (p < token.start and input:sub(p, token.start-1)) or ""
+					--
+					-- And finally the actual token
+					--
+					move_on(token.value:len() + sep:len(), colourise_token(token, sep))
+					token.hash = hash
+					lop = token.start + token.value:len()
+				end
+				p = token.start + token.value:len()
+			end
+		end
+		return p, lop
+	end
+	local p, lop = show_token_list(tokens, input, offset, force, 1, -1)
+	if lop == 1 or lop == #input+1 then
+		ti.out(ti.clr_eol)
+	end
 end
 
-local function redraw_line(tokens, input)
+
+
+
+local function redraw_line(tokens, input, full_redraw)
 	ti.out(ti.cursor_invisible)
-	move_to(0,0)
 
-	move_on(__promptlen, __prompt)
+	if full_redraw then
+		move_to(0,0)
+		move_on(__promptlen, __prompt)
+	end
+	show_line(tokens, input, __promptlen, full_redraw)
 
-	show_line(tokens, input)
-	ti.out(ti.clr_eol)
-
-	local pp = (__pos-1) + __promptlen
-	local r = math.floor(pp/__width)
-	local c = pp % __width
-	move_to(r, c)
+	move_to(row_and_col_from_pos((__pos-1) + __promptlen))
 	ti.out(ti.cursor_normal)
 end
 
@@ -503,14 +520,17 @@ local function handle_resize()
 	__height = ti.lines
 
 	--
-	-- TODO: we can do better than clear the screen, perhaps work out
-	-- how many rows down we were, move back up clear to eos, then redraw.
+	-- Work out how far down we are now likely to be, then move back up that many lines
+	-- and clear to EOS.
 	--
---	ti.out(ti.clear_screen)
+	-- Different terminals handle this differently so we've just do the best we can.
+	--
+	local r, c = row_and_col_from_pos((__pos-1) + __promptlen)
 	ti.out(ti.carriage_return)
-	__row, __col = 0, 0
---	redraw_line()
-	move_to(math.floor((__pos-1)/__width), (__pos-1)%__width)
+
+	__row, __col = r, 0
+	move_to(0, 0)
+	ti.out(ti.clr_eos)
 end
 
 
@@ -524,7 +544,8 @@ local function which_token(tokens, pos)
 			return i, token.value:sub(1, pos - token.start)
 		end
 	end
-	assert(false, "cant figure out which token (pos="..pos..")")
+	print("WARNING: which_token no token matches")
+	return #tokens+1, ""
 end
 
 --
@@ -552,6 +573,7 @@ local function readline(prompt, history, syntax_func, completer_func)
 	local line = ""
 	local tokens = {}
 	local needs_redraw = true
+	local needs_full_redraw = true
 	__row, __col, __pos = 0, 0, 1
 
 	--
@@ -572,17 +594,20 @@ local function readline(prompt, history, syntax_func, completer_func)
 		--
 		-- we will redraw up front...
 		--
-		if needs_redraw then
+		if needs_redraw or needs_full_redraw then
 			--
 			-- Build list of tokens
 			--
 			tokenise(tokens, line, " ")
+
 			if syntax_func then syntax_func(tokens, line) end
 
-			redraw_line(tokens, line)
+			redraw_line(tokens, line, needs_full_redraw)
 			needs_redraw = false
+			needs_full_redraw = false
 		end
 		io.flush()
+
 
 		--
 		-- Now process key presses...
@@ -614,7 +639,7 @@ local function readline(prompt, history, syntax_func, completer_func)
 				tokens = {}
 				line = history[hindex]
 				__pos = #line + 1
-				needs_redraw = true
+				needs_full_redraw = true
 			end
 		elseif c == "DOWN" then
 			if hindex < #history then
@@ -623,7 +648,7 @@ local function readline(prompt, history, syntax_func, completer_func)
 				tokens = {}
 				line = history[hindex]
 				__pos = #line + 1
-				needs_redraw = true
+				needs_full_redraw = true
 			end
 		elseif c == "LEFT" then 
 			if __pos > 1 then
@@ -635,7 +660,7 @@ local function readline(prompt, history, syntax_func, completer_func)
 				move_on()
 				__pos = __pos + 1
 			end
-		elseif c == "DELETE" then
+		elseif c == "BACKSPACE" then
 			if __pos > 1 then
 				line = string_remove(line, __pos-1, 1)
 				__pos = __pos - 1
@@ -655,7 +680,7 @@ local function readline(prompt, history, syntax_func, completer_func)
 					for _,m in ipairs(rc) do
 						ti.out(m .. "\n")
 					end
-					needs_redraw = true
+					needs_full_redraw = true
 				end
 			end
 		elseif c == "ENTER" then
@@ -673,25 +698,24 @@ local function readline(prompt, history, syntax_func, completer_func)
 			__row, __col = 0, 0
 			__pos = 1
 			line = ""
-			needs_redraw = true
+			needs_full_redraw = true
 		elseif c == "RESIZE" then
 			handle_resize()
-			needs_redraw = true
+			needs_full_redraw = true
 		elseif c == "GO_BOL" then
 			__pos = 1
 			needs_redraw = true
 		elseif c == "GO_EOL" then
 			__pos = #line + 1
 			needs_redraw = true
-		elseif c == "EOF" then
-			if __pos == 1 and line == "" then 
-				ti.out(ti.carriage_return)
-				ti.out(ti.cursor_down) 
-				return nil 
-			end
+		elseif c == "DELETE" or c == "EOF" then
 			if __pos <= line:len() then
 				line = string_remove(line, __pos, 1)
 				needs_redraw = true
+			elseif c == "EOF" and __pos == 1 and line == "" then 
+				ti.out(ti.carriage_return)
+				ti.out(ti.cursor_down) 
+				return nil 
 			end
 		end
 
