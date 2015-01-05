@@ -107,6 +107,7 @@ end
 -- search, looking for non-master records
 --
 function node_exists_using_master(prefix, kv)
+	prefix = prefix:gsub("([%-%.%+])", "%%%1")
 	prefix = "^" .. prefix:gsub("%*%f[/%z]", "*[^/]+")
 
 	for k,_ in pairs(kv) do

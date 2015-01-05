@@ -196,6 +196,8 @@ function ntp_init()
 	-- macro
 	--
 	add_trigger("service/ntp/enable", "iptables/*MACROS/@(input-allowed-services)")
+	add_trigger("service/ntp/provide-service", "iptables/*MACROS/@(input-allowed-services)")
+	add_trigger("service/ntp/listen-on", "iptables/*MACROS/@(input-allowed-services)")
 
 	--
 	-- Make sure we can contribute to the allowed services list...
