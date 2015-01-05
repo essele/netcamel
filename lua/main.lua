@@ -218,6 +218,26 @@ show(current, new)
 CF_current = {}
 CF_new = {}
 
+
+--
+-- If we are called with "init" as the arg then we load and commit the boot config
+--
+if arg[1] == "init" then
+	print("Loading boot config...")
+	CF_new = import("etc/boot.conf")
+	if not CF_new then
+		print("LOAD FAILED")
+		os.exit(1)
+	end
+	local rc, err = commit(CF_current, CF_new)
+	if not rc then 
+		print("Error: " .. err)
+		os.exit(1)
+	end
+	os.exit(0)
+end
+
+
 history = {}
 
 -- Read History
