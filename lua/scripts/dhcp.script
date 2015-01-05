@@ -13,7 +13,7 @@ package.path = "/netcamel/lib/?.lua;"..package.path
 db = require("db")
 
 --
--- Just for string split
+-- For string split and each
 --
 require("utils")
 
@@ -30,7 +30,7 @@ local priority 	= os.getenv("priority") or "99"
 local action 	= arg[1]
 
 
-print("Action="..action)
+print("Performing Action: "..action)
 
 if action == "deconfig" then
 	--
@@ -69,13 +69,24 @@ if action == "renew" or action == "bound" then
 	os.execute(string.format("ip addr add %s/%s broadcast %s dev %s", ip, mask, broadcast, interface))
 end
 
+-- ------------------------------------------------------------------------------
+-- THE CODE BELOW WILL FORM A STANDARD MODULE AS IT WILL BE USED BY A NUMBER OF
+-- DIFFERENT BITS OF CODE:
+--
+-- pppoe
+-- dhcpc
+-- tinc
+-- strongswan
+-- etc.
+-- ------------------------------------------------------------------------------
+
 --
 -- Now work out what the correct route and resolvers are
 --
 local resolver_rows = db.query("resolvers", "priority_resolvers")
 local file = io.open("/etc/resolv.conf", "w")
-for _,res in ipairs(resolver_rows) do
-	file:write(string.format("nameserver %s # %s\n", res.value, interface))
+for resolver in each(resolver_rows) do
+	file:write(string.format("nameserver %s # %s\n", resolver.value, interface))
 end
 file:close()
 
