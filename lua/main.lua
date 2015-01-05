@@ -1,4 +1,4 @@
-#!./luajit
+#!/usr/bin/luajit
 --------------------------------------------------------------------------------
 --  This file is part of NetCamel
 --  Copyright (C) 2014 Lee Essen <lee.essen@nowonline.co.uk>
@@ -17,8 +17,10 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
-package.path = "/usr/share/lua/5.1/?.lua;./lib/?.lua;./?.lua"
-package.cpath = "/usr/lib/lua/5.1/?.so;./lib/?.so"
+package.path = "./lib/?.lua;" .. package.path
+
+--package.path = "/usr/share/lua/5.1/?.lua;./lib/?.lua;./?.lua"
+--package.cpath = "/usr/lib/lua/5.1/?.so;./lib/?.so"
 
 -- global level packages
 --require("lfs")

@@ -1,0 +1,20 @@
+#!/bin/sh
+
+case "$1" in
+	start)
+		echo -n "Mounting netcamel test filesystem: "
+		mkdir -p /netcamel
+		mount -t 9p netcamel /netcamel
+		[ $? = 0 ] && echo "OK" || echo "FAIL"
+		;;
+	stop)
+		echo -n "Unmounting netcamel test filesystem: "
+		umount /netcamel && rmdir /netcamel
+		[ $? = 0 ] && echo "OK" || echo "FAIL"
+		;;
+	*)
+		echo "Usage: $0 {start|stop}"
+		exit 1
+esac
+
+exit 0
