@@ -383,14 +383,20 @@ VALIDATOR["iptables_table"] = function(v, kp)
 	local valid = { ["filter"] = 1, ["mangle"] = 1, ["nat"] = 1, ["raw"] = 1 }
 
 	if valid[v] then return OK end
-	--
-	-- Now check for partial...
-	--
 	for k,_ in pairs(valid) do
 		if k:sub(1, #v) == v then return PARTIAL, "invalid table name" end
 	end
 	return FAIL, "invalid table name"
 end
+VALIDATOR["iptables_policy"] = function(v, kp)
+	local valid = { ["accept"] = 1, ["drop"] = 1 }
+
+	if valid[v] then return OK end
+	for k,_ in pairs(valid) do
+		if k:sub(1, #v) == v then return PARTIAL, "invalid policy" end
+	end
+	return FAIL, "invalid policy"
+end	
 
 VALIDATOR["iptables_chain"] = function(v, kp)
 	print("Validating chain ("..v..") for keypath ("..kp..")")
