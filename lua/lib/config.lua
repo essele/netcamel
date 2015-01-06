@@ -484,7 +484,7 @@ function show(current, new, kp)
 		local disposition = " "
 		local value = new_all[kp]
 		if old_all[kp] ~= new_all[kp] then
-			disposition = (not old_all[kp] and "+") or (not new_all[kp] and "-") or "|"
+			disposition = (old_all[kp] == nil and "+") or (new_all[kp] == nil and "-") or "|"
 			if disposition == "-" then value = old_all[kp] end
 		end
 		return disposition, value
