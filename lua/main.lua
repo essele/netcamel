@@ -35,6 +35,7 @@ base64 	= require("base64")
 ffi 	= require("ffi")
 service = require("service")
 posix   = require("posix")
+db 		= require("db")
 
 -- bring in our syntax checkers and completers
 -- this also brings in readline
@@ -79,7 +80,6 @@ for module in each(core_modules) do
 		if not ok then assert(false, string.format("[%s]: %s code error: %s", key, funcname, err)) end
 	end
 end
-
 
 
 function other() 
@@ -223,6 +223,8 @@ CF_new = {}
 -- If we are called with "init" as the arg then we load and commit the boot config
 --
 if arg[1] == "init" then
+	print("Initialising transient data...")
+	db.init()
 	print("Loading boot config...")
 	CF_new = import("etc/boot.conf")
 	if not CF_new then
@@ -279,6 +281,13 @@ while true do
 		end
 	
 		local rc, err = set(CF_new, tags[2].value, tags[3].value)
+		if not rc then print("Error: " .. tostring(err)) end
+	elseif tags[1].value == "delete" then
+		print("2="..tostring(tags[2].value))
+		print("3="..tostring(tags[3] and tags[3].value))
+		local list_elem = (tags[3] and tags[3].value ~= "" and tags[3].value) or nil
+
+		local rc, err = delete(CF_new, tags[2].value, list_elem)
 		if not rc then print("Error: " .. tostring(err)) end
 	elseif tags[1].value == "commit" then
 		local rc, err = commit(CF_current, CF_new)

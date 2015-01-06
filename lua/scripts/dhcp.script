@@ -1,4 +1,22 @@
 #!/usr/bin/luajit
+--------------------------------------------------------------------------------
+--  This file is part of NetCamel
+--  Copyright (C) 2014,2015 Lee Essen <lee.essen@nowonline.co.uk>
+--
+--  This program is free software: you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free Software Foundation, either version 3 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+------------------------------------------------------------------------------
+
 --
 -- This script is called by udhcpc when a lease is granted, fails or is renewed.
 --
@@ -11,6 +29,7 @@ package.path = "/netcamel/lib/?.lua;"..package.path
 -- We need to access the database
 --
 db = require("db")
+runtime = require("runtime")
 
 --
 -- For string split and each
@@ -20,25 +39,31 @@ require("utils")
 --
 -- Pull out all of the environment variables
 --
-local interface = os.getenv("interface")
-local ip		= os.getenv("ip")
-local mask		= os.getenv("mask")
-local broadcast = os.getenv("broadcast") or "+"
-local routers 	= split(os.getenv("router") or "", " ")
-local dns 		= split(os.getenv("dns") or "", " ")
-local priority 	= os.getenv("priority") or "99"
-local action 	= arg[1]
+local interface 	= os.getenv("interface")
+local ip			= os.getenv("ip")
+local mask			= os.getenv("mask")
+local broadcast 	= os.getenv("broadcast") or "+"
+local routers 		= split(os.getenv("router") or "", " ")
+local dns 			= split(os.getenv("dns") or "", " ")
+
+local no_resolv 	= os.getenv("dhcp_no_resolv") or false
+local no_route		= os.getenv("dhcp_no_route") or false
+local resolv_pri 	= os.getenv("dhcp_resolv_pri") or "99"
+local route_pri 	= os.getenv("dhcp_route_pri") or "99"
+
+local action 		= arg[1]
+
+--
+-- We always need to remove any defined resolvers of routers from the
+-- database (for our interface) so we are starting clean in all situations
+--
+runtime.remove_resolvers(interface)
+runtime.remove_defaultroute(interface)
 
 
 print("Performing Action: "..action)
 
 if action == "deconfig" then
-	--
-	-- Remove the prior entries from the database
-	--
-	db.query("resolvers", "remove_with_key", interface)
-	db.query("defaultroutes", "remove_with_key", interface)
-
 	--
 	-- Make sure the interface is up but unconfigured
 	--
@@ -51,15 +76,17 @@ end
 
 if action == "renew" or action == "bound" then
 	--
-	-- Replace any entries with the new ones
+	-- Populate new entries if we are configured to do so...
 	--
-	db.query("resolvers", "remove_with_key", interface)
-	db.query("defaultroutes", "remove_with_key", interface)
-	for resolver in each(dns) do
-		db.insert("resolvers", { key = interface, priority = priority, value = resolver })
+	if not no_resolv then
+		for resolver in each(dns) do
+			runtime.add_resolver(interface, resolver, resolv_pri)
+		end
 	end
-	for router in each(routers) do
-		db.insert("defaultroutes", { key = interface, priority = priority, value = router })
+	if not no_route then
+		for router in each(routers) do
+			runtime.add_defaultroute(interface, router, route_pri)
+		end
 	end
 
 	--
@@ -69,38 +96,8 @@ if action == "renew" or action == "bound" then
 	os.execute(string.format("ip addr add %s/%s broadcast %s dev %s", ip, mask, broadcast, interface))
 end
 
--- ------------------------------------------------------------------------------
--- THE CODE BELOW WILL FORM A STANDARD MODULE AS IT WILL BE USED BY A NUMBER OF
--- DIFFERENT BITS OF CODE:
---
--- pppoe
--- dhcpc
--- tinc
--- strongswan
--- etc.
--- ------------------------------------------------------------------------------
 
---
--- Now work out what the correct route and resolvers are
---
-local resolver_rows = db.query("resolvers", "priority_resolvers")
-local file = io.open("/etc/resolv.conf", "w")
-for resolver in each(resolver_rows) do
-	file:write(string.format("nameserver %s # %s\n", resolver.value, interface))
-end
-file:close()
-
---
--- Remove the default route, and then add from the prioritised records
---
--- We can only support one router at this stage, so just pick the first one
--- we get back.
---
-os.execute(string.format("ip route del default dev %s 2>/dev/null", interface))
-local router_rows = db.query("defaultroutes", "priority_defaultroutes")
-if router_rows[1] then
-	local router = router_rows[1].value
-	os.execute(string.format("ip route add default via %s dev %s", router, interface))
-end
+runtime.update_resolvers()
+runtime.update_defaultroute()
 
 os.exit(0)

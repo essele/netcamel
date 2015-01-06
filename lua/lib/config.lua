@@ -711,7 +711,7 @@ function set(config, kp, value)
 	if master[mp]["type"] then
 		local rc, newval = validate(master[mp]["type"], rkp, value)
 		if not rc then return false, newval end
-		if newval then value = newval end
+		if type(newval) ~= nil then value = newval end
 	else
 		return false, "not a settable configuration node: "..rkp
 	end

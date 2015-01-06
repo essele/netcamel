@@ -75,10 +75,14 @@ local function get_pids_by(v, field)
 end
 local function get_pids_from_pidfile(v)
 	local pids = {}
+	print("pidfile="..services[v].pidfile)
 	local file = io.open(services[v].pidfile)
-	local line = file:read("*all")
-	file:close()
-	for pid in line:gmatch("%d+") do table.insert(pids, tonumber(pid)) end
+	print("file="..tostring(file))
+	if file then
+		local line = file:read("*all")
+		file:close()
+		for pid in line:gmatch("%d+") do table.insert(pids, tonumber(pid)) end
+	end
 	return pids
 end
 
@@ -170,8 +174,14 @@ local function start_normally(name)
 
 	local rc, err = execute(svc.binary, svc.args, nil, svc.env )
 	print("rc="..tostring(rc))
-	for _,x in ipairs(err) do
-		print("> "..x)
+	if not rc then return false, err end
+
+	if svc.logfile then
+		local file = io.open(svc.logfile, "w")
+		if file then
+			for line in each(err) do file:write(line.."\n") end
+			file:close()
+		end
 	end
 	return
 end

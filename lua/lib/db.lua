@@ -28,15 +28,6 @@ TABLE = {}
 local sqlite3 = require("lsqlite3")
 local db = sqlite3.open("/tmp/netcamel_t.sqlite3")
 
-local function init()
-	local rc = db:exec[[
-		drop table if exists __queries;
-		create table __queries ( name string, query string, sql string );
-	]]
-	print("init== rc="..rc.." err="..db:errmsg())
-	return true
-end
-
 --
 -- Create a table given the spec from the TABLE table.
 --
@@ -132,6 +123,23 @@ end
 
 local function close()
 	db:close()
+end
+
+
+local function init()
+	local rc = db:exec[[
+		drop table if exists __queries;
+		create table __queries ( name string, query string, sql string );
+	]]
+	print("init== rc="..rc.." err="..db:errmsg())
+
+	for name, tabdef in pairs(TABLE) do
+		print("Creating table: "..name)
+		local rc, err = create_table(name)
+		if not rc then print("err="..err) end
+	end
+
+	return true
 end
 
 return {

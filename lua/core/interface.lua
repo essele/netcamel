@@ -20,6 +20,8 @@
 local DHCPC="/sbin/udhcpc"
 local DHCP_SCRIPT="/netcamel/scripts/dhcp.script"
 
+local runtime = require("runtime")
+
 local function start_dhcp(intf, cf)
 
 	--
@@ -54,7 +56,7 @@ local function start_dhcp(intf, cf)
 		["args"] = args,
 		["env"] = env,
 		["name"] = "dhcp."..intf,
-		["pidfile"] = "/var/run/udhcpc."..intf..".pid",
+		["pidfile"] = "/var/run/dhcp."..intf..".pid",
 		["logfile"] = "/tmp/dhcp."..intf..".log",
 
 		["start"] = service.start_as_daemon,
@@ -69,10 +71,33 @@ local function start_dhcp(intf, cf)
 	return true
 end
 local function stop_dhcp(intf)
-	if service.get("dhcp."..intf) then
-		service.stop("dhcp."..intf)
-		service.define("dhcp."..intf, nil)
-	end
+	--
+	-- Setup enough so we can kill the process
+	--
+	service.define("dhcp."..intf, {
+		["pidfile"] = "/var/run/dhcp."..intf..".pid",
+		["stop"] = service.kill_by_pidfile,
+	})
+	service.stop("dhcp."..intf)
+
+	--
+	-- Remove the definition
+	--
+	service.define("dhcp."..intf, nil)
+
+	--
+	-- Remove any resolvers or routes we added as part of this
+	-- since dhcpc won't clear up itself
+	--
+	runtime.remove_resolvers(intf)
+	runtime.remove_defaultroute(intf)
+	runtime.update_resolvers()
+	runtime.update_defaultroute()
+
+	--
+	-- Make sure we also remove any dhcp provided address
+	--
+	print(string.format("# ip addr flush dev %s", intf))
 end
 
 
@@ -86,7 +111,12 @@ local function ethernet_commit(changes)
 	--
 	for ifnum in each(state.removed) do 
 		print("Removed: "..ifnum) 
+		local oldcf = node_vars("interface/ethernet/"..ifnum, CF_current)
 		local physical = interface_name("ethernet/"..ifnum)
+
+		if oldcf["dhcp-enable"] then
+			stop_dhcp(physical)
+		end
 
 		print(string.format("# ip addr flush dev %s", physical))
 		print(string.format("# ip link set dev %s down", physical))
@@ -102,6 +132,30 @@ local function ethernet_commit(changes)
 		local physical = interface_name("ethernet/"..ifnum)
 
 		local changed = values_to_keys(node_list("interface/ethernet/"..ifnum, changes))
+
+
+		--
+		-- If we have changed from or two dhcp then we need to be a little careful
+		--
+		if changed["dhcp-enable"] then
+			if cf["dhcp-enable"] then
+				print("dhcp-enable type="..type(cf["dhcp-enable"]))
+				print(string.format("# ip addr flush dev %s", physical))
+				start_dhcp(physical, cf)
+			else
+				stop_dhcp(physical)
+				if cf.ip then
+					print(string.format("# ip addr add %s dev %s", cf.ip, physical))
+				end
+			end
+		end
+
+		--
+		-- If we have changed any of the dhcp settings then we need to (re)start
+		-- dhcp
+		--
+		-- TODO: ip changes conflict with DHCP at the moment
+
 		if changed.ip then
 			print(string.format("# ip addr del %s dev %s", oldcf.ip, physical))
 			print(string.format("# ip addr add %s dev %s", cf.ip, physical))
@@ -152,8 +206,8 @@ end
 --------------------------------------------------------------------------------
 --
 -- pppoe -- we create or remove the pppoe config files as needed, we need to
---          make sure that the "attach" interface is valid, up, and has no
---          ip address. (We use a trigger to ensure this)
+--	      make sure that the "attach" interface is valid, up, and has no
+--	      ip address. (We use a trigger to ensure this)
 --
 --------------------------------------------------------------------------------
 local function pppoe_precommit(changes)
@@ -163,7 +217,7 @@ local function pppoe_precommit(changes)
 
 		--
 		-- TODO: check all the required fields are present for each
-		--       pppoe interface definition
+		--	   pppoe interface definition
 		--
 
 		--
@@ -217,7 +271,7 @@ end
 VALIDATOR["ethernet_if"] = function(v, kp)
 	--
 	-- TODO: once we know the numbers are ok, we need to test for a real
-	--       interface.
+	--	   interface.
 	--
 	local err = "interface numbers should be [nnn] or [nnn:nnn] only"
 	if v:len() == 0 then return PARTIAL end
@@ -240,7 +294,7 @@ end
 VALIDATOR["mtu"] = function(v, kp)
 	--
 	-- TODO: check the proper range of MTU numbers, may need to support
-	--       jumbo frames
+	--	   jumbo frames
 	--
 	if not v:match("^%d+$") then return FAIL, "mtu must be numeric only" end
 	local mtu = tonumber(v)
@@ -338,6 +392,21 @@ master["interface/pppoe/*/mtu"] =			{ ["type"] = "mtu" }
 master["interface/pppoe/*/user-id"] =		{ ["type"] = "OK" }
 master["interface/pppoe/*/password"] =		{ ["type"] = "OK" }
 master["interface/pppoe/*/disabled"] = 		{ ["type"] = "boolean" }
+
+--
+-- We will use a number of tables to manage dynamic information like
+-- resolvers and defaultroutes
+--
+TABLE["resolvers"] = {
+	schema = { source="string key", priority="integer", value="string" },
+	priority_resolvers = "select * from resolvers where priority = (select min(priority) from resolvers)",
+	remove_source = "delete from resolvers where source = :source"
+}
+TABLE["defaultroutes"] = {
+	schema = { source="string key", priority="integer", value="string" },
+	priority_defaultroutes = "select * from defaultroutes where priority = (select min(priority) from defaultroutes)",
+	remove_source = "delete from defaultroutes where source = :source"
+}
 
 --
 -- Deal with triggers and depdencies
