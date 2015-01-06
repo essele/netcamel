@@ -149,6 +149,13 @@ local function ethernet_commit(changes)
 				end
 			end
 		end
+		local dhcp_changes = prefixmatches(changed, "dhcp-")
+		for k,_ in pairs(dhcp_changes) do
+			print("DHCP CHANGE: " .. k)
+		end
+		--
+		-- If we have changes other dhcp settings then we need to stop and start
+		--
 
 		--
 		-- If we have changed any of the dhcp settings then we need to (re)start

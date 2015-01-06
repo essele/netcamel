@@ -711,7 +711,7 @@ function set(config, kp, value)
 	if master[mp]["type"] then
 		local rc, newval = validate(master[mp]["type"], rkp, value)
 		if not rc then return false, newval end
-		if type(newval) ~= nil then value = newval end
+		if type(newval) ~= "nil" then value = newval end
 	else
 		return false, "not a settable configuration node: "..rkp
 	end
@@ -719,12 +719,15 @@ function set(config, kp, value)
 	-- If we get here then we must be ok, add to list or set value
 	-- accordingly
 	--
+	print("Adding: mp="..mp)
 	if master[mp]["list"] then
 		if not config[rkp] then config[rkp] = {} end
 		if not in_list(config[rkp], value) then
 			table.insert(config[rkp], value)
 		end
 	else
+		print("RKP="..rkp)
+		print("VALUE="..tostring(value))
 		config[rkp] = value
 	end
 	return true
