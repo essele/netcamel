@@ -73,9 +73,15 @@ local function insert_into_table(name, item)
 	stmt = db:prepare("insert into "..name.." ("..vals..") VALUES ("..args..")")
 	if not stmt then return false, "insert prepare failed: "..db:errmsg() end
 	rc = stmt:bind_names(item)
-	if rc ~= sqlite3.OK then return false, "insert bind failed: "..db:errmsg() end
+	if rc ~= sqlite3.OK then 
+		stmt:finalize()
+		return false, "insert bind failed: "..db:errmsg() 
+	end
 	rc = stmt:step()
-	if rc ~= sqlite3.DONE then return false, "insert step failed: "..db:errmsg() end
+	if rc ~= sqlite3.DONE then 
+		stmt:finalize()
+		return false, "insert step failed: "..db:errmsg() 
+	end
 	stmt:finalize()
 	return true
 end
@@ -99,9 +105,16 @@ local function query(name, qname, ...)
 	local sql = "select sql from __queries where name = ? and query = ?"
 	local stmt = db:prepare(sql)
 	if not stmt then return false, "pre-query prep failed: "..db:errmsg() end
-	if stmt:bind_values(name, qname) ~= sqlite3.OK then return false, "pre-bind failed: "..db:errmsg() end
+	if stmt:bind_values(name, qname) ~= sqlite3.OK then 
+		stmt:finalize()
+		return false, "pre-bind failed: "..db:errmsg() 
+	end
 	local res = (stmt:nrows()(stmt))
-	if not res or not res.sql then return false, "unable to find query: "..db:errmsg() end
+	if not res or not res.sql then 
+		stmt:finalize()
+		return false, "unable to find query: "..db:errmsg() 
+	end
+	stmt:finalize()
 
 	sql = res.sql
 	local stmt = db:prepare(sql)
@@ -109,9 +122,15 @@ local function query(name, qname, ...)
 
 	if select('#', ...) > 0 then
 		if type(select(1, ...)) == "table" then
-			if stmt:bind_names(select(1, ...)) ~= sqlite3.OK then return false, "bind failed: "..db:errmsg() end
+			if stmt:bind_names(select(1, ...)) ~= sqlite3.OK then 
+				stmt:finalize()
+				return false, "bind failed: "..db:errmsg() 
+			end
 		else
-			if stmt:bind_values(...) ~= sqlite3.OK then return false, "bind failed: "..db:errmsg() end
+			if stmt:bind_values(...) ~= sqlite3.OK then 
+				stmt:finalize()
+				return false, "bind failed: "..db:errmsg() 
+			end
 		end
 	end
 

@@ -71,7 +71,7 @@ function cfpath_completer(tokens, n, prefix)
 	--
 	-- Retrieve matches from our pre-cached list...
 	--
-	local matches = prefixmatches(token.options, prefix)
+	local matches = prefixmatches(token.options or {}, prefix)
 
 	--
 	-- If we have multiple matches then find the common prefix
@@ -334,7 +334,7 @@ function syntax_delete(tokens)
 
 	if tokens[2].status ~= OK then cfpath_validator(tokens, 2) end
 	if tokens[2].status ~= OK then readline.mark_all(tokens, 3, FAIL) return end
-	
+
 	--
 	-- We support additional tokens if we are deleting from a list
 	--
@@ -345,6 +345,9 @@ function syntax_delete(tokens)
 			tv2(tokens, n)
 			n = n + 1
 		end
+	else
+		local n = 3
+		while tokens[n] do tokens[n].status = FAIL n = n + 1 end
 	end
 end
 

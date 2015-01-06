@@ -241,7 +241,7 @@ local function start_as_daemon(name)
 	-- Create a logfile if asked
 	--
 	if svc.logfile then
-		local logfd = posix.fcntl.open(svc.logfile, bit.bor(posix.O_CREAT, posix.O_WRONLY))
+		local logfd = posix.fcntl.open(svc.logfile, bit.bor(posix.O_CREAT, posix.O_WRONLY, posix.O_TRUNC))
 		if logfd then
 			posix.close(1)
 			posix.close(2)

@@ -481,11 +481,13 @@ local function show_line(tokens, input, offset, force)
 		return p, lop
 	end
 	local p, lop = show_token_list(tokens, input, offset, force, 1, -1)
-	if lop == 1 or lop == #input+1 then
-		ti.out(ti.clr_eol)
-	end
-end
 
+	--
+	-- Handle end of input line stuff...
+	--
+	if lop == -1 then move_to(row_and_col_from_pos(p-1+offset)) end
+	if lop == -1 or lop == #input+1 then ti.out(ti.clr_eol) end
+end
 
 
 

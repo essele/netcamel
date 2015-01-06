@@ -23,7 +23,6 @@ local DHCP_SCRIPT="/netcamel/scripts/dhcp.script"
 local runtime = require("runtime")
 
 local function start_dhcp(intf, cf)
-
 	--
 	-- Make sure we create the needed environment to pass suitable
 	-- options to the dhcp.script
@@ -97,7 +96,7 @@ local function stop_dhcp(intf)
 	--
 	-- Make sure we also remove any dhcp provided address
 	--
-	print(string.format("# ip addr flush dev %s", intf))
+	os.execute(string.format("# ip addr flush dev %s", intf))
 end
 
 
@@ -118,8 +117,8 @@ local function ethernet_commit(changes)
 			stop_dhcp(physical)
 		end
 
-		print(string.format("# ip addr flush dev %s", physical))
-		print(string.format("# ip link set dev %s down", physical))
+		os.execute(string.format("ip addr flush dev %s", physical))
+		os.execute(string.format("ip link set dev %s down", physical))
 	end
 
 	--
@@ -135,43 +134,41 @@ local function ethernet_commit(changes)
 
 
 		--
-		-- If we have changed from or two dhcp then we need to be a little careful
+		-- If we have changed any of our dhcp settings then we definitely need to
+		-- stop dhcp (and maybe restart)
 		--
-		if changed["dhcp-enable"] then
+		-- Also, if we change our IP address when dhcp is enabled (used to request
+		-- specific IP address) then we also need to restart
+		--
+		local dhcp_ip_restart = changed.ip and oldcf["dhcp-enable"]
+
+		if dhcp_ip_restart or next(prefixmatches(changed, "dhcp-")) then
+			stop_dhcp(physical)
+
 			if cf["dhcp-enable"] then
 				print("dhcp-enable type="..type(cf["dhcp-enable"]))
-				print(string.format("# ip addr flush dev %s", physical))
+				os.execute(string.format("ip addr flush dev %s", physical))
 				start_dhcp(physical, cf)
 			else
-				stop_dhcp(physical)
 				if cf.ip then
-					print(string.format("# ip addr add %s dev %s", cf.ip, physical))
+					os.execute(string.format("ip addr add %s dev %s", cf.ip, physical))
 				end
 			end
 		end
-		local dhcp_changes = prefixmatches(changed, "dhcp-")
-		for k,_ in pairs(dhcp_changes) do
-			print("DHCP CHANGE: " .. k)
-		end
-		--
-		-- If we have changes other dhcp settings then we need to stop and start
-		--
-
+	
 		--
 		-- If we have changed any of the dhcp settings then we need to (re)start
 		-- dhcp
 		--
-		-- TODO: ip changes conflict with DHCP at the moment
-
-		if changed.ip then
-			print(string.format("# ip addr del %s dev %s", oldcf.ip, physical))
-			print(string.format("# ip addr add %s dev %s", cf.ip, physical))
+		if changed.ip and not cf["dhcp-enable"] then
+			os.execute(string.format("ip addr del %s dev %s", oldcf.ip, physical))
+			os.execute(string.format("ip addr add %s dev %s", cf.ip, physical))
 		end
 		if changed.mtu then
-			print(string.format("# ip link set dev %s mtu %s", physical, cf.mtu))
+			os.execute(string.format("ip link set dev %s mtu %s", physical, cf.mtu))
 		end
 		if changed.disabled then
-			print(string.format("# ip link set dev %s %s", physical, 
+			os.execute(string.format("ip link set dev %s %s", physical, 
 							(cf.disabled and "down") or "up" ))
 		end
 		
@@ -192,15 +189,15 @@ local function ethernet_commit(changes)
 		--
 		-- Remove any addresses, and set the link up or down
 		--
-		print(string.format("# ip addr flush dev %s", physical))
-		print(string.format("# ip link set dev %s %s", physical, (cf.disabled and "down") or "up" ))
-		if(cf.mtu) then print(string.format("# ip link set dev %s mtu %s", physical, cf.mtu)) end
+		os.execute(string.format("ip addr flush dev %s", physical))
+		os.execute(string.format("ip link set dev %s %s", physical, (cf.disabled and "down") or "up" ))
+		if(cf.mtu) then os.execute(string.format("ip link set dev %s mtu %s", physical, cf.mtu)) end
 
 		--
 		-- The IP address only goes on the interface if we don't have dhcp enabled
 		--
 		if(not cf["dhcp-enable"]) then
-			if(cf.ip) then print(string.format("# ip addr add %s brd + dev %s", cf.ip, physical)) end
+			if(cf.ip) then os.execute(string.format("ip addr add %s brd + dev %s", cf.ip, physical)) end
 		else
 			start_dhcp(physical, cf)
 		end
@@ -241,6 +238,9 @@ local function pppoe_precommit(changes)
 			end
 			if ethcf.ip then
 				return false, string.format("attach interface must have no IP address for pppoe/%s: %s", ifnum, ifpath)
+			end
+			if ethcf["dhcp-enable"] then
+				return false, string.format("attach interface must not have DHCP for pppoe/%s: %s", ifnum, ifpath)
 			end
 			if ethcf.disabled and not cf.disabled then
 				return false, string.format("attach interface must be enabled for pppoe/%s: %s", ifnum, ifpath)

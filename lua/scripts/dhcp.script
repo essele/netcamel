@@ -28,7 +28,6 @@ package.path = "/netcamel/lib/?.lua;"..package.path
 --
 -- We need to access the database
 --
-db = require("db")
 runtime = require("runtime")
 
 --
@@ -54,8 +53,7 @@ local route_pri 	= os.getenv("dhcp_route_pri") or "99"
 local action 		= arg[1]
 
 --
--- We always need to remove any defined resolvers of routers from the
--- database (for our interface) so we are starting clean in all situations
+-- Remove anything stored from this interface so we are starting clean
 --
 runtime.remove_resolvers(interface)
 runtime.remove_defaultroute(interface)
@@ -67,14 +65,15 @@ if action == "deconfig" then
 	--
 	-- Make sure the interface is up but unconfigured
 	--
-	os.execute(string.format("ip link set %s up", interface))
-	os.execute(string.format("ip addr flush dev %s", interface))
+--	os.execute(string.format("ip link set %s up", interface))
+--	os.execute(string.format("ip addr flush dev %s", interface))
 end
 
 if action == "leasefail" or action == "nak" then
 end
 
 if action == "renew" or action == "bound" then
+
 	--
 	-- Populate new entries if we are configured to do so...
 	--
