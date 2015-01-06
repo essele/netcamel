@@ -236,6 +236,14 @@ function back_each(t)
 	end
 end
 
+--
+-- Push .. because table.insert is horrible
+--
+function push(t, ...)
+	for _,v in ipairs({...}) do
+		table.insert(t, v)
+	end
+end
 
 --
 -- Check to see if the prefix of line matches token, but where

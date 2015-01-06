@@ -56,7 +56,7 @@ end
 -- Execute some other binary, but allow us to pipe in to stdin and
 -- collect stdout and stderr
 --
-function execute(cmd, args, stdin)
+function execute(cmd, args, stdin, env)
 	local outr, outw = posix.pipe()
 	local pid = posix.fork()
 	if pid == 0 then
@@ -72,6 +72,9 @@ function execute(cmd, args, stdin)
 			-- real child
 			posix.close(inw)
 			posix.dup2(inr, 0)
+
+			-- set any required environment
+			for k,v in pairs(env or {}) do posix.setenv(k, v) end
 		
 			posix.execp(cmd, args)
 			print("unable to exec")

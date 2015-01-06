@@ -46,7 +46,18 @@ VALIDATOR["boolean"] = function(v,kp)
 	end
 	return FAIL, "boolean can be true or false"
 end
-TYPEOPTS["Xboolean"] = { "true", "false" }
+TYPEOPTS["boolean"] = { "true", "false" }
+
+--
+-- 2-digits ... needed for priority etc
+--
+VALIDATOR["2-digit"] = function(v,kp)
+	local err = "require two digits (nn)"
+	local a, b = v:match("^(%d)(%d?)$")
+	if not a then return FAIL, err end
+	if b == "" then return PARTIAL, err end
+	return OK
+end
 
 
 --

@@ -25,6 +25,8 @@ local posix = require("posix")
 posix.time = require("posix.time")
 posix.sys = {}
 posix.sys.stat = require("posix.sys.stat")
+posix.fcntl = require("posix.fcntl")
+require("bit")
 
 --
 -- Read the name from the proc stat file
@@ -166,7 +168,7 @@ local function start_normally(name)
 
 	print("would run (normally): " .. tostring(svc.binary))
 
-	local rc, err = execute(svc.binary, svc.args, nil )
+	local rc, err = execute(svc.binary, svc.args, nil, svc.env )
 	print("rc="..tostring(rc))
 	for _,x in ipairs(err) do
 		print("> "..x)
@@ -203,7 +205,7 @@ local function start_as_daemon(name)
 	--
 	-- Re-open the three filehandles, all /dev/null
 	--
-	local fdnull = posix.open("/dev/null", posix.O_RDWR)	-- stdin
+	local fdnull = posix.fcntl.open("/dev/null", posix.O_RDWR)	-- stdin
 	posix.dup(fdnull)										-- stdout
 	posix.dup(fdnull)										-- stderr
 
@@ -225,6 +227,21 @@ local function start_as_daemon(name)
 		end
 	end
 
+	--
+	-- Create a logfile if asked
+	--
+	if svc.logfile then
+		local logfd = posix.fcntl.open(svc.logfile, bit.bor(posix.O_CREAT, posix.O_WRONLY))
+		if logfd then
+			posix.close(1)
+			posix.close(2)
+			posix.dup(logfd)
+			posix.dup(logfd)
+		end
+	end
+
+	for k, v in pairs(svc.env or {}) do posix.setenv(k, v) end
+
 	posix.exec(svc.binary, svc.args)
 	--
 	-- if we get here then the exec has failed
@@ -238,6 +255,9 @@ end
 --
 local function define(name, svc)
 	services[name] = svc
+end
+local function getservice(name)
+	return services[name]
 end
 local function set(name, item, value)
 	services[name][item] = value
@@ -253,6 +273,7 @@ return {
 	--
 	define = define,
 	set = set,
+	get = getservice,
 	start = start,
 	stop = stop,
 	restart = restart,

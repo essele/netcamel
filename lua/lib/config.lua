@@ -125,7 +125,9 @@ function node_vars(prefix, kv)
 	local mprefix = find_master_key(prefix)
 
 	for k in each(node_list(mprefix, master)) do
-		rc[k] = master[mprefix.."/"..k].default
+		if master[mprefix.."/"..k]["type"] then
+			rc[k] = master[mprefix.."/"..k].default
+		end
 	end
 	for k in each(node_list(prefix, kv)) do rc[k] = kv[prefix .. "/" .. k] end
 	return rc

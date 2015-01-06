@@ -17,6 +17,65 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
+local DHCPC="/sbin/udhcpc"
+local DHCP_SCRIPT="/netcamel/scripts/dhcp.script"
+
+local function start_dhcp(intf, cf)
+
+	--
+	-- Make sure we create the needed environment to pass suitable
+	-- options to the dhcp.script
+	--
+	local env = {}
+	if cf["dhcp-no-resolv"] then env["dhcp_no_resolv"] = 1 end
+	if cf["dhcp-no-route"] then env["dhcp_no_route"] = 1 end
+	if cf["dhcp-resolv-pri"] then env["dhcp_resolv_pri"] = cf["dhcp-resolv-pri"] end
+	if cf["dhcp-route-pri"] then env["dhcp_route_pri"] = cf["dhcp-route-pri"] end
+
+	--
+	-- Build the command line args. Don't include --release as we may create
+	-- a race condition when unconfiguring dhcp where our ip commands run before
+	-- the dhcp script undoes them!
+	--
+	local args = { 
+		"--interface", intf,
+		"--pidfile", "/var/run/dhcp."..intf..".pid",
+		"--script", DHCP_SCRIPT,
+		"--background",
+	}
+	if cf["ip"] then push(args, "--request", cf["ip"]) end
+
+	--
+	-- Use the service framework to start the service so we can track it properly
+	-- later
+	--
+	service.define("dhcp."..intf, {
+		["binary"] = DHCPC,
+		["args"] = args,
+		["env"] = env,
+		["name"] = "dhcp."..intf,
+		["pidfile"] = "/var/run/udhcpc."..intf..".pid",
+		["logfile"] = "/tmp/dhcp."..intf..".log",
+
+		["start"] = service.start_as_daemon,
+		["stop"] = service.kill_by_pidfile,
+	})
+
+	print("ARGS: " .. table.concat(args, " "))
+
+	service.start("dhcp."..intf)
+
+	--if not rc then return false, "DHCP start failed: "..err end
+	return true
+end
+local function stop_dhcp(intf)
+	if service.get("dhcp."..intf) then
+		service.stop("dhcp."..intf)
+		service.define("dhcp."..intf, nil)
+	end
+end
+
+
 local function ethernet_commit(changes)
 	print("Hello From Interface")
 
@@ -69,10 +128,21 @@ local function ethernet_commit(changes)
 		local cf = node_vars("interface/ethernet/"..ifnum, CF_new)
 		local physical = interface_name("ethernet/"..ifnum)
 
+		--
+		-- Remove any addresses, and set the link up or down
+		--
 		print(string.format("# ip addr flush dev %s", physical))
-		if(cf.ip) then print(string.format("# ip addr add %s brd + dev %s", cf.ip, physical)) end
-		if(cf.mtu) then print(string.format("# ip link set dev %s mtu %s", physical, cf.mtu)) end
 		print(string.format("# ip link set dev %s %s", physical, (cf.disabled and "down") or "up" ))
+		if(cf.mtu) then print(string.format("# ip link set dev %s mtu %s", physical, cf.mtu)) end
+
+		--
+		-- The IP address only goes on the interface if we don't have dhcp enabled
+		--
+		if(not cf["dhcp-enable"]) then
+			if(cf.ip) then print(string.format("# ip addr add %s brd + dev %s", cf.ip, physical)) end
+		else
+			start_dhcp(physical, cf)
+		end
 	end	
 
 
@@ -242,6 +312,15 @@ master["interface/ethernet/*/ip"] = 		{ ["type"] = "ipv4_nm" }
 master["interface/ethernet/*/ipx"] = 		{ ["type"] = "ipv4" }
 master["interface/ethernet/*/mtu"] = 		{ ["type"] = "mtu" }
 master["interface/ethernet/*/disabled"] = 	{ ["type"] = "boolean" }
+
+--
+-- Support DHCP on the interface (off by default)
+--
+master["interface/ethernet/*/dhcp-enable"] = 		{ ["type"] = "boolean", ["default"] = false }
+master["interface/ethernet/*/dhcp-no-resolv"] = 	{ ["type"] = "boolean", ["default"] = false }
+master["interface/ethernet/*/dhcp-no-route"] = 		{ ["type"] = "boolean", ["default"] = false }
+master["interface/ethernet/*/dhcp-resolv-pri"] = 	{ ["type"] = "2-digit", ["default"] = "50" }
+master["interface/ethernet/*/dhcp-route-pri"] = 	{ ["type"] = "2-digit", ["default"] = "50" }
 
 --
 -- pppoe interfaces...
