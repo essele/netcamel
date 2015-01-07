@@ -51,7 +51,7 @@ function keys_to_values(t)
 end
 
 --
--- Return the uniq sorted valies from a table (or two)
+-- Return the uniq sorted values from a table (or two)
 --
 function sorted_values(kv1, kv2)
 	local list = {}

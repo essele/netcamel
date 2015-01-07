@@ -129,7 +129,7 @@ local function ntp_precommit(changes)
 		return false, "service/ntp/listen-on must list at least one interface for provide-service"
 	end
 	for interface in each(cf["listen-on"]) do
-		if not node_exists(interface_path(interface), CF_new) then
+		if not node_exists("interface/"..interface, CF_new) then
 			return false, string.format("service/ntp/listen-on interface not valid: %s", interface)
 		end
 	end
@@ -173,7 +173,9 @@ master["service/ntp"] = {
 
 master["service/ntp/enable"] = { ["type"] = "boolean" }
 master["service/ntp/provide-service"] = { ["type"] = "boolean" }
-master["service/ntp/listen-on"] = { ["type"] = "interface", ["list"] = 1 }
+master["service/ntp/listen-on"] = { ["type"] = "any_interface", 
+									["options"] = options_all_interfaces,
+									["list"] = 1 }
 master["service/ntp/server"] = { ["type"] = "OK", ["list"] = 1 }
 
 

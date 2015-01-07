@@ -128,7 +128,7 @@ function cfsetitem_completer(tokens, n, prefix)
 	--
 	if CF_new[kp] then
 		if master[mp].list then
-			options = CF_new[kp]
+			options = copy_table(CF_new[kp])
 		else
 			options = { tostring(CF_new[kp]) }
 		end
@@ -137,11 +137,20 @@ function cfsetitem_completer(tokens, n, prefix)
 	--
 	-- Provided options eithet from master or TYPEOPTS
 	--
-	if master[mp].options then
-		add_to_list(options, master[mp].options)
+	local master_opts = master[mp].options
+
+	if type(master_opts) == "table" then
+		add_to_list(options, master_opts)
+	elseif type(master_opts) == "function" then
+		add_to_list(options, master_opts(kp, mp))
 	elseif TYPEOPTS[master[mp]["type"]] then
 		add_to_list(options, TYPEOPTS[master[mp]["type"]])
 	end
+
+	--
+	-- Sort and uniq
+	--
+	options = sorted_values(options)
 
 	--
 	-- Now completer logic
@@ -166,7 +175,12 @@ function populate_options(options, mp, kp, containeronly)
 		for item in each(node_list(mp, master)) do
 			if containeronly and master[mp..slash..item]["type"] ~= nil then goto nextmp end
 			if item == "*" then
-				for item in each(master[mp..slash.."*"]["options"] or {}) do
+				local master_opts = master[mp..slash.."*"]["options"]
+				if type(master_opts) == "function" then
+					master_opts = master_opts(kp..slash.."*", mp..slash.."*")
+				end
+
+				for item in each(master_opts or {}) do
 					options[item] = { mp = "*", kp = "*"..item }
 				end
 			else

@@ -215,7 +215,8 @@ local function pppoe_precommit(changes)
 		-- Check the interface we are attaching to meets our requirements
 		--
 		if cf.attach then
-			local ifpath = interface_path(cf.attach)
+			--local ifpath = interface_path(cf.attach)
+			local ifpath = "interface/"..cf.attach
 			if not ifpath then 
 				return false, string.format("attach interface incorrect for pppoe/%s: %s", ifnum, cf.attach)
 			end
@@ -325,7 +326,7 @@ end
 -- For ethernet interfaces we expect a simple number, but it needs
 -- to map to a real interface (or be a virtual)
 --
-VALIDATOR["ethernet_if"] = function(v, kp)
+VALIDATOR["ethernet_unit"] = function(v, kp)
 	--
 	-- TODO: once we know the numbers are ok, we need to test for a real
 	--	   interface.
@@ -361,12 +362,26 @@ VALIDATOR["mtu"] = function(v, kp)
 	return OK
 end
 
+
+function interface_validator(v, types)
+	for _,item in ipairs(types) do
+		if (item.."/"):sub(1, v:len()) == v then return PARTIAL end
+	end
+	for _,item in ipairs(types) do
+		if v:match("^"..item.."/".."%d+$") then return OK end
+	end
+	return FAIL, "interfaces need to be ["..table.concat(types, "|").."]/nn"
+end
+
+
 --
 -- Where we expect an interface name...
 --
-VALIDATOR["interface"] = function(v, kp)
-	-- TODO
-	return OK
+VALIDATOR["any_interface"] = function(v, kp)
+	return interface_validator(v, {"ethernet", "pppoe"})
+end
+VALIDATOR["eth_interface"] = function(v, kp)
+	return interface_validator(v, {"ethernet"})
 end
 
 --
@@ -406,6 +421,26 @@ function interface_names(list)
 	return rc
 end
 
+--
+-- Used to provide a list of configured ethernet interfaces for cmdline
+-- completion.
+--
+function options_from_interfaces(types)
+	local rc = {}
+	for _,t in ipairs(types) do
+		for node in each(node_list("interface/"..t, CF_new)) do
+			push(rc, t .."/"..node:gsub("^%*", ""))
+		end
+	end
+	return rc
+end
+		
+function options_eth_interfaces(kp, mp)
+	return options_from_interfaces({"ethernet"})
+end
+function options_all_interfaces(kp, mp)
+	return options_from_interfaces({"ethernet", "pppoe"})
+end
 
 --
 -- Ethernet interfaces...
@@ -417,7 +452,7 @@ master["interface/ethernet"] = {
 	["with_children"] = 1
 }
 
-master["interface/ethernet/*"] = 			{ ["style"] = "ethernet_if",
+master["interface/ethernet/*"] = 			{ ["style"] = "ethernet_unit",
 											  ["options"] = { "0", "1", "2" } }
 master["interface/ethernet/*/ip"] = 		{ ["type"] = "ipv4_nm" }
 master["interface/ethernet/*/ipx"] = 		{ ["type"] = "ipv4" }
@@ -443,7 +478,8 @@ master["interface/pppoe"] = {
 }
 
 master["interface/pppoe/*"] =				{ ["style"] = "pppoe_if" }
-master["interface/pppoe/*/attach"] =		{ ["type"] = "interface" }
+master["interface/pppoe/*/attach"] =		{ ["type"] = "eth_interface",
+											  ["options"] = options_eth_interfaces }
 master["interface/pppoe/*/default-route"] =	{ ["type"] = "boolean" }
 master["interface/pppoe/*/mtu"] =			{ ["type"] = "mtu" }
 master["interface/pppoe/*/resolv-pri"] = 	{ ["type"] = "2-digit", ["default"] = "40" }
