@@ -270,6 +270,34 @@ function split(str, sep)
 	return t
 end
 
+--
+-- Simple serialisation routine, will take any variable type and
+-- return a string that represents it.
+--
+function serialise(t)
+	local rc
+
+	if type(t) == "table" then
+		rc = "{"
+		for k,v in pairs(t) do
+			rc = rc .. ("["..serialise(k).."]="..serialise(v)..",")
+		end
+		return rc .. "}"
+	elseif type(t) == "string" then
+		return "\"".. t:gsub("([\"\'])", "\\%1") .."\""
+	else
+		return tostring(t)
+	end
+end
+
+--
+-- Unserialise will take the string representation and work it back
+-- into the original variable.
+--
+function unserialise(v)
+	local code = load("return "..v)
+	return code()
+end
 
 --
 -- Create a configuration file

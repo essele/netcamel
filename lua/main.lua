@@ -68,6 +68,16 @@ for module in each(core_modules) do
 end
 
 --
+-- If we are in "init" mode then initialise the transient data
+-- before we run each modules init() function since it might want
+-- to use the database tables
+--
+if arg[1] == "init" then
+	print("Initialising transient data...")
+	db.init()
+end
+
+--
 -- If the module has a <modname>_init() function then we call it, the
 -- intent of this is to initialise the depends and triggers once we know
 -- that all the structures are initialised.
@@ -223,8 +233,6 @@ CF_new = {}
 -- If we are called with "init" as the arg then we load and commit the boot config
 --
 if arg[1] == "init" then
-	print("Initialising transient data...")
-	db.init()
 	print("Loading boot config...")
 	CF_new = import("etc/boot.conf")
 	if not CF_new then

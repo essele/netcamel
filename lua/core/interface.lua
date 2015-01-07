@@ -42,6 +42,7 @@ local function start_dhcp(intf, cf)
 		"--interface", intf,
 		"--pidfile", "/var/run/dhcp."..intf..".pid",
 		"--script", DHCP_SCRIPT,
+		"--release",
 		"--background",
 	}
 	if cf["ip"] then push(args, "--request", cf["ip"]) end
@@ -57,14 +58,16 @@ local function start_dhcp(intf, cf)
 		["name"] = "dhcp."..intf,
 		["pidfile"] = "/var/run/dhcp."..intf..".pid",
 		["logfile"] = "/tmp/dhcp."..intf..".log",
+		["maxkilltime"] = 500,
 
-		["start"] = service.start_as_daemon,
-		["stop"] = service.kill_by_pidfile,
+		["start"] = "ASDAEMON",
+		["stop"] = "BYPIDFILE",
 	})
 
 	print("ARGS: " .. table.concat(args, " "))
 
-	service.start("dhcp."..intf)
+	local rc, err = service.start("dhcp."..intf)
+	print("rc="..tostring(rc).." err="..tostring(err))
 
 	--if not rc then return false, "DHCP start failed: "..err end
 	return true
@@ -73,30 +76,14 @@ local function stop_dhcp(intf)
 	--
 	-- Setup enough so we can kill the process
 	--
-	service.define("dhcp."..intf, {
-		["pidfile"] = "/var/run/dhcp."..intf..".pid",
-		["stop"] = service.kill_by_pidfile,
-	})
-	service.stop("dhcp."..intf)
+	print("Stopping dhcp")
+	local rc, err = service.stop("dhcp."..intf)
+	print("rc="..tostring(rc).." err="..tostring(err))
 
 	--
 	-- Remove the definition
 	--
-	service.define("dhcp."..intf, nil)
-
-	--
-	-- Remove any resolvers or routes we added as part of this
-	-- since dhcpc won't clear up itself
-	--
-	runtime.remove_resolvers(intf)
-	runtime.remove_defaultroute(intf)
-	runtime.update_resolvers()
-	runtime.update_defaultroute()
-
-	--
-	-- Make sure we also remove any dhcp provided address
-	--
-	os.execute(string.format("# ip addr flush dev %s", intf))
+	service.remove("dhcp."..intf)
 end
 
 
@@ -143,27 +130,29 @@ local function ethernet_commit(changes)
 		local dhcp_ip_restart = changed.ip and oldcf["dhcp-enable"]
 
 		if dhcp_ip_restart or next(prefixmatches(changed, "dhcp-")) then
-			stop_dhcp(physical)
+			if oldcf["dhcp-enable"] then
+				stop_dhcp(physical)
+			end
 
 			if cf["dhcp-enable"] then
 				print("dhcp-enable type="..type(cf["dhcp-enable"]))
-				os.execute(string.format("ip addr flush dev %s", physical))
+--				os.execute(string.format("ip addr flush dev %s", physical))
 				start_dhcp(physical, cf)
 			else
 				if cf.ip then
 					os.execute(string.format("ip addr add %s dev %s", cf.ip, physical))
 				end
 			end
+		else
+			--
+			-- Handle standard IP address changes here
+			--
+			if changed.ip and not cf["dhcp-enable"] then
+				if oldcf.ip then os.execute(string.format("ip addr del %s dev %s", oldcf.ip, physical)) end
+				os.execute(string.format("ip addr add %s dev %s", cf.ip, physical))
+			end
 		end
 	
-		--
-		-- If we have changed any of the dhcp settings then we need to (re)start
-		-- dhcp
-		--
-		if changed.ip and not cf["dhcp-enable"] then
-			os.execute(string.format("ip addr del %s dev %s", oldcf.ip, physical))
-			os.execute(string.format("ip addr add %s dev %s", cf.ip, physical))
-		end
 		if changed.mtu then
 			os.execute(string.format("ip link set dev %s mtu %s", physical, cf.mtu))
 		end

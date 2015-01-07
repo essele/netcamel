@@ -55,6 +55,7 @@ local action 		= arg[1]
 --
 -- Remove anything stored from this interface so we are starting clean
 --
+
 runtime.remove_resolvers(interface)
 runtime.remove_defaultroute(interface)
 
@@ -63,17 +64,17 @@ print("Performing Action: "..action)
 
 if action == "deconfig" then
 	--
-	-- Make sure the interface is up but unconfigured
+	-- Deconfig means clear out the interface ready to start
+	-- or when finishing.
 	--
---	os.execute(string.format("ip link set %s up", interface))
---	os.execute(string.format("ip addr flush dev %s", interface))
+	os.execute(string.format("ip link set %s up", interface))
+	os.execute(string.format("ip addr flush dev %s", interface))
 end
 
 if action == "leasefail" or action == "nak" then
 end
 
 if action == "renew" or action == "bound" then
-
 	--
 	-- Populate new entries if we are configured to do so...
 	--
@@ -95,7 +96,10 @@ if action == "renew" or action == "bound" then
 	os.execute(string.format("ip addr add %s/%s broadcast %s dev %s", ip, mask, broadcast, interface))
 end
 
-
+--
+-- Update the resolves and defaultroute based on any changed made in the
+-- transient table
+--
 runtime.update_resolvers()
 runtime.update_defaultroute()
 

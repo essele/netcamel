@@ -161,18 +161,6 @@ local function ntp_iptables_rules()
 	return rules
 end
 
---
--- Define the service so that we can stop, start and monitor the
--- daemon.
---
-service.define("ntpd", {
-	["binary"] = NTPD,
-	["args"] = NTPD_ARGS,
-	["name"] = NTPD_NAME,
-
-	["start"] = service.start_normally,
-	["stop"] = service.kill_by_name,
-})
 
 --
 -- Main interface config definition
@@ -191,6 +179,19 @@ master["service/ntp/server"] = { ["type"] = "OK", ["list"] = 1 }
 
 function ntp_init()
 	print("INIT_NTP")
+	--
+	-- Define the service so that we can stop, start and monitor the
+	-- daemon.
+	--
+	service.define("ntpd", {
+		["binary"] = NTPD,
+		["args"] = NTPD_ARGS,
+		["name"] = NTPD_NAME,
+
+		["start"] = "NORMALLY",
+		["stop"] = "BYNAME",
+	})
+
 	--
 	-- If we change the settings we will need to adjust the iptables
 	-- macro
