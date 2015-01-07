@@ -312,43 +312,43 @@ end
 -- TODO: probably move somewhere else
 --
 function create_config_file(name, template, dict)
-	local input = split(template, "\n")
-	local output = {}
+    local input = split(template, "\n")
 
 	-- work out leading space
 	local lead = input[1]:match("^(%s+)") or ""
 
-	-- now process each line
-	for line in each(input) do
-		local out = line:gsub("^"..lead, "")		-- remove leading space
+	local i = 1
+	while input[i] do
+		local out = input[i]
 		local var = out:match("{{([^}]+)}}")
 
 		if var and dict[var] then
 			if type(dict[var]) == "table" then
-				for v in each(dict[var]) do
-					table.insert(output, (out:gsub("{{"..var.."}}", v)))
+				for v = 1, #dict[var] do
+					table.insert(input, i+v, (out:gsub("{{"..var.."}}", dict[var][v])))
 				end
+				if #dict[var] > 0 then table.remove(input, i) end
 			else
-				table.insert(output, (out:gsub("{{"..var.."}}", dict[var])))
+				input[i] = out:gsub("{{"..var.."}}", dict[var])
 			end
 		else
-			table.insert(output, out)
+			input[i] = out
+			i = i + 1
 		end
 	end
 
 	-- remove the last line if it's just whitespace
-	if output[#output]:match("^%s+$") then
-		table.remove(output, #output)
+	if input[#input]:match("^%s+$") then
+		table.remove(input, #input)
 	end
-
+	
 	local file = io.open(name, "w+")
 	if not file then return nil end
 
-	for line in each(output) do
-		file:write(line .. "\n")
+	for line in each(input) do
+		file:write(line:gsub("^"..lead,"") .. "\n")
 	end
 	file:close()
 	return true
 end
-
 
