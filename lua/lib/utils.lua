@@ -327,7 +327,7 @@ function create_config_file(name, template, dict)
 				for v = 1, #dict[var] do
 					table.insert(input, i+v, (out:gsub("{{"..var.."}}", dict[var][v])))
 				end
-				if #dict[var] > 0 then table.remove(input, i) end
+				table.remove(input, i) 
 			else
 				input[i] = out:gsub("{{"..var.."}}", dict[var])
 			end
