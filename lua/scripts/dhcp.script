@@ -47,8 +47,8 @@ local dns 			= split(os.getenv("dns") or "", " ")
 
 local no_resolv 	= os.getenv("dhcp_no_resolv") or false
 local no_route		= os.getenv("dhcp_no_route") or false
-local resolv_pri 	= os.getenv("dhcp_resolv_pri") or "99"
-local route_pri 	= os.getenv("dhcp_route_pri") or "99"
+local resolv_pri 	= os.getenv("dhcp_resolv_pri") or "60"
+local route_pri 	= os.getenv("dhcp_route_pri") or "60"
 
 local action 		= arg[1]
 
