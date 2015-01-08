@@ -29,9 +29,9 @@ local function start_dhcp(intf, cf)
 	--
 	local env = {}
 	if cf["dhcp-no-resolv"] then env["dhcp_no_resolv"] = 1 end
-	if cf["dhcp-no-route"] then env["dhcp_no_route"] = 1 end
+	if cf["dhcp-no-defaultroute"] then env["dhcp_no_defaultroute"] = 1 end
 	if cf["dhcp-resolv-pri"] then env["dhcp_resolv_pri"] = cf["dhcp-resolv-pri"] end
-	if cf["dhcp-route-pri"] then env["dhcp_route_pri"] = cf["dhcp-route-pri"] end
+	if cf["dhcp-defaultroute-pri"] then env["dhcp_defaultroute_pri"] = cf["dhcp-defauldefaulttroute-pri"] end
 
 	--
 	-- Build the command line args. Don't include --release as we may create
@@ -254,7 +254,10 @@ local function start_pppoe(intf, cf)
 	-- a race condition when unconfiguring dhcp where our ip commands run before
 	-- the dhcp script undoes them!
 	--
-	local args = { "call", intf, }
+	local args = { 	"nodetach",
+					"logfile", "/tmp/log."..intf,
+					"call", intf, 
+	}
 
 	--
 	-- Use the service framework to start the service so we can track it properly
@@ -263,7 +266,8 @@ local function start_pppoe(intf, cf)
 	service.define(intf, {
 		["binary"] = PPPD,
 		["args"] = args,
-		["pidfile"] = "/var/run/"..intf..".pid",
+		["pidfile"] = "/var/run/"..intf..".pidX",
+		["create_pidfile"] = true,
 		["maxkilltime"] = 2500,
 
 		["start"] = "ASDAEMON",
@@ -338,7 +342,7 @@ local function pppoe_commit(changes)
 				["attach"] = interface_name(cf.attach),
 				["defaultroute"] = (cf["default-route"] and "defaultroute") or "",
 				["resolv_pri"] = cf["resolv-pri"],
-				["route_pri"] = cf["route-pri"],
+				["defaultroute_pri"] = cf["defaultroute-pri"],
 				["username"] = cf.username or {},
 				["password"] = cf.password or {},
 			}
@@ -353,7 +357,7 @@ local function pppoe_commit(changes)
 				usepeerdns
 				nodefaultroute
 				debug
-				ipparam "{{defaultroute}} route_pri={{route_pri}} resolv_pri={{resolv_pri}}"
+				ipparam "{{defaultroute}} logfile=/tmp/log.{{interface}} defaultroute_pri={{defaultroute_pri}} resolv_pri={{resolv_pri}}"
 				user "{{username}}"
 				password "{{password}}"
 			]]
@@ -503,11 +507,11 @@ master["interface/ethernet/*/disabled"] = 	{ ["type"] = "boolean" }
 --
 -- Support DHCP on the interface (off by default)
 --
-master["interface/ethernet/*/dhcp-enable"] = 		{ ["type"] = "boolean", ["default"] = false }
-master["interface/ethernet/*/dhcp-no-resolv"] = 	{ ["type"] = "boolean", ["default"] = false }
-master["interface/ethernet/*/dhcp-no-route"] = 		{ ["type"] = "boolean", ["default"] = false }
-master["interface/ethernet/*/dhcp-resolv-pri"] = 	{ ["type"] = "2-digit", ["default"] = "60" }
-master["interface/ethernet/*/dhcp-route-pri"] = 	{ ["type"] = "2-digit", ["default"] = "60" }
+master["interface/ethernet/*/dhcp-enable"] = 			{ ["type"] = "boolean", ["default"] = false }
+master["interface/ethernet/*/dhcp-no-resolv"] = 		{ ["type"] = "boolean", ["default"] = false }
+master["interface/ethernet/*/dhcp-no-defaultroute"] = 	{ ["type"] = "boolean", ["default"] = false }
+master["interface/ethernet/*/dhcp-resolv-pri"] = 		{ ["type"] = "2-digit", ["default"] = "60" }
+master["interface/ethernet/*/dhcp-defaultroute-pri"] = 	{ ["type"] = "2-digit", ["default"] = "60" }
 
 --
 -- pppoe interfaces...
@@ -518,16 +522,16 @@ master["interface/pppoe"] = {
 	["with_children"] = 1,
 }
 
-master["interface/pppoe/*"] =				{ ["style"] = "pppoe_if" }
-master["interface/pppoe/*/attach"] =		{ ["type"] = "eth_interface",
-											  ["options"] = options_eth_interfaces }
-master["interface/pppoe/*/default-route"] =	{ ["type"] = "boolean" }
-master["interface/pppoe/*/mtu"] =			{ ["type"] = "mtu" }
-master["interface/pppoe/*/resolv-pri"] = 	{ ["type"] = "2-digit", ["default"] = "40" }
-master["interface/pppoe/*/route-pri"] = 	{ ["type"] = "2-digit", ["default"] = "40" }
-master["interface/pppoe/*/username"] =		{ ["type"] = "OK" }
-master["interface/pppoe/*/password"] =		{ ["type"] = "OK" }
-master["interface/pppoe/*/disabled"] = 		{ ["type"] = "boolean" }
+master["interface/pppoe/*"] =					{ ["style"] = "pppoe_if" }
+master["interface/pppoe/*/attach"] =			{ ["type"] = "eth_interface",
+											  	  ["options"] = options_eth_interfaces }
+master["interface/pppoe/*/default-route"] =		{ ["type"] = "boolean" }
+master["interface/pppoe/*/mtu"] =				{ ["type"] = "mtu" }
+master["interface/pppoe/*/resolv-pri"] = 		{ ["type"] = "2-digit", ["default"] = "40" }
+master["interface/pppoe/*/defaultroute-pri"] = 	{ ["type"] = "2-digit", ["default"] = "40" }
+master["interface/pppoe/*/username"] =			{ ["type"] = "OK" }
+master["interface/pppoe/*/password"] =			{ ["type"] = "OK" }
+master["interface/pppoe/*/disabled"] = 			{ ["type"] = "boolean" }
 
 --
 -- We will use a number of tables to manage dynamic information like

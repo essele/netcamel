@@ -67,6 +67,19 @@ local function update_defaultroute()
 	end
 end
 
+--
+-- Redirect our output to the named logfile, we keep the posix require in here
+-- so that we don't impact performance too much.
+--
+local function redirect(filename)
+	posix = require("posix")
+	posix.fcntl = require("posix.fcntl")
+	require("bit")
+	posix.close(1)
+	posix.close(2)
+	local fd = posix.fcntl.open(filename, bit.bor(posix.O_WRONLY, posix.O_CREAT, posix.O_APPEND, posix.O_SYNC))
+	posix.dup(fd)
+end
 
 return {
 	remove_resolvers = remove_resolvers,
@@ -74,7 +87,8 @@ return {
 	add_resolver = add_resolver,
 	add_defaultroute = add_defaultroute,
 	update_resolvers = update_resolvers,
-	update_defaultroute = update_defaultroute
+	update_defaultroute = update_defaultroute,
+	redirect = redirect,
 }
 
 

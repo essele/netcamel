@@ -36,23 +36,6 @@ runtime = require("runtime")
 --
 require("utils")
 
-
---
--- Debug code so we can get a logfile for this execution...
---
-	posix = require("posix")
-	posix.fcntl = require("posix.fcntl")
-	require("bit")
-	posix.close(1)
-	posix.close(2)
-	local fd = posix.fcntl.open("/tmp/aaaa", bit.bor(posix.O_WRONLY, posix.O_CREAT, posix.O_APPEND))
-	posix.dup(fd)
---
---
---
-
-
-
 --
 -- Pull out the relevent bits from the environment
 --
@@ -63,31 +46,41 @@ local dns1		= os.getenv("DNS1")
 local dns2		= os.getenv("DNS2")
 local extras	= arg[6]
 
-local defaultroute 	= false
-local resolve_pri	= "40"
-local route_pri		= "40"
+local defaultroute 			= false
+local resolve_pri			= "40"
+local defaultroute_pri		= "40"
 
 --
--- Process out extra arguments
+-- Find the logfile entry in extra so that we can redirect our output
+--
+local logfile = extras and extras:match("%f[^%s%z]logfile=([^%s]+)%f[%s%z]")
+if logfile then runtime.redirect(logfile) end
+
+--
+-- Process our other extra arguments...
 --
 if extras then
 	extras = extras:match("^%s*(.-)%s*$")		-- remove leading and trailing whitespace
 	for var in each(split(extras, " ")) do
 		print("Extra="..var)
+
 		local k, v = var:match("^([^=]+)=?(.-)$")
-		if k == "defaultroute" then defaultroute = true
+		if k == "logfile" then
+		elseif k == "defaultroute" then defaultroute = true
 		elseif k == "resolv_pri" then resolv_pri = v
-		elseif k == "route_pri" then resolv_pri = v
+		elseif k == "defaultroute_pri" then resolv_pri = v
 		else print("unknown extra option: "..k) end
 	end
 end
-
 
 --
 -- Work out which action we are performing
 --
 local action = arg[0]:match("/?([^/]-)$")
 print("Action is: " .. action)
+print("Args1="..tostring(arg[1]))
+print("Args2="..tostring(arg[2]))
+print("Args3="..tostring(arg[3]))
 
 if action == "ip-up" then
 	runtime.remove_resolvers(interface)
@@ -95,7 +88,7 @@ if action == "ip-up" then
 
 	if dns1 then runtime.add_resolver(interface, dns1, resolv_pri) end
 	if dns2 then runtime.add_resolver(interface, dns2, resolv_pri) end
-	if defaultroute then runtime.add_defaultroute(interface, server, route_pri) end
+	if defaultroute then runtime.add_defaultroute(interface, server, defaultroute_pri) end
 
 	runtime.update_resolvers()
 	runtime.update_defaultroute()
