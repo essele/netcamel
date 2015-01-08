@@ -40,8 +40,8 @@ local function ipt_set_commit(changes)
 	end
 	for set in each(state.changed) do
 		local setname = set:gsub("*", "")
-		local old_cf = node_vars("iptables/set/"..set, CF_current)
-		local cf = node_vars("iptables/set/"..set, CF_new)
+		local old_cf = node_vars("iptables/set/"..set, CF_current) or {}
+		local cf = node_vars("iptables/set/"..set, CF_new) or {}
 		io.write(string.format("# (change set %s)\n", setname))
 
 		if old_cf["type"] ~= cf["type"] then

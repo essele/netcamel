@@ -20,6 +20,8 @@
 local DHCPC="/sbin/udhcpc"
 local DHCP_SCRIPT="/netcamel/scripts/dhcp.script"
 
+local PPPD="/usr/sbin/pppd"
+
 local function start_dhcp(intf, cf)
 	--
 	-- Make sure we create the needed environment to pass suitable
@@ -56,7 +58,7 @@ local function start_dhcp(intf, cf)
 		["name"] = "dhcp."..intf,
 		["pidfile"] = "/var/run/dhcp."..intf..".pid",
 		["logfile"] = "/tmp/dhcp."..intf..".log",
-		["maxkilltime"] = 500,
+		["maxkilltime"] = 1500,
 
 		["start"] = "ASDAEMON",
 		["stop"] = "BYPIDFILE",
@@ -95,7 +97,7 @@ local function ethernet_commit(changes)
 	--
 	for ifnum in each(state.removed) do 
 		print("Removed: "..ifnum) 
-		local oldcf = node_vars("interface/ethernet/"..ifnum, CF_current)
+		local oldcf = node_vars("interface/ethernet/"..ifnum, CF_current) or {}
 		local physical = interface_name("ethernet/"..ifnum)
 
 		if oldcf["dhcp-enable"] then
@@ -111,8 +113,8 @@ local function ethernet_commit(changes)
 	--
 	for ifnum in each(state.changed) do 
 		print("Changed: "..ifnum) 
-		local cf = node_vars("interface/ethernet/"..ifnum, CF_new)
-		local oldcf = node_vars("interface/ethernet/"..ifnum, CF_current)
+		local cf = node_vars("interface/ethernet/"..ifnum, CF_new) or {}
+		local oldcf = node_vars("interface/ethernet/"..ifnum, CF_current) or {}
 		local physical = interface_name("ethernet/"..ifnum)
 
 		local changed = values_to_keys(node_list("interface/ethernet/"..ifnum, changes))
@@ -203,7 +205,7 @@ end
 --------------------------------------------------------------------------------
 local function pppoe_precommit(changes)
 	for ifnum in each(node_list("interface/pppoe", CF_new)) do
-		local cf = node_vars("interface/pppoe/"..ifnum, CF_new)
+		local cf = node_vars("interface/pppoe/"..ifnum, CF_new) or {}
 		print("PPPOE Precommit -- node: " .. ifnum)
 
 		--
@@ -215,13 +217,15 @@ local function pppoe_precommit(changes)
 		-- Check the interface we are attaching to meets our requirements
 		--
 		if cf.attach then
-			--local ifpath = interface_path(cf.attach)
-			local ifpath = "interface/"..cf.attach
+			local ifpath = interface_path(cf.attach)
 			if not ifpath then 
 				return false, string.format("attach interface incorrect for pppoe/%s: %s", ifnum, cf.attach)
 			end
+			-- TODO: we get defaults!!!!!
 			local ethcf = node_vars(ifpath, CF_new)
-			if not next(ethcf) then 
+--			print("ETHCF="..tostring(ethcf))
+--			for k,v in pairs(ethcf) do print("k="..k.." v="..tostring(v)) end
+			if not ethcf then 
 				return false, string.format("attach interface unknown for pppoe/%s: %s", ifnum, ifpath)
 			end
 			if ethcf.ip then
@@ -240,6 +244,50 @@ local function pppoe_precommit(changes)
 	return true
 end
 
+--
+-- Actually start the pppoe process, this means creating the config file and
+-- then adding the service and starting it.
+--
+local function start_pppoe(intf, cf)
+	--
+	-- Build the command line args. Don't include --release as we may create
+	-- a race condition when unconfiguring dhcp where our ip commands run before
+	-- the dhcp script undoes them!
+	--
+	local args = { "call", intf, }
+
+	--
+	-- Use the service framework to start the service so we can track it properly
+	-- later
+	--
+	service.define(intf, {
+		["binary"] = PPPD,
+		["args"] = args,
+		["pidfile"] = "/var/run/"..intf..".pid",
+		["maxkilltime"] = 2500,
+
+		["start"] = "ASDAEMON",
+		["stop"] = "BYPIDFILE",
+	})
+
+	print("ARGS: " .. table.concat(args, " "))
+
+	local rc, err = service.start(intf)
+	print("rc="..tostring(rc).." err="..tostring(err))
+
+	--if not rc then return false, "DHCP start failed: "..err end
+	return true
+end
+local function stop_pppoe(intf)
+	print("Stopping pppoe")
+	local rc, err = service.stop(intf)
+	print("rc="..tostring(rc).." err="..tostring(err))
+
+	--
+	-- Remove the definition
+	--
+	service.remove("pppoe."..intf)
+end
 
 --
 -- If deleted then remove peer config
@@ -264,8 +312,8 @@ local function pppoe_commit(changes)
 
 	for ifnum in each(todo) do
 		print("WOULD PROCESS: pppoe"..ifnum)
-		local cf = node_vars("interface/pppoe/"..ifnum, CF_new)
-		local oldcf = node_vars("interface/pppoe/"..ifnum, CF_current)
+		local cf = node_vars("interface/pppoe/"..ifnum, CF_new) or {}
+		local oldcf = node_vars("interface/pppoe/"..ifnum, CF_current) or {}
 		local physical = interface_name("pppoe/"..ifnum)
 
 		--
@@ -273,14 +321,15 @@ local function pppoe_commit(changes)
 		--
 		-- TODO: disable??
 		if oldcf.attach then
-			print("WOULD STOP: pppoe"..ifnum)
+			print("WOULD STOP: "..physical)
+			stop_pppoe(physical)
 		end
 
 		--
 		-- Now start the new service if we need to...
 		--
 		if cf.attach then
-			print("WOULD START: pppoe"..ifnum)
+			print("WOULD START: "..physical)
 	
 			print("REOSLVC_PRI="..cf["resolv-pri"])
 
@@ -309,6 +358,7 @@ local function pppoe_commit(changes)
 				password "{{password}}"
 			]]
 			create_config_file("/etc/ppp/peers/"..physical, cfdata, cfdict)
+			start_pppoe(physical)
 		end	
 		
 	end
@@ -390,17 +440,8 @@ end
 -- can be used.
 --
 function interface_path(interface)
-	local t, i = interface:match("^interface/([^/]+)/%*?(%d+)$")
-	if t then return string.format("interface/%s/*%s", t, i) end
-
 	local t, i = interface:match("^([^/]+)/%*?(%d+)$")
 	if t then return string.format("interface/%s/*%s", t, i) end
-
-	local i = interface:match("^eth(%d+)$")
-	if i then return string.format("interface/ethernet/*%s", i) end
-
-	local i = interface:match("^pppoe(%d+)$")
-	if i then return string.format("interface/pppoe/*%s", i) end
 
 	return nil
 end

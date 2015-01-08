@@ -118,18 +118,26 @@ end
 
 --
 -- Take a prefix and build a hash of elements and values (using the
--- defaults it provided in the master config)
+-- defaults it provided in the master config).
+--
+-- Note we only apply the defaults if we have something defined in
+-- the config.
 --
 function node_vars(prefix, kv)
 	local rc = {}
 	local mprefix = find_master_key(prefix)
 
-	for k in each(node_list(mprefix, master)) do
-		if master[mprefix.."/"..k]["type"] then
-			rc[k] = master[mprefix.."/"..k].default
-		end
-	end
+	-- build config provded vars
 	for k in each(node_list(prefix, kv)) do rc[k] = kv[prefix .. "/" .. k] end
+
+	-- if no vars then return nil
+	if not next(rc) then return nil end
+
+	-- fill in any missing defaults
+	for k in each(node_list(mprefix, master)) do
+		local m = master[mprefix.."/"..k]
+		if not rc[k] and m["type"] then rc[k] = m.default end
+	end
 	return rc
 end
 

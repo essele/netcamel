@@ -30,7 +30,7 @@ local NTPD_ARGS = { "-c", NTPD_CONFIG, "-g" }
 local function ntp_commit(changes)
 	print("Hello From NTP")
 
-	local cf = node_vars("service/ntp", CF_new)
+	local cf = node_vars("service/ntp", CF_new) or {}
 
 	--
 	-- Stop the daemon...
@@ -106,7 +106,7 @@ end
 -- interfaces.
 --
 local function ntp_precommit(changes)
-	local cf = node_vars("service/ntp", CF_new)
+	local cf = node_vars("service/ntp", CF_new) or {}
 
 	--
 	-- if we are not enabled then we don't really care about anything
@@ -129,7 +129,7 @@ local function ntp_precommit(changes)
 		return false, "service/ntp/listen-on must list at least one interface for provide-service"
 	end
 	for interface in each(cf["listen-on"]) do
-		if not node_exists("interface/"..interface, CF_new) then
+		if not node_exists(interface_path(interface), CF_new) then
 			return false, string.format("service/ntp/listen-on interface not valid: %s", interface)
 		end
 	end
