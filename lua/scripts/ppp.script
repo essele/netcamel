@@ -60,8 +60,7 @@ if logfile then runtime.redirect(logfile) end
 -- Process our other extra arguments...
 --
 if extras then
-	extras = extras:match("^%s*(.-)%s*$")		-- remove leading and trailing whitespace
-	for var in each(split(extras, " ")) do
+	for var in each(split(extras, "%s")) do
 		print("Extra="..var)
 
 		local k, v = var:match("^([^=]+)=?(.-)$")

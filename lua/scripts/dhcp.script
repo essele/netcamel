@@ -42,8 +42,8 @@ local interface 		= os.getenv("interface")
 local ip				= os.getenv("ip")
 local mask				= os.getenv("mask")
 local broadcast 		= os.getenv("broadcast") or "+"
-local routers 			= split(os.getenv("router") or "", " ")
-local dns 				= split(os.getenv("dns") or "", " ")
+local routers 			= split(os.getenv("router") or "", "%s")
+local dns 				= split(os.getenv("dns") or "", "%s")
 
 local no_resolv 		= os.getenv("dhcp_no_resolv") or false
 local no_route			= os.getenv("dhcp_no_route") or false

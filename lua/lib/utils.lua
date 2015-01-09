@@ -263,11 +263,20 @@ end
 -- Split a string into a list, given a specific separator
 --
 function split(str, sep)
-	local t = {}
-	local function helper(line) table.insert(t, line) return "" end
+	local rc = {}
+	for tok in string.gmatch(str, "([^"..sep.."]+)") do
+		table.insert(rc, tok)
+	end
+	return rc
+end
 
-	helper((str:gsub("(.-)"..sep, helper)))
-	return t
+--
+-- Split a string into lines
+--
+function lines(str)
+	local rc = {}
+	for line in string.gmatch(str, "(.-)\n") do table.insert(rc, line) end
+	return rc
 end
 
 --
@@ -312,7 +321,7 @@ end
 -- TODO: probably move somewhere else
 --
 function create_config_file(name, template, dict)
-    local input = split(template, "\n")
+    local input = lines(template, "\n")
 
 	-- work out leading space
 	local lead = input[1]:match("^(%s+)") or ""
