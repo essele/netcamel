@@ -44,50 +44,39 @@ local ip		= os.getenv("IPLOCAL")
 local server	= os.getenv("IPREMOTE")
 local dns1		= os.getenv("DNS1")
 local dns2		= os.getenv("DNS2")
-local extras	= arg[6]
-
-local defaultroute 			= false
-local resolve_pri			= "40"
-local defaultroute_pri		= "40"
 
 --
--- Find the logfile entry in extra so that we can redirect our output
+-- Load the extra variables
 --
-local logfile = extras and extras:match("%f[^%s%z]logfile=([^%s]+)%f[%s%z]")
+local vars = load_vars(interface)
+
+local logfile				= vars["logfile"]
+local no_resolv				= vars["no-resolv"]
+local no_defaultroute		= vars["no_defaultroute"]
+local resolv_pri			= vars["resolv-pri"] or "40"
+local defaultroute_pri		= vars["defaultroute-pri"] or "40"
+
+--
+-- Redirect our output
+--
 if logfile then runtime.redirect(logfile) end
-
---
--- Process our other extra arguments...
---
-if extras then
-	for var in each(split(extras, "%s")) do
-		print("Extra="..var)
-
-		local k, v = var:match("^([^=]+)=?(.-)$")
-		if k == "logfile" then
-		elseif k == "defaultroute" then defaultroute = true
-		elseif k == "resolv_pri" then resolv_pri = v
-		elseif k == "defaultroute_pri" then resolv_pri = v
-		else print("unknown extra option: "..k) end
-	end
-end
 
 --
 -- Work out which action we are performing
 --
 local action = arg[0]:match("/?([^/]-)$")
 print("Action is: " .. action)
-print("Args1="..tostring(arg[1]))
-print("Args2="..tostring(arg[2]))
-print("Args3="..tostring(arg[3]))
+
 
 if action == "ip-up" then
 	runtime.remove_resolvers(interface)
 	runtime.remove_defaultroute(interface)
 
-	if dns1 then runtime.add_resolver(interface, dns1, resolv_pri) end
-	if dns2 then runtime.add_resolver(interface, dns2, resolv_pri) end
-	if defaultroute then runtime.add_defaultroute(interface, server, defaultroute_pri) end
+	if not no_resolv then
+		if dns1 then runtime.add_resolver(interface, dns1, resolv_pri) end
+		if dns2 then runtime.add_resolver(interface, dns2, resolv_pri) end
+	end
+	if not no_defaultroute then runtime.add_defaultroute(interface, server, defaultroute_pri) end
 
 	runtime.update_resolvers()
 	runtime.update_defaultroute()
@@ -99,5 +88,4 @@ if action == "ip-down" then
 	runtime.update_resolvers()
 	runtime.update_defaultroute()
 end
-
 

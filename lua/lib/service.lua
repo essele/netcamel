@@ -272,7 +272,7 @@ local function start_as_daemon(svc)
 		local file = io.open(svc.pidfile, "w+")
 		local pid = posix.getpid()
 		if file then
-			file:write(tostring(pid))
+			file:write(tostring(pid.pid))
 			file:close()
 		end
 	end

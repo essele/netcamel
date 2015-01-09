@@ -45,10 +45,16 @@ local broadcast 		= os.getenv("broadcast") or "+"
 local routers 			= split(os.getenv("router") or "", "%s")
 local dns 				= split(os.getenv("dns") or "", "%s")
 
-local no_resolv 		= os.getenv("dhcp_no_resolv") or false
-local no_route			= os.getenv("dhcp_no_route") or false
-local resolv_pri 		= os.getenv("dhcp_resolv_pri") or "60"
-local defaultroute_pri 	= os.getenv("dhcp_defaultroute_pri") or "60"
+--
+-- Load the extra variables
+--
+local vars = load_vars(interface)
+
+local logfile               = vars["logfile"]
+local no_resolv             = vars["no-resolv"]
+local no_defaultroute       = vars["no_defaultroute"]
+local resolv_pri            = vars["resolv-pri"] or "60"
+local defaultroute_pri      = vars["defaultroute-pri"] or "60"
 
 local action 			= arg[1]
 
@@ -83,7 +89,7 @@ if action == "renew" or action == "bound" then
 			runtime.add_resolver(interface, resolver, resolv_pri)
 		end
 	end
-	if not no_route then
+	if not no_defaultroute then
 		for router in each(routers) do
 			runtime.add_defaultroute(interface, router, defaultroute_pri)
 		end

@@ -27,11 +27,18 @@ local function start_dhcp(intf, cf)
 	-- Make sure we create the needed environment to pass suitable
 	-- options to the dhcp.script
 	--
-	local env = {}
-	if cf["dhcp-no-resolv"] then env["dhcp_no_resolv"] = 1 end
-	if cf["dhcp-no-defaultroute"] then env["dhcp_no_defaultroute"] = 1 end
-	if cf["dhcp-resolv-pri"] then env["dhcp_resolv_pri"] = cf["dhcp-resolv-pri"] end
-	if cf["dhcp-defaultroute-pri"] then env["dhcp_defaultroute_pri"] = cf["dhcp-defauldefaulttroute-pri"] end
+	--
+	--
+	-- Build a set of information to pass into the dhcp script so that
+	-- it can be a bit more clever
+	--
+	local vars = {
+		["no-resolv"]			= cf["dhcp-no-resolv"],
+		["no-defaultroute"]		= cf["dhcp-no-defaultroute"],
+		["resolv-pri"]			= cf["dhcp-resolv-pri"],
+		["defaultroute-pri"]	= cf["dhcp-defaultroute-pri"],
+	}
+	save_vars(intf, vars)
 
 	--
 	-- Build the command line args. Don't include --release as we may create
@@ -54,7 +61,6 @@ local function start_dhcp(intf, cf)
 	service.define("dhcp."..intf, {
 		["binary"] = DHCPC,
 		["args"] = args,
-		["env"] = env,
 		["name"] = "dhcp."..intf,
 		["pidfile"] = "/var/run/dhcp."..intf..".pid",
 		["logfile"] = "/tmp/dhcp."..intf..".log",
@@ -216,7 +222,10 @@ local function pppoe_precommit(changes)
 		--
 		-- Check the interface we are attaching to meets our requirements
 		--
-		if cf.attach then
+		if not cf.disabled then
+			if not cf.attach then
+				return false, "required interface in attach field"
+			end
 			local ifpath = interface_path(cf.attach)
 			if not ifpath then 
 				return false, string.format("attach interface incorrect for pppoe/%s: %s", ifnum, cf.attach)
@@ -237,8 +246,6 @@ local function pppoe_precommit(changes)
 			if ethcf.disabled and not cf.disabled then
 				return false, string.format("attach interface must be enabled for pppoe/%s: %s", ifnum, ifpath)
 			end
-		else
-			return false, "required interface in attach field"
 		end
 	end
 	return true
@@ -250,9 +257,21 @@ end
 --
 local function start_pppoe(intf, cf)
 	--
-	-- Build the command line args. Don't include --release as we may create
-	-- a race condition when unconfiguring dhcp where our ip commands run before
-	-- the dhcp script undoes them!
+	-- Build a set of information to pass into the ppp script so that
+	-- it can be a bit more clever
+	--
+	local vars = {
+		["logfile"] 			= "/tmp/log."..intf,
+		["no-defaultroute"] 	= cf["no-defaultroute"],
+		["no-resolv"]			= cf["no-resolv"],
+		["resolv-pri"] 			= cf["resolv-pri"],
+		["defaultroute-pri"] 	= cf["defaultroute-pri"]
+	}
+	save_vars(intf, vars)
+
+	--
+	-- Build the command line args. For ppp it's just simply a call with a logfile
+	-- so that we can get the output of the daemon.
 	--
 	local args = { 	"nodetach",
 					"logfile", "/tmp/log."..intf,
@@ -324,7 +343,7 @@ local function pppoe_commit(changes)
 		-- If we were running pppoe then we need to kill it
 		--
 		-- TODO: disable??
-		if oldcf.attach then
+		if not oldcf.disabled then
 			print("WOULD STOP: "..physical)
 			stop_pppoe(physical)
 		end
@@ -332,7 +351,7 @@ local function pppoe_commit(changes)
 		--
 		-- Now start the new service if we need to...
 		--
-		if cf.attach then
+		if not cf.disabled then
 			print("WOULD START: "..physical)
 	
 			print("REOSLVC_PRI="..cf["resolv-pri"])
@@ -340,9 +359,6 @@ local function pppoe_commit(changes)
 			local cfdict = {
 				["interface"] = physical,
 				["attach"] = interface_name(cf.attach),
-				["defaultroute"] = (cf["default-route"] and "defaultroute") or "",
-				["resolv_pri"] = cf["resolv-pri"],
-				["defaultroute_pri"] = cf["defaultroute-pri"],
 				["username"] = cf.username or {},
 				["password"] = cf.password or {},
 			}
@@ -357,12 +373,11 @@ local function pppoe_commit(changes)
 				usepeerdns
 				nodefaultroute
 				debug
-				ipparam "{{defaultroute}} logfile=/tmp/log.{{interface}} defaultroute_pri={{defaultroute_pri}} resolv_pri={{resolv_pri}}"
 				user "{{username}}"
 				password "{{password}}"
 			]]
 			create_config_file("/etc/ppp/peers/"..physical, cfdata, cfdict)
-			start_pppoe(physical)
+			start_pppoe(physical, cf)
 		end	
 		
 	end
@@ -525,7 +540,8 @@ master["interface/pppoe"] = {
 master["interface/pppoe/*"] =					{ ["style"] = "pppoe_if" }
 master["interface/pppoe/*/attach"] =			{ ["type"] = "eth_interface",
 											  	  ["options"] = options_eth_interfaces }
-master["interface/pppoe/*/default-route"] =		{ ["type"] = "boolean" }
+master["interface/pppoe/*/no-defaultroute"] =	{ ["type"] = "boolean", ["default"] = false }
+master["interface/pppoe/*/no-resolv"] =			{ ["type"] = "boolean", ["default"] = false }
 master["interface/pppoe/*/mtu"] =				{ ["type"] = "mtu" }
 master["interface/pppoe/*/resolv-pri"] = 		{ ["type"] = "2-digit", ["default"] = "40" }
 master["interface/pppoe/*/defaultroute-pri"] = 	{ ["type"] = "2-digit", ["default"] = "40" }
