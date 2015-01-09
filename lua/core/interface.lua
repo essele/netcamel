@@ -24,11 +24,6 @@ local PPPD="/usr/sbin/pppd"
 
 local function start_dhcp(intf, cf)
 	--
-	-- Make sure we create the needed environment to pass suitable
-	-- options to the dhcp.script
-	--
-	--
-	--
 	-- Build a set of information to pass into the dhcp script so that
 	-- it can be a bit more clever
 	--
@@ -109,7 +104,6 @@ local function ethernet_commit(changes)
 		if oldcf["dhcp-enable"] then
 			stop_dhcp(physical)
 		end
-
 		os.execute(string.format("ip addr flush dev %s", physical))
 		os.execute(string.format("ip link set dev %s down", physical))
 	end
@@ -124,7 +118,6 @@ local function ethernet_commit(changes)
 		local physical = interface_name("ethernet/"..ifnum)
 
 		local changed = values_to_keys(node_list("interface/ethernet/"..ifnum, changes))
-
 
 		--
 		-- If we have changed any of our dhcp settings then we definitely need to
@@ -142,7 +135,6 @@ local function ethernet_commit(changes)
 
 			if cf["dhcp-enable"] then
 				print("dhcp-enable type="..type(cf["dhcp-enable"]))
---				os.execute(string.format("ip addr flush dev %s", physical))
 				start_dhcp(physical, cf)
 			else
 				if cf.ip then
@@ -198,7 +190,6 @@ local function ethernet_commit(changes)
 		end
 	end	
 
-
 	return true
 end
 
@@ -230,10 +221,8 @@ local function pppoe_precommit(changes)
 			if not ifpath then 
 				return false, string.format("attach interface incorrect for pppoe/%s: %s", ifnum, cf.attach)
 			end
-			-- TODO: we get defaults!!!!!
+
 			local ethcf = node_vars(ifpath, CF_new)
---			print("ETHCF="..tostring(ethcf))
---			for k,v in pairs(ethcf) do print("k="..k.." v="..tostring(v)) end
 			if not ethcf then 
 				return false, string.format("attach interface unknown for pppoe/%s: %s", ifnum, ifpath)
 			end
@@ -379,9 +368,7 @@ local function pppoe_commit(changes)
 			create_config_file("/etc/ppp/peers/"..physical, cfdata, cfdict)
 			start_pppoe(physical, cf)
 		end	
-		
 	end
-
 
 	for trig in each(state.triggers) do
 		print("We were triggered by: "..trig)
@@ -461,7 +448,6 @@ end
 function interface_path(interface)
 	local t, i = interface:match("^([^/]+)/%*?(%d+)$")
 	if t then return string.format("interface/%s/*%s", t, i) end
-
 	return nil
 end
 
