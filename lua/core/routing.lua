@@ -69,7 +69,7 @@ master["routing/route/*/interface"] = 	{ ["type"] = "any_interface",
 										  ["options"] = options_all_interfaces }
 master["routing/route/*/dest"] = 		{ ["type"] = "OK" }
 master["routing/route/*/gateway"] = 	{ ["type"] = "OK" }
-master["routing/route/*/table"] =		{ ["type"] = "OK", ["default"] = "default" }
+master["routing/route/*/table"] =		{ ["type"] = "OK", ["default"] = "main" }
 master["routing/route/*/priority"] = 	{ ["type"] = "2-digit" }
 
 TABLE["routes"] = {
@@ -80,7 +80,10 @@ TABLE["routes"] = {
 				priority="integer", 
 				table="string",
 	},
-
+	
+	--
+	-- Remove a specific route matching source, dest and table
+	--
 	delete_route_for_source = "delete from routes where source = :source and dest = :dest and \"table\" = :table",
 
 	--
@@ -90,8 +93,14 @@ TABLE["routes"] = {
 			"select * from routes where \"table\" = :table and dest = 'default' and " ..
 			"priority = (select min(priority) from routes where \"table\" = :table and dest = 'default')",
 
+	--
+	-- Find all non-default routes for the given interface (where the interface is up!)
+	--
+	routes_for_interface = 
+			"select * from routes,status where routes.interface = status.node and " ..
+			"routes.dest != 'default' and status.status = 'up' and routes.interface = :interface",
+
 	remove_all_routes = "delete from routes where source = 'routes'",
-    remove_source = "delete from defaultroutes where source = :source"
 }
 
 

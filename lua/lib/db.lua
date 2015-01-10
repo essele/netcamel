@@ -26,7 +26,14 @@
 TABLE = {}
 
 local sqlite3 = require("lsqlite3")
+
+--
+-- Open the database and allow us 2000ms for busy timeouts, we shouldn't get
+-- anywhere near that, but we do have multiple processes accessing the same
+-- tables so there are conflicts.
+--
 local db = sqlite3.open("/tmp/netcamel_t.sqlite3")
+db:busy_timeout(2000)
 
 --
 -- Create a table given the spec from the TABLE table.
@@ -36,25 +43,37 @@ local function create_table(name)
 	local tabdef = TABLE[name] and TABLE[name].schema
 	if not tabdef then return false, "unknown table" end
 
+	--
+	-- Prepare the fields for the table
+	--
 	local fields = {}
-	for k,v in pairs(tabdef) do
-		table.insert(fields, "'"..k.."' "..v)
-	end
+	for k,v in pairs(tabdef) do table.insert(fields, "'"..k.."' "..v) end
+
+	--
+	-- Drop the old one if it exists
+	--
 	rc = db:exec("drop table if exists "..name)
 	if rc ~= 0 then return false, "unable to drop table" end
-	print("create table " .. name .. " (" .. table.concat(fields, ", ") .. ")")
-	rc = db:exec("create table " .. name .. " (" .. table.concat(fields, ", ") .. ")")
-	if rc ~= 0 then return false, "unable to create table" end
 
+	--
+	-- Create the new table
+	--
+	rc = db:exec(string.format("create table %s (%s)", name, table.concat(fields, ", ")))
+	if rc ~= 0 then return false, "unable to create table "..name..": "..db:errmsg() end
+
+	--
+	-- Populate the queries
+	--
+	local stmt = db:prepare("insert into __queries values (?, ?, ?)")
+	if not stmt then return false, "queryadd: "..db:errmsg() end
 	for k, v in pairs(TABLE[name]) do
-		local stmt = db:prepare("insert into __queries values (?, ?, ?)")
-		if not stmt then return false, "queryadd: "..db:errmsg() end
 		if k ~= "schema" then
+			stmt:reset()
 			stmt:bind_values(name, k, v)
 			stmt:step()
-			stmt:finalize()
 		end
 	end
+	stmt:finalize()
 
 	return true
 end
@@ -63,19 +82,20 @@ end
 -- Insert items into a table based on the fields provided in a hash
 --
 local function insert_into_table(name, item)
-	local vals = ""
-	local args = ""
+	local vals, args = "", ""
 	local rc, stmt
-	
+
+	--
+	-- Prepare the fields and values strings
+	--
 	for k,_ in pairs(item) do
 		vals = vals .. ((vals == "" and "") or ", ") .. "'"..k.."'"
-
 		args = args .. ((args == "" and "") or ", ") .. ":" .. k
 	end
-	item["__table"] = item["table"]
 
-	print("Vals="..vals)
-	print("Args="..args)
+	--
+	-- Preapre the sql and bind
+	--
 	stmt = db:prepare("insert into "..name.." ("..vals..") VALUES ("..args..")")
 	if not stmt then return false, "insert prepare failed: "..db:errmsg() end
 	rc = stmt:bind_names(item)
@@ -83,11 +103,16 @@ local function insert_into_table(name, item)
 		stmt:finalize()
 		return false, "insert bind failed: "..db:errmsg() 
 	end
+
+	--
+	-- Execute the insert
+	--
 	rc = stmt:step()
 	if rc ~= sqlite3.DONE then 
 		stmt:finalize()
 		return false, "insert step failed: "..db:errmsg() 
 	end
+
 	stmt:finalize()
 	return true
 end
@@ -122,6 +147,9 @@ local function query(name, qname, ...)
 	end
 	stmt:finalize()
 
+	--
+	-- Prepare and execute the query
+	--
 	sql = res.sql
 	local stmt = db:prepare(sql)
 	if not stmt then return false, "query failed: "..db:errmsg() end
@@ -140,6 +168,9 @@ local function query(name, qname, ...)
 		end
 	end
 
+	--
+	-- Build the results
+	--
 	local rc = {}
 	for row in stmt:nrows(sql) do table.insert(rc, row) end
 	stmt:finalize()
@@ -152,12 +183,18 @@ end
 
 
 local function init()
+	--
+	-- Create the __queries table
+	--
+--		pragma journal_mode=WAL;
 	local rc = db:exec[[
 		drop table if exists __queries;
 		create table __queries ( name string, query string, sql string );
 	]]
-	print("init== rc="..rc.." err="..db:errmsg())
 
+	--
+	-- Create each table from the TABLE hash
+	--
 	for name, tabdef in pairs(TABLE) do
 		print("Creating table: "..name)
 		local rc, err = create_table(name)

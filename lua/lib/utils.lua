@@ -309,27 +309,6 @@ function unserialise(v)
 end
 
 --
----- Save and restore variables (so we can communicate between different parts
----- of the system)
-----
-function save_vars(name, vars)
-	local file = io.open("/tmp/vars."..name, "w+")
-	if file then
-		file:write(serialise(vars))
-		file:close()
-		return true
-	else return false, "unable to create file: /tmp/vars."..name end
-end
-function load_vars(name)
-	local file = io.open("/tmp/vars."..name, "r")
-	if file then
-		local data = file:read("*a")
-		file:close()
-		return unserialise(data)
-	else return nil end
-end
-
---
 -- Create a configuration file
 --
 -- We work out what the leading space is on the first line

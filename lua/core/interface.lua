@@ -34,7 +34,6 @@ local function start_dhcp(intf, cf)
 		["resolv-pri"]			= cf["dhcp-resolv-pri"],
 		["defaultroute-pri"]	= cf["dhcp-defaultroute-pri"],
 	}
-	save_vars(intf, vars)
 
 	--
 	-- Build the command line args. Don't include --release as we may create
@@ -57,6 +56,7 @@ local function start_dhcp(intf, cf)
 	service.define("dhcp."..intf, {
 		["binary"] = DHCPC,
 		["args"] = args,
+		["vars"] = vars,
 		["name"] = "dhcp."..intf,
 		["pidfile"] = "/var/run/dhcp."..intf..".pid",
 		["logfile"] = "/tmp/dhcp."..intf..".log",
@@ -69,7 +69,7 @@ local function start_dhcp(intf, cf)
 	print("ARGS: " .. table.concat(args, " "))
 
 	local rc, err = service.start("dhcp."..intf)
-	print("rc="..tostring(rc).." err="..tostring(err))
+	print("service.start dhcp rc="..tostring(rc).." err="..tostring(err))
 
 	--if not rc then return false, "DHCP start failed: "..err end
 	return true
@@ -257,7 +257,6 @@ local function start_pppoe(intf, cf)
 		["resolv-pri"] 			= cf["resolv-pri"],
 		["defaultroute-pri"] 	= cf["defaultroute-pri"]
 	}
-	save_vars(intf, vars)
 
 	--
 	-- Build the command line args. For ppp it's just simply a call with a logfile
@@ -275,6 +274,7 @@ local function start_pppoe(intf, cf)
 	service.define(intf, {
 		["binary"] = PPPD,
 		["args"] = args,
+		["vars"] = vars,
 		["pidfile"] = "/var/run/"..intf..".pidX",
 		["create_pidfile"] = true,
 		["maxkilltime"] = 2500,
@@ -333,7 +333,7 @@ local function pppoe_commit(changes)
 		-- If we were running pppoe then we need to kill it
 		--
 		-- TODO: disable??
-		if not oldcf.disabled then
+		if oldcf.attach and not oldcf.disabled then
 			print("WOULD STOP: "..physical)
 			stop_pppoe(physical)
 		end
@@ -537,18 +537,22 @@ master["interface/pppoe/*/password"] =			{ ["type"] = "OK" }
 master["interface/pppoe/*/disabled"] = 			{ ["type"] = "boolean" }
 
 --
--- We will use a number of tables to manage dynamic information like
--- resolvers and defaultroutes
+-- We will use a table to manage the resolvers that come in from various sources
 --
 TABLE["resolvers"] = {
 	schema = { source="string key", priority="integer", value="string" },
 	priority_resolvers = "select * from resolvers where priority = (select min(priority) from resolvers)",
 	remove_source = "delete from resolvers where source = :source"
 }
-TABLE["defaultroutes"] = {
-	schema = { source="string key", priority="integer", value="string" },
-	priority_defaultroutes = "select * from defaultroutes where priority = (select min(priority) from defaultroutes)",
-	remove_source = "delete from defaultroutes where source = :source"
+
+--
+-- We'll also use a table to track status information so we know whether to apply
+-- routes etc.
+--
+TABLE["status"] = {
+	schema = { node="string primary key", status="string" },
+	set_status = "insert or replace into status (node, status) values (:node, :status)",
+	get_status = "select status from status where node = :node",
 }
 
 --

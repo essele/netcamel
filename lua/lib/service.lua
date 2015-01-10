@@ -37,6 +37,7 @@ function define(name, svc)
 	svc.service = name
 	if svc.args then svc.args = serialise(svc.args) end
 	if svc.env then svc.env = serialise(svc.env) end
+	if svc.vars then svc.vars = serialise(svc.vars) end
 	rc, err = db.query("services", "remove_service", name)
 	print("remove rc="..tostring(rc).." err="..tostring(err))
 	rc, err = db.insert("services", svc)
@@ -237,7 +238,7 @@ local function start_as_daemon(svc)
 	local cpid = posix.fork()
 	if cpid ~= 0 then		-- parent
 		local rc, state, status = posix.wait(cpid)
-		print("rc = "..tostring(rc).." status=" .. status)
+		print("start as daemon rc = "..tostring(rc).." status=" .. status)
 		return
 	end
 
@@ -378,6 +379,7 @@ TABLE["services"] = {
 				status="string",
 				args="string",
 				env="string",
+				vars="string",
 				maxkilltime="integer"
 	},
 	["get_service"] = "select * from services where service = :service",
