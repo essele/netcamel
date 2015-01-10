@@ -55,6 +55,7 @@ local no_resolv				= vars["no-resolv"]
 local no_defaultroute		= vars["no_defaultroute"]
 local resolv_pri			= vars["resolv-pri"] or "40"
 local defaultroute_pri		= vars["defaultroute-pri"] or "40"
+local defaultroute_table	= vars["defaultroute-table"] or "main"
 
 --
 -- Redirect our output
@@ -70,13 +71,16 @@ print("Action is: " .. action)
 
 if action == "ip-up" then
 	runtime.remove_resolvers(interface)
-	runtime.remove_defaultroute(interface)
+	runtime.delete_route({ interface = interface, dest = "default", table = defaultroute_table })
 
 	if not no_resolv then
 		if dns1 then runtime.add_resolver(interface, dns1, resolv_pri) end
 		if dns2 then runtime.add_resolver(interface, dns2, resolv_pri) end
 	end
-	if not no_defaultroute then runtime.add_defaultroute(interface, server, defaultroute_pri) end
+	if not no_defaultroute then 
+		runtime.insert_route({ source = interface, dest = "default", gateway = server, 
+						interface = interface, priority = defaultroute_pri, table = defaultroute_table })
+	end
 
 	runtime.update_resolvers()
 	runtime.update_defaultroute()
@@ -84,8 +88,8 @@ end
 
 if action == "ip-down" then
 	runtime.remove_resolvers(interface)
-	runtime.remove_defaultroute(interface)
+	runtime.delete_route({ interface = interface, dest = "default", table = defaultroute_table })
 	runtime.update_resolvers()
-	runtime.update_defaultroute()
+	runtime.update_defaultroute(defaultroute_table)
 end
 

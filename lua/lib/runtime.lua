@@ -30,14 +30,26 @@ local db = require("db")
 local function remove_resolvers(source)
 	db.query("resolvers", "remove_source", source)
 end
-local function remove_defaultroute(source)
-	db.query("defaultroutes", "remove_source", source)
-end
 local function add_resolver(source, value, priority)
 	db.insert("resolvers", { source = source, priority = priority, value = value })
 end
-local function add_defaultroute(source, value, priority)
-	db.insert("defaultroutes", { source = source, priority = priority, value = value })
+
+--
+-- Insert and remove routes from the routing database
+--
+local function insert_route(e)
+	local entry = copy_table(e)
+	entry.table = entry.table or "main"
+	local rc, err = db.insert("routes", entry)
+	print("route insert rc="..tostring(rc).." err="..tostring(err))
+end
+local function delete_route(f)
+	local entry = copy_table(f)
+	entry.dest = entry.dest or "default"
+	entry.table = entry.table or "main"
+
+	local rc, err = db.query("routes", "delete_route_for_source", entry)
+	print("route delete rc="..tostring(rc).." err="..tostring(err))
 end
 
 --
@@ -58,12 +70,21 @@ end
 -- We can only support one router at this stage, so just pick the first one
 -- we get back.
 --
-local function update_defaultroute()
-	os.execute(string.format("ip route del default 2>/dev/null"))
-	local routers = db.query("defaultroutes", "priority_defaultroutes")
+local function update_defaultroute(table)
+	table = table or "main"
+
+	print(string.format("ip route del default table %s 2>/dev/null", table))
+	os.execute(string.format("ip route del default table %s 2>/dev/null", table))
+	local routers, err = db.query("routes", "priority_defaultroutes_for_table", table)
+	if not routers then
+		print("Err for pdft="..tostring(err))
+	else
+		print("count="..#routers)
+	end
 	if routers and routers[1] then
-		local router, interface = routers[1].value, routers[1].source
-		os.execute(string.format("ip route add default via %s dev %s", router, interface))
+		local gateway, interface = routers[1].gateway, routers[1].interface
+		os.execute(string.format("ip route add default via %s dev %s table %s", gateway, interface, table))
+		print(string.format("ip route add default via %s dev %s table %s", gateway, interface, table))
 	end
 end
 
@@ -86,6 +107,9 @@ return {
 	remove_defaultroute = remove_defaultroute,
 	add_resolver = add_resolver,
 	add_defaultroute = add_defaultroute,
+	insert_route = insert_route,
+	delete_route = delete_route,
+
 	update_resolvers = update_resolvers,
 	update_defaultroute = update_defaultroute,
 	redirect = redirect,

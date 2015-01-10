@@ -17,17 +17,41 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
+local db = require("db")
+
 --
+-- Commit will just remove all the routes and then re-add them
 --
+-- TODO: what about live routes
 --
 local function routing_commit(changes)
 	print("Hello From ROUTINGQ")
+
+	local rc, err = db.query("routes", "remove_all_routes")
+	print("remove: rc="..tostring(rc).." err="..tostring(err))
+
+	for routename in each(node_list("routing/route", CF_new)) do
+		local route = node_vars("routing/route/"..routename, CF_new)
+
+		print("Route: "..routename.." dest="..route.dest)
+		--
+		-- Build an entry for the database...
+		--
+		local entry = copy_table(route)
+		entry.source = "routes"
+		entry.interface = interface_name(entry.interface)
+	
+		local rc, err = db.insert("routes", entry)
+		print("add: rc="..tostring(rc).." err="..tostring(err))
+	end
+	return true
 end
 
 --
 --
 --
 local function routing_precommit(changes)
+	return true
 end
 
 
@@ -35,16 +59,39 @@ end
 -- Main routing config definition
 --
 master["routing"] = { 
-	["commit"] = dnsmasq_commit,
-	["precommit"] = dnsmasq_precommit 
+	["commit"] = routing_commit,
+	["precommit"] = routing_precommit 
 }
 
-master["routing/route"] = {}
+master["routing/route"] = { ["with_children"] = 1 }
 master["routing/route/*"] = 			{ ["style"] = "text_label" }
 master["routing/route/*/interface"] = 	{ ["type"] = "any_interface",
 										  ["options"] = options_all_interfaces }
 master["routing/route/*/dest"] = 		{ ["type"] = "OK" }
-master["routing/route/*/via"] = 		{ ["type"] = "OK" }
-master["routing/route/*/table"] = 		{ ["type"] = "OK" }
+master["routing/route/*/gateway"] = 	{ ["type"] = "OK" }
+master["routing/route/*/table"] =		{ ["type"] = "OK", ["default"] = "default" }
+master["routing/route/*/priority"] = 	{ ["type"] = "2-digit" }
+
+TABLE["routes"] = {
+    schema = { 	source="string key",
+				dest="string",
+				gateway="string" ,
+				interface="string",
+				priority="integer", 
+				table="string",
+	},
+
+	delete_route_for_source = "delete from routes where source = :source and dest = :dest and \"table\" = :table",
+
+	--
+	-- Return the defaultroute with the lowest priority for the given table
+	--
+	priority_defaultroutes_for_table = 
+			"select * from routes where \"table\" = :table and dest = 'default' and " ..
+			"priority = (select min(priority) from routes where \"table\" = :table and dest = 'default')",
+
+	remove_all_routes = "delete from routes where source = 'routes'",
+    remove_source = "delete from defaultroutes where source = :source"
+}
 
 

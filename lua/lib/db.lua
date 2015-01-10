@@ -38,10 +38,11 @@ local function create_table(name)
 
 	local fields = {}
 	for k,v in pairs(tabdef) do
-		table.insert(fields, k.." "..v)
+		table.insert(fields, "'"..k.."' "..v)
 	end
 	rc = db:exec("drop table if exists "..name)
 	if rc ~= 0 then return false, "unable to drop table" end
+	print("create table " .. name .. " (" .. table.concat(fields, ", ") .. ")")
 	rc = db:exec("create table " .. name .. " (" .. table.concat(fields, ", ") .. ")")
 	if rc ~= 0 then return false, "unable to create table" end
 
@@ -65,11 +66,16 @@ local function insert_into_table(name, item)
 	local vals = ""
 	local args = ""
 	local rc, stmt
+	
 	for k,_ in pairs(item) do
-		vals = vals .. ((vals == "" and "") or ", ") .. k
+		vals = vals .. ((vals == "" and "") or ", ") .. "'"..k.."'"
+
 		args = args .. ((args == "" and "") or ", ") .. ":" .. k
 	end
+	item["__table"] = item["table"]
 
+	print("Vals="..vals)
+	print("Args="..args)
 	stmt = db:prepare("insert into "..name.." ("..vals..") VALUES ("..args..")")
 	if not stmt then return false, "insert prepare failed: "..db:errmsg() end
 	rc = stmt:bind_names(item)

@@ -28,6 +28,7 @@ local function start_dhcp(intf, cf)
 	-- it can be a bit more clever
 	--
 	local vars = {
+		["logfile"]				= "/tmp/dhcp."..intf..".log",
 		["no-resolv"]			= cf["dhcp-no-resolv"],
 		["no-defaultroute"]		= cf["dhcp-no-defaultroute"],
 		["resolv-pri"]			= cf["dhcp-resolv-pri"],
@@ -45,7 +46,7 @@ local function start_dhcp(intf, cf)
 		"--pidfile", "/var/run/dhcp."..intf..".pid",
 		"--script", DHCP_SCRIPT,
 		"--release",
-		"--background",
+		"--background"
 	}
 	if cf["ip"] then push(args, "--request", cf["ip"]) end
 
