@@ -101,5 +101,15 @@ VALIDATOR["ipv4_nm"] = function(v, kp)
 	return OK
 end
 
+--
+-- And ipv4_nm or "default"
+--
+VALIDATOR["ipv4_nm_default"] = function(v, kp)
+	err = "ipv4_nm_default must be ipv4_nm or default"
+	local default = "default"
+	if default == v then return OK end
+	if default:sub(1,#v) == v then return PARTIAL, err end
+	return VALIDATOR["ipv4_nm"](v, kp)
+end
 
 
