@@ -24,12 +24,10 @@
 -- Build the specific posix commands we need, this saves using the full
 -- require which adds quite a delay to startup.
 --
-local posix = {}
-posix.fcntl = require("posix.fcntl")
-posix.unistd = require("posix.unistd")
-posix.open = posix.fcntl.open
-posix.close = posix.unistd.close
-posix.dup = posix.unistd.dup
+local posix = {
+	fcntl = require("posix.fcntl"),
+	unistd = require("posix.unistd"),
+}
 
 --
 -- We need to access the database
@@ -203,9 +201,9 @@ end
 -- so that we don't impact performance too much.
 --
 local function redirect(filename)
-	posix.close(1)
-	posix.close(2)
-	local fd = posix.open(filename, bit.bor(posix.fcntl.O_WRONLY, posix.fcntl.O_CREAT, posix.fcntl.O_APPEND, posix.fcntl.O_SYNC))
+	posix.unistd.close(1)
+	posix.unistd.close(2)
+	local fd = posix.fnctl.open(filename, bit.bor(posix.fcntl.O_WRONLY, posix.fcntl.O_CREAT, posix.fcntl.O_APPEND, posix.fcntl.O_SYNC))
 	posix.dup(fd)
 end
 

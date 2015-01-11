@@ -21,7 +21,15 @@ require("utils")
 
 ffi = require("ffi")
 bit = require("bit")
-posix = require("posix")
+local posix = {
+	termio = require("posix.termio"),
+	signal = require("posix.signal"),
+	unistd = require("posix.unistd"),
+	poll = require("posix.poll"),
+	sys = {
+		time = require("posix.sys.time"),
+	},
+}
 
 
 
@@ -253,11 +261,11 @@ local function init()
 	-- Make the required changes to the termios struct...
 	--
 	print("INIT")
-	__saved_tios = posix.tcgetattr(0)
-	local tios = posix.tcgetattr(0)
-	tios.lflag = bit.band(tios.lflag, bit.bnot(posix.ECHO))
-	tios.lflag = bit.band(tios.lflag, bit.bnot(posix.ICANON))
-	posix.tcsetattr(0, posix.TCSANOW, tios)
+	__saved_tios = posix.termio.tcgetattr(0)
+	local tios = posix.termio.tcgetattr(0)
+	tios.lflag = bit.band(tios.lflag, bit.bnot(posix.termio.ECHO))
+	tios.lflag = bit.band(tios.lflag, bit.bnot(posix.termio.ICANON))
+	posix.termio.tcsetattr(0, posix.termio.TCSANOW, tios)
 
 	--
 	--
@@ -265,8 +273,8 @@ local function init()
 	-- the window size change signal and adjust accordingly
 	--
 	-- SIGWINCH
-	posix.signal(28, function() __sigwinch = true end)
-	posix.signal(2, function() __sigint = true end)
+	posix.signal.signal(28, function() __sigwinch = true end)
+	posix.signal.signal(2, function() __sigint = true end)
 
 	ti.init()
 	ti.out(ti.keypad_xmit)
@@ -275,7 +283,7 @@ local function init()
 	__height = ti.lines
 end
 local function finish()
-	posix.tcsetattr(0, posix.TCSANOW, __saved_tios)
+	posix.termio.tcsetattr(0, posix.termio.TCSANOW, __saved_tios)
 end
 
 
@@ -288,8 +296,8 @@ local function getchar(ms)
 		[0] = { events = { IN = true }},
 	}
 
-	local before = posix.gettimeofday()
-	local rc, err = posix.poll(fds, ms)
+	local before = posix.sys.time.gettimeofday()
+	local rc, err = posix.poll.poll(fds, ms)
 
 	if not rc then
 		-- Interrupted system call probably, most likely
@@ -302,10 +310,10 @@ local function getchar(ms)
 	end
 	
 	if rc < 1 then return nil, 0 end
-	local after = posix.gettimeofday()
+	local after = posix.sys.time.gettimeofday()
 
-	local beforems = before.sec * 1000 + math.floor(before.usec/1000)
-	local afterms = after.sec * 1000 + math.floor(after.usec/1000)
+	local beforems = before.tv_sec * 1000 + math.floor(before.tv_usec/1000)
+	local afterms = after.tv_sec * 1000 + math.floor(after.tv_usec/1000)
 
 	ms = ms - (afterms - beforems)
 	ms = (ms < 0 and 0) or ms
@@ -314,7 +322,7 @@ local function getchar(ms)
 	-- If we get here it will be a key...
 	--
 	if fds[0].revents.IN then
-		local char, err = posix.read(0, 1)
+		local char, err = posix.unistd.read(0, 1)
 		if not char then
 			print("Error reading char: " .. err)
 			return nil

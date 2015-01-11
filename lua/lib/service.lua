@@ -21,11 +21,19 @@
 -- The main services array
 --
 local db = require("db")
-local posix = require("posix")
-posix.time = require("posix.time")
-posix.sys = {}
-posix.sys.stat = require("posix.sys.stat")
-posix.fcntl = require("posix.fcntl")
+
+local posix = {
+	unistd = require("posix.unistd"),
+	stdlib = require("posix.stdlib"),
+	fcntl = require("posix.fcntl"),
+	signal = require("posix.signal"),
+	time = require("posix.time"),
+	glob = require("posix.glob"),
+	sys = {
+		wait = require("posix.sys.wait"),
+		stat = require("posix.sys.stat"),
+	},
+}
 require("bit")
 require("utils")
 
@@ -84,9 +92,9 @@ end
 local function get_pidinfo()
 	local rc = { ["pid"] = {}, ["binary"] = {}, ["name"] = {} }
 
-	for _,exe in ipairs(posix.glob("/proc/[0-9]*/exe")) do
+	for _,exe in ipairs(posix.glob.glob("/proc/[0-9]*/exe")) do
 		local pid = tonumber(exe:match("(%d+)"))
-		local binary = posix.readlink(exe)
+		local binary = posix.unistd.readlink(exe)
 		local name = readname(pid)
 
 		rc.pid[pid] = { ["binary"] = exe, ["name"] = name }
@@ -139,7 +147,7 @@ local function kill_and_wait_to_die(pids, time)
 	-- Kill any valid ones...
 	for _,pid in ipairs(pids) do
 		print("pid="..pid.." name="..tostring(pidmap[pid]))
-		if pidmap[pid] then posix.kill(pid, posix.SIGTERM) end
+		if pidmap[pid] then posix.signal.kill(pid, posix.signal.SIGTERM) end
 	end
 	print("time = "..tostring(time))
 
@@ -232,9 +240,9 @@ end
 local function start_as_daemon(svc)
 	print("would run: " .. tostring(svc.binary))
 
-	local cpid = posix.fork()
+	local cpid = posix.unistd.fork()
 	if cpid ~= 0 then		-- parent
-		local rc, state, status = posix.wait(cpid)
+		local rc, state, status = posix.sys.wait.wait(cpid)
 		print("start as daemon rc = "..tostring(rc).." status=" .. status)
 		return
 	end
@@ -244,23 +252,23 @@ local function start_as_daemon(svc)
 	-- setsid, chdir to /, then close our key filehandles.
 	--
 	posix.sys.stat.umask(0)
-	if(not posix.setpid("s")) then os.exit(1) end
-	if(posix.chdir("/") ~= 0) then os.exit(1) end
-	posix.close(0)
-	posix.close(1)
-	posix.close(2)
+	if(not posix.unistd.setpid("s")) then os.exit(1) end
+	if(posix.unistd.chdir("/") ~= 0) then os.exit(1) end
+	posix.unistd.close(0)
+	posix.unistd.close(1)
+	posix.unistd.close(2)
 
 	--
 	-- Re-open the three filehandles, all /dev/null
 	--
-	local fdnull = posix.fcntl.open("/dev/null", posix.O_RDWR)	-- stdin
-	posix.dup(fdnull)										-- stdout
-	posix.dup(fdnull)										-- stderr
+	local fdnull = posix.fcntl.open("/dev/null", posix.fcntl.O_RDWR)	-- stdin
+	posix.unistd.dup(fdnull)										-- stdout
+	posix.unistd.dup(fdnull)										-- stderr
 
 	--
 	-- Fork again, so the parent can exit, orphaning the child
 	--
-	local npid = posix.fork()
+	local npid = posix.unistd.fork()
 	if npid ~= 0 then os.exit(0) end
 	
 	--
@@ -268,7 +276,7 @@ local function start_as_daemon(svc)
 	--
 	if svc.create_pidfile then
 		local file = io.open(svc.pidfile, "w+")
-		local pid = posix.getpid()
+		local pid = posix.unistd.getpid()
 		if file then
 			file:write(tostring(pid.pid))
 			file:close()
@@ -279,18 +287,18 @@ local function start_as_daemon(svc)
 	-- Create a logfile if asked
 	--
 	if svc.logfile then
-		local logfd = posix.fcntl.open(svc.logfile, bit.bor(posix.O_CREAT, posix.O_WRONLY, posix.O_TRUNC))
+		local logfd = posix.fcntl.open(svc.logfile, bit.bor(posix.fcntl.O_CREAT, posix.fcntl.O_WRONLY, posix.fcntl.O_TRUNC))
 		if logfd then
-			posix.close(1)
-			posix.close(2)
-			posix.dup(logfd)
-			posix.dup(logfd)
+			posix.unistd.close(1)
+			posix.unistd.close(2)
+			posix.unistd.dup(logfd)
+			posix.unistd.dup(logfd)
 		end
 	end
 
-	for k, v in pairs(svc.env or {}) do posix.setenv(k, v) end
+	for k, v in pairs(svc.env or {}) do posix.stdlib.setenv(k, v) end
 
-	posix.exec(svc.binary, svc.args)
+	posix.unistd.exec(svc.binary, svc.args)
 	--
 	-- if we get here then the exec has failed
 	-- TODO get err and write an error out to a log (which we need to open)

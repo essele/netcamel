@@ -21,20 +21,13 @@
 -- Build the specific posix commands we need, this saves using the full
 -- require which adds quite a delay to startup.
 --
-local posix = { sys = {} }
-posix.unistd = require("posix.unistd")
-posix.stdlib = require("posix.stdlib")
-posix.sys.wait = require("posix.sys.wait")
-
-posix.read = posix.unistd.read
-posix.write = posix.unistd.write
-posix.close = posix.unistd.close
-posix.fork = posix.unistd.fork
-posix.dup2 = posix.unistd.dup2
-posix.pipe = posix.unistd.pipe
-posix.exec = posix.unistd.exec
-posix.wait = posix.sys.wait.wait
-posix.setenv = posix.stdlib.setenv
+local posix = { 
+	unistd = require("posix.unistd"),
+	stdlib = require("posix.stdlib"),
+	sys = { 
+		wait = require("posix.sys.wait") 
+	} 
+}
 
 --
 -- Given a file descriptor, return an iterator that will return each line
@@ -58,10 +51,10 @@ function lines_from_fd(fd)
 				return line
 			end
 
-			local c = posix.read(fd, 1024)
+			local c = posix.unistd.read(fd, 1024)
 			if not c or c == "" then
 				__nomore = true
-				posix.close(fd)
+				posix.unistd.close(fd)
 			else 
 				__str = __str .. c
 			end
@@ -74,50 +67,50 @@ end
 -- collect stdout and stderr
 --
 function pipe_execute(cmd, args, stdin, env)
-	local outr, outw = posix.pipe()
-	local pid = posix.fork()
+	local outr, outw = posix.unistd.pipe()
+	local pid = posix.unistd.fork()
 	if pid == 0 then
 		-- child
-		posix.close(outr)
-		posix.dup2(outw, 1)
-		posix.dup2(outw, 2)
+		posix.unistd.close(outr)
+		posix.unistd.dup2(outw, 1)
+		posix.unistd.dup2(outw, 2)
 
 		-- set any required environment
-		for k,v in pairs(env or {}) do posix.setenv(k, v) end
+		for k,v in pairs(env or {}) do posix.stdlib.setenv(k, v) end
 
 		if stdin then
 			-- build the pipe to feed input
-			local inr, inw = posix.pipe()
-			local cpid = posix.fork()
+			local inr, inw = posix.unistd.pipe()
+			local cpid = posix.unistd.fork()
 			if cpid == 0 then
 				-- real child
-				posix.close(inw)
-				posix.dup2(inr, 0)
+				posix.unistd.close(inw)
+				posix.unistd.dup2(inr, 0)
 
-				posix.exec(cmd, args)
+				posix.unistd.exec(cmd, args)
 				print("unable to exec")
 				os.exit(1)
 			end
-			posix.close(inr)
+			posix.unistd.close(inr)
 			-- Feed in the stdin if we have some
 			for _,line in ipairs(stdin) do
 				line = line .. "\n"
-				posix.write(inw, line)
+				posix.unistd.write(inw, line)
 			end
-			posix.close(inw)
-			local pid, reason, status = posix.wait(cpid)
+			posix.unistd.close(inw)
+			local pid, reason, status = posix.sys.wait.wait(cpid)
 			os.exit(status)
 		else
-			posix.exec(cmd, args)
+			posix.unistd.exec(cmd, args)
 			print("unable to exec")
 			os.exit(1)
 		end
 	end
-	posix.close(outw)
+	posix.unistd.close(outw)
 	local output = {}
 	for line in lines_from_fd(outr) do
 		table.insert(output, line)
 	end
-    local pid, reason, status = posix.wait(pid)
+    local pid, reason, status = posix.sys.wait.wait(pid)
 	return status, output
 end
