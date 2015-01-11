@@ -23,8 +23,9 @@
 __log = {}
 __logfd = nil
 __logfile = "/tmp/nc.log"
+__logroot = nil
 
-function log(t, section, msg, ...)
+function log(t, msg, ...)
 	--
 	-- Ensure we want these messages
 	--
@@ -42,11 +43,20 @@ function log(t, section, msg, ...)
 	end
 
 	--
+	-- What out what the path to our message is
+	--
+	local path = __logroot or "?"
+
+	--
 	-- Output the message
 	--
-	__logfd:write(string.format("%s [%-20.20s] %s\n", os.date("%b %d %X"), t.."/"..section,
+	__logfd:write(string.format("%s %-5.5s %s: %s\n", os.date("%b %d %X"), t, path,
 			string.format(msg, ...)))
 	__logfd:flush()
+end
+
+function logroot(...)
+	__logroot = table.concat({...}, ":")
 end
 
 

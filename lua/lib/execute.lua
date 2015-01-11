@@ -87,7 +87,7 @@ function pipe_execute(cmd, args, stdin, env)
 				posix.unistd.close(inw)
 				posix.unistd.dup2(inr, 0)
 
-				posix.unistd.exec(cmd, args)
+				posix.unistd.exec(cmd, args or {})
 				print("unable to exec")
 				os.exit(1)
 			end
@@ -101,7 +101,7 @@ function pipe_execute(cmd, args, stdin, env)
 			local pid, reason, status = posix.sys.wait.wait(cpid)
 			os.exit(status)
 		else
-			posix.unistd.exec(cmd, args)
+			posix.unistd.exec(cmd, args or {})
 			print("unable to exec")
 			os.exit(1)
 		end

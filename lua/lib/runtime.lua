@@ -38,6 +38,7 @@ local db = require("db")
 -- We will need lots of logging
 --
 require("bit")
+require("execute")
 require("log")
 
 --
@@ -50,7 +51,7 @@ local function get_status(node)
 end
 local function set_status(node, status)
 	local rc, err = db.query("status", "set_status", node, status)
-	log("info", node, "%s is %s", node, status)
+	log("info", "%s is %s", node, status)
 	return rc, err
 end
 
@@ -59,7 +60,7 @@ local function remove_resolvers(source)
 end
 local function add_resolver(source, value, priority)
 	db.insert("resolvers", { source = source, priority = priority, value = value })
-	log("info", source, "adding dns resovler option: %s (pri=%s)", value, priority)
+	log("info", "adding dns resovler option: %s (pri=%s)", value, priority)
 end
 
 --
@@ -84,13 +85,16 @@ end
 -- Now work out what the correct route and resolvers are
 --
 local function update_resolvers()
+	log("info", "selecting resolvers based on priority")
+
 	local resolvers = db.query("resolvers", "priority_resolvers")
 	local file = io.open("/etc/resolv.conf", "w")
 	for resolver in each(resolvers) do
 		file:write(string.format("nameserver %s # %s\n", resolver.value, resolver.source))
-		log("info", "resolv", "selected resolver %s (%s)", resolver.value, resolver.source)
+		log("info", "- selected resolver %s (%s)", resolver.value, resolver.source)
 	end
 	file:close()
+	if #resolvers == 0 then log("info", "- no resolvers available") end
 end
 
 --
@@ -99,21 +103,20 @@ end
 --
 local function set_routes_for_interface(interface, op)
 	op = op or "add"
+	local verb = (op == "add" and "installing") or "removing"
+
+	log("info", "%s routes for interface", verb)
 
 	local rc, err = db.query("routes", "routes_for_interface", interface)
 	if not rc then return rc, err end
 
 	for _, route in ipairs(rc) do
 		if route.gateway then
-			log("info", interface, "route %s %s via %s dev %s table %s",
-							op, route.dest, route.gateway, route.interface, route.table)
-			runtime.execute(interface, string.format("ip route %s %s via %s dev %s table %s", 
-							op, route.dest, route.gateway, route.interface, route.table))
+			runtime.execute("/sbin/ip", { "route", op, route.dest, "via", route.gateway,
+								"dev", route.interface, "table", route.table }) 
 		else
-			log("info", interface, "route %s %s dev %s table %s",
-							op, route.dest, route.interface, route.table)
-			runtime.execute(interface, string.format("ip route %s %s dev %s table %s", 
-							op, route.dest, route.interface, route.table))
+			runtime.execute("/sbin/ip", { "route", op, route.dest, "dev", route.interface,
+								"table", route.table })
 		end
 	end
 end
@@ -127,8 +130,9 @@ end
 local function update_defaultroute(table)
 	table = table or "main"
 
-	print(string.format("ip route del default table %s 2>/dev/null", table))
-	os.execute(string.format("ip route del default table %s 2>/dev/null", table))
+	log("info", "selecting defaultroute/%s", table)
+	
+	runtime.execute("/sbin/ip", { "route", "del", "default", "table", table })
 	local routers, err = db.query("routes", "priority_defaultroutes_for_table", table)
 	if not routers then
 		print("Err for pdft="..tostring(err))
@@ -137,8 +141,10 @@ local function update_defaultroute(table)
 	end
 	if routers and routers[1] then
 		local gateway, interface = routers[1].gateway, routers[1].interface
-		log("info", "defaulroute", "setting defaultroute to %s (%s) for table %s", gateway, interface, table)
-		runtime.execute(interface, string.format("ip route add default via %s dev %s table %s", gateway, interface, table))
+		log("info", "- selecting defaultroute/%s %s", table, gateway)
+		runtime.execute("/sbin/ip", { "route", "add", "default", "via", gateway, "dev", interface, "table", table })
+	else
+		log("info", "- no defaultroute/%s available", table)
 	end
 end
 
@@ -197,23 +203,30 @@ end
 
 
 --
--- Redirect our output to the named logfile, we keep the posix require in here
--- so that we don't impact performance too much.
+-- Redirect our output to the named logfile
 --
 local function redirect(filename)
 	posix.unistd.close(1)
 	posix.unistd.close(2)
-	local fd = posix.fnctl.open(filename, bit.bor(posix.fcntl.O_WRONLY, posix.fcntl.O_CREAT, posix.fcntl.O_APPEND, posix.fcntl.O_SYNC))
-	posix.dup(fd)
+	local fd = posix.fcntl.open(filename, bit.bor(posix.fcntl.O_WRONLY, 
+				posix.fcntl.O_CREAT, posix.fcntl.O_APPEND, posix.fcntl.O_SYNC))
+	posix.unistd.dup(fd)
 end
 
 --
 -- Simple execute function that wraps os.execute, but also logs
 -- the commands
 --
-function execute(section, cmd)
-	log("cmd", section, cmd)
-	return os.execute(cmd)
+--function execute(cmd)
+--	log("cmd", "# %s", cmd)
+--	return os.execute(cmd)
+--end
+function execute(binary, args)
+	local rc, res = pipe_execute(binary, args, nil, nil)
+	log("cmd", "# %s%s (exit: %d)", binary,	args and " "..table.concat(args, " "), rc)
+	for _, out in pairs(res) do
+		log("cmd", "> %s", out)
+	end
 end
 
 
@@ -244,6 +257,7 @@ return {
 	set_status = set_status,
 	get_status = get_stats,
 
+	exec = exec,
 	execute = execute,
 }
 

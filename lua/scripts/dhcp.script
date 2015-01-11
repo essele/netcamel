@@ -47,12 +47,10 @@ local routers 			= split(os.getenv("router") or "", "%s")
 local dns 				= split(os.getenv("dns") or "", "%s")
 
 --
--- Load the extra variables
+-- Load the extra variables and work out the action
 --
 local vars = runtime.get_vars("dhcp."..interface)
-
 local action 			= arg[1]
-local label				= interface..".dhcp"
 
 --
 -- Redirect our output to make sure we capture even the
@@ -63,15 +61,16 @@ if vars.logfile then runtime.redirect(vars.logfile) end
 --
 -- Remove anything stored from this interface so we are starting clean
 --
-log("info", label, "DHCP event action=%s", action)
+logroot("intf", interface, "dhcp")
+log("info", "DHCP event action=%s", action)
 
 if action == "deconfig" then
 	--
 	-- Deconfig means clear out the interface ready to start
 	-- or when finishing.
 	--
-	runtime.execute(label, string.format("ip link set %s up", interface))
-	runtime.execute(label, string.format("ip addr flush dev %s", interface))
+	runtime.execute("/sbin/ip", { "link", "set", interface, "up" })
+	runtime.execute("/sbin/ip", { "addr", "flush", "dev", interface })
 
 	--
 	-- Remove any routes and resolvers and work out what the
@@ -87,8 +86,8 @@ if action == "renew" or action == "bound" then
 	--
 	-- Configure the interface
 	--
-	runtime.execute(label, string.format("ip addr flush dev %s", interface))
-	runtime.execute(label, string.format("ip addr add %s/%s broadcast %s dev %s", ip, mask, broadcast, interface))
+	runtime.execute("/sbin/ip", { "addr", "flush", "dev", interface })
+	runtime.execute("/sbin/ip", { "addr", "add", ip.."/"..mask, "broadcast", broadcast, "dev", interface })
 
 	--
 	-- Add routes and resolvers and work out what the

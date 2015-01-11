@@ -51,6 +51,11 @@ local dns2		= os.getenv("DNS2")
 local vars = runtime.get_vars(interface)
 
 --
+-- Prepare the log
+--
+logroot("intf", interface)
+
+--
 -- Redirect our output
 --
 if vars.logfile then runtime.redirect(vars.logfile) end
@@ -60,6 +65,7 @@ if vars.logfile then runtime.redirect(vars.logfile) end
 --
 local action = arg[0]:match("/?([^/]-)$")
 print("Action is: " .. action)
+log("info", "PPPOE event action=%s", action)
 
 if action == "ip-up" then
 	local dns = {}

@@ -70,7 +70,7 @@ local function start_dhcp(intf, cf)
 		["stop"] = "BYPIDFILE",
 	})
 
-	log("info", intf, "starting dhcp")
+	log("info", "starting dhcp")
 
 	local rc, err = service.start("dhcp."..intf)
 	print("service.start dhcp rc="..tostring(rc).." err="..tostring(err))
@@ -82,7 +82,7 @@ local function stop_dhcp(intf)
 	--
 	-- Setup enough so we can kill the process
 	--
-	log("info", intf, "stopping dhcp")
+	log("info", "stopping dhcp")
 	local rc, err = service.stop("dhcp."..intf)
 	print("rc="..tostring(rc).." err="..tostring(err))
 
@@ -94,6 +94,7 @@ end
 
 
 local function ethernet_commit(changes)
+	logroot("intf")
 	print("Hello From Interface")
 
 	local state = process_changes(changes, "interface/ethernet")
@@ -102,29 +103,29 @@ local function ethernet_commit(changes)
 	-- Remove any interface that has been removed from the system...
 	--
 	for ifnum in each(state.removed) do 
-		print("Removed: "..ifnum) 
 		local oldcf = node_vars("interface/ethernet/"..ifnum, CF_current) or {}
 		local physical = interface_name("ethernet/"..ifnum)
 
-		log("info", physical, "removing interface")
+		logroot("intf", physical)
+		log("info", "removing interface")
 		if oldcf["dhcp-enable"] then
 			stop_dhcp(physical)
 		end
-		runtime.execute(physical, string.format("ip addr flush dev %s", physical))
-		runtime.execute(physical, string.format("ip link set dev %s down", physical))
+		runtime.execute("/sbin/ip", {"addr", "flush", "dev", physical})
+		runtime.execute("/sbin/ip", {"link", "set", "dev", physical, "down"})
 	end
 
 	--
 	-- Modify an interface ... we'll work through the actual changes
 	--
 	for ifnum in each(state.changed) do 
-		print("Changed: "..ifnum) 
 		local cf = node_vars("interface/ethernet/"..ifnum, CF_new) or {}
 		local oldcf = node_vars("interface/ethernet/"..ifnum, CF_current) or {}
 		local physical = interface_name("ethernet/"..ifnum)
 
 		local changed = values_to_keys(node_list("interface/ethernet/"..ifnum, changes))
-		log("info", physical, "changing interface")
+		logroot("intf", physical)
+		log("info", "changing interface")
 
 		--
 		-- If we have changed any of our dhcp settings then we definitely need to
@@ -145,7 +146,7 @@ local function ethernet_commit(changes)
 				start_dhcp(physical, cf)
 			else
 				if cf.ip then
-					runtime.execute(physical, string.format("ip addr add %s dev %s", cf.ip, physical))
+					runtime.execute("/sbin/ip", { "addr", "add", cf.ip, "dev", physical })
 				end
 			end
 		else
@@ -153,17 +154,17 @@ local function ethernet_commit(changes)
 			-- Handle standard IP address changes here
 			--
 			if changed.ip and not cf["dhcp-enable"] then
-				if oldcf.ip then runtime.execute(physical, string.format("ip addr del %s dev %s", oldcf.ip, physical)) end
-				runtime.execute(physical, string.format("ip addr add %s dev %s", cf.ip, physical))
+				if oldcf.ip then runtime.execute("/sbin/ip", { "addr", "del", oldcf.ip, "dev", physical }) end
+				runtime.execute("/sbin/ip", { "addr", "add", cf.ip, "dev", physical })
 			end
 		end
 	
 		if changed.mtu then
-			runtime.execute(physical, string.format("ip link set dev %s mtu %s", physical, cf.mtu))
+			runtime.execute("/sbin/ip", { "link", "set", "dev", physical, "mtu", cf.mtu })
 		end
 		if changed.disabled then
-			runtime.execute(physical, string.format("ip link set dev %s %s", physical, 
-							(cf.disabled and "down") or "up" ))
+			runtime.execute("/sbin/ip", { "link", "set", "dev", physical, 
+													(cf.disabled and "down") or "up" })
 		end
 		
 		for p in each(changed) do
@@ -179,20 +180,21 @@ local function ethernet_commit(changes)
 		local cf = node_vars("interface/ethernet/"..ifnum, CF_new)
 		local physical = interface_name("ethernet/"..ifnum)
 
-		log("info", physical, "creating interface")
+		logroot("intf", physical)
+		log("info", "creating interface")
 
 		--
 		-- Remove any addresses, and set the link up or down
 		--
-		runtime.execute(physical, string.format("ip addr flush dev %s", physical))
-		runtime.execute(physical, string.format("ip link set dev %s %s", physical, (cf.disabled and "down") or "up" ))
-		if(cf.mtu) then runtime.execute(physical, string.format("ip link set dev %s mtu %s", physical, cf.mtu)) end
+		runtime.execute("/sbin/ip", { "addr", "flush", "dev", physical})
+		runtime.execute("/sbin/ip", { "link", "set", "dev", physical, (cf.disabled and "down") or "up" })
+		if(cf.mtu) then runtime.execute("/sbin/ip", { "link", "set", "dev", physical, "mtu", cf.mtu}) end
 
 		--
 		-- The IP address only goes on the interface if we don't have dhcp enabled
 		--
 		if(not cf["dhcp-enable"]) then
-			if(cf.ip) then runtime.execute(physical, string.format("ip addr add %s brd + dev %s", cf.ip, physical)) end
+			if(cf.ip) then runtime.execute("/sbin/ip", {"addr", "add", cf.ip, "brd", "+", "dev", physical}) end
 		else
 			start_dhcp(physical, cf)
 		end
@@ -290,7 +292,7 @@ local function start_pppoe(intf, cf)
 		["stop"] = "BYPIDFILE",
 	})
 
-	print("ARGS: " .. table.concat(args, " "))
+	log("info", "starting pppoe")
 
 	local rc, err = service.start(intf)
 	print("rc="..tostring(rc).." err="..tostring(err))
@@ -299,7 +301,8 @@ local function start_pppoe(intf, cf)
 	return true
 end
 local function stop_pppoe(intf)
-	print("Stopping pppoe")
+	log("info", "stopping pppoe")
+
 	local rc, err = service.stop(intf)
 	print("rc="..tostring(rc).." err="..tostring(err))
 
@@ -335,6 +338,9 @@ local function pppoe_commit(changes)
 		local cf = node_vars("interface/pppoe/"..ifnum, CF_new) or {}
 		local oldcf = node_vars("interface/pppoe/"..ifnum, CF_current) or {}
 		local physical = interface_name("pppoe/"..ifnum)
+
+		logroot("intf", physical)
+		log("info", "processing interface")
 
 		--
 		-- If we were running pppoe then we need to kill it
