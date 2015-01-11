@@ -169,18 +169,15 @@ end
 --
 local function kill_by_name(svc)
 	local pids = get_pids_by(svc, "name")
---	for _, pid in ipairs(pids) do posix.kill(pid, posix.SIGTERM) end
 	kill_and_wait_to_die(pids, svc.maxkilltime)
 end
 
 local function kill_by_binary(svc)
 	local pids = get_pids_by(svc, "binary")
---	for _, pid in ipairs(pids) do posix.kill(pid, posix.SIGTERM) end
 	kill_and_wait_to_die(pids, svc.maxkilltime)
 end
 local function kill_by_pidfile(svc)
 	local pids = get_pids_from_pidfile(svc)
---	for _, pid in ipairs(pids) do posix.kill(pid, posix.SIGTERM) end
 	kill_and_wait_to_die(pids, svc.maxkilltime)
 end
 

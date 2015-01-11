@@ -17,7 +17,24 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -----------------------------------------------------------------------------
 
-posix = require("posix")
+--
+-- Build the specific posix commands we need, this saves using the full
+-- require which adds quite a delay to startup.
+--
+local posix = { sys = {} }
+posix.unistd = require("posix.unistd")
+posix.stdlib = require("posix.stdlib")
+posix.sys.wait = require("posix.sys.wait")
+
+posix.read = posix.unistd.read
+posix.write = posix.unistd.write
+posix.close = posix.unistd.close
+posix.fork = posix.unistd.fork
+posix.dup2 = posix.unistd.dup2
+posix.pipe = posix.unistd.pipe
+posix.exec = posix.unistd.exec
+posix.wait = posix.sys.wait.wait
+posix.setenv = posix.stdlib.setenv
 
 --
 -- Given a file descriptor, return an iterator that will return each line
@@ -65,30 +82,36 @@ function pipe_execute(cmd, args, stdin, env)
 		posix.dup2(outw, 1)
 		posix.dup2(outw, 2)
 
-		-- build the pipe to feed input
-		local inr, inw = posix.pipe()
-		local cpid = posix.fork()
-		if cpid == 0 then
-			-- real child
-			posix.close(inw)
-			posix.dup2(inr, 0)
+		-- set any required environment
+		for k,v in pairs(env or {}) do posix.setenv(k, v) end
 
-			-- set any required environment
-			for k,v in pairs(env or {}) do posix.setenv(k, v) end
-		
+		if stdin then
+			-- build the pipe to feed input
+			local inr, inw = posix.pipe()
+			local cpid = posix.fork()
+			if cpid == 0 then
+				-- real child
+				posix.close(inw)
+				posix.dup2(inr, 0)
+
+				posix.exec(cmd, args)
+				print("unable to exec")
+				os.exit(1)
+			end
+			posix.close(inr)
+			-- Feed in the stdin if we have some
+			for _,line in ipairs(stdin) do
+				line = line .. "\n"
+				posix.write(inw, line)
+			end
+			posix.close(inw)
+			local pid, reason, status = posix.wait(cpid)
+			os.exit(status)
+		else
 			posix.exec(cmd, args)
 			print("unable to exec")
 			os.exit(1)
 		end
-		posix.close(inr)
-		-- Feed in the stdin if we have some
-		for _,line in ipairs(stdin or {}) do
-			line = line .. "\n"
-			posix.write(inw, line)
-		end
-		posix.close(inw)
-		local pid, reason, status = posix.wait(cpid)
-		os.exit(status)
 	end
 	posix.close(outw)
 	local output = {}
@@ -97,7 +120,4 @@ function pipe_execute(cmd, args, stdin, env)
 	end
     local pid, reason, status = posix.wait(pid)
 	return status, output
-end
-function simple_exec(cmd)
-	
 end

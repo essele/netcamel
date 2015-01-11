@@ -20,6 +20,16 @@
 -- This module provides a number of runtime helpers
 --
 
+--
+-- Build the specific posix commands we need, this saves using the full
+-- require which adds quite a delay to startup.
+--
+local posix = {}
+posix.fcntl = require("posix.fcntl")
+posix.unistd = require("posix.unistd")
+posix.open = posix.fcntl.open
+posix.close = posix.unistd.close
+posix.dup = posix.unistd.dup
 
 --
 -- We need to access the database
@@ -29,6 +39,7 @@ local db = require("db")
 --
 -- We will need lots of logging
 --
+require("bit")
 require("log")
 
 --
@@ -192,12 +203,9 @@ end
 -- so that we don't impact performance too much.
 --
 local function redirect(filename)
-	posix = require("posix")
-	posix.fcntl = require("posix.fcntl")
-	require("bit")
 	posix.close(1)
 	posix.close(2)
-	local fd = posix.fcntl.open(filename, bit.bor(posix.O_WRONLY, posix.O_CREAT, posix.O_APPEND, posix.O_SYNC))
+	local fd = posix.open(filename, bit.bor(posix.fcntl.O_WRONLY, posix.fcntl.O_CREAT, posix.fcntl.O_APPEND, posix.fcntl.O_SYNC))
 	posix.dup(fd)
 end
 
