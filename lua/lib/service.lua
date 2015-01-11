@@ -215,7 +215,7 @@ end
 local function start_normally(svc)
 	print("would run (normally): " .. tostring(svc.binary))
 
-	local rc, err = execute(svc.binary, svc.args, nil, svc.env )
+	local rc, err = pipe_execute(svc.binary, svc.args, nil, svc.env )
 	print("rc="..tostring(rc))
 	if not rc then return false, err end
 

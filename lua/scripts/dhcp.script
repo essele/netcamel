@@ -34,6 +34,7 @@ runtime = require("runtime")
 -- For string split and each
 --
 require("utils")
+require("log")
 
 --
 -- Pull out all of the environment variables
@@ -51,6 +52,7 @@ local dns 				= split(os.getenv("dns") or "", "%s")
 local vars = runtime.get_vars("dhcp."..interface)
 
 local action 			= arg[1]
+local label				= interface..".dhcp"
 
 --
 -- Redirect our output to make sure we capture even the
@@ -61,15 +63,15 @@ if vars.logfile then runtime.redirect(vars.logfile) end
 --
 -- Remove anything stored from this interface so we are starting clean
 --
-print("Performing Action: "..action)
+log("info", label, "DHCP event action=%s", action)
 
 if action == "deconfig" then
 	--
 	-- Deconfig means clear out the interface ready to start
 	-- or when finishing.
 	--
-	os.execute(string.format("ip link set %s up", interface))
-	os.execute(string.format("ip addr flush dev %s", interface))
+	runtime.execute(label, string.format("ip link set %s up", interface))
+	runtime.execute(label, string.format("ip addr flush dev %s", interface))
 
 	--
 	-- Remove any routes and resolvers and work out what the
@@ -85,8 +87,8 @@ if action == "renew" or action == "bound" then
 	--
 	-- Configure the interface
 	--
-	os.execute(string.format("ip addr flush dev %s", interface))
-	os.execute(string.format("ip addr add %s/%s broadcast %s dev %s", ip, mask, broadcast, interface))
+	runtime.execute(label, string.format("ip addr flush dev %s", interface))
+	runtime.execute(label, string.format("ip addr add %s/%s broadcast %s dev %s", ip, mask, broadcast, interface))
 
 	--
 	-- Add routes and resolvers and work out what the

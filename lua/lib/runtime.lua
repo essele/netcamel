@@ -27,6 +27,11 @@
 local db = require("db")
 
 --
+-- We will need lots of logging
+--
+require("log")
+
+--
 -- Allow set and get status 
 --
 local function get_status(node)
@@ -36,7 +41,7 @@ local function get_status(node)
 end
 local function set_status(node, status)
 	local rc, err = db.query("status", "set_status", node, status)
-	print("set status rc="..tostring(rc).." err="..tostring(err))
+	log("info", node, "%s is %s", node, status)
 	return rc, err
 end
 
@@ -45,6 +50,7 @@ local function remove_resolvers(source)
 end
 local function add_resolver(source, value, priority)
 	db.insert("resolvers", { source = source, priority = priority, value = value })
+	log("info", source, "adding dns resovler option: %s (pri=%s)", value, priority)
 end
 
 --
@@ -73,6 +79,7 @@ local function update_resolvers()
 	local file = io.open("/etc/resolv.conf", "w")
 	for resolver in each(resolvers) do
 		file:write(string.format("nameserver %s # %s\n", resolver.value, resolver.source))
+		log("info", "resolv", "selected resolver %s (%s)", resolver.value, resolver.source)
 	end
 	file:close()
 end
@@ -89,14 +96,14 @@ local function set_routes_for_interface(interface, op)
 
 	for _, route in ipairs(rc) do
 		if route.gateway then
-			print(string.format("ip route %s %s via %s dev %s table %s", 
-							op, route.dest, route.gateway, route.interface, route.table))
-			os.execute(string.format("ip route %s %s via %s dev %s table %s", 
+			log("info", interface, "route %s %s via %s dev %s table %s",
+							op, route.dest, route.gateway, route.interface, route.table)
+			runtime.execute(interface, string.format("ip route %s %s via %s dev %s table %s", 
 							op, route.dest, route.gateway, route.interface, route.table))
 		else
-			print(string.format("ip route %s %s dev %s table %s", 
-							op, route.dest, route.interface, route.table))
-			os.execute(string.format("ip route %s %s dev %s table %s", 
+			log("info", interface, "route %s %s dev %s table %s",
+							op, route.dest, route.interface, route.table)
+			runtime.execute(interface, string.format("ip route %s %s dev %s table %s", 
 							op, route.dest, route.interface, route.table))
 		end
 	end
@@ -121,8 +128,8 @@ local function update_defaultroute(table)
 	end
 	if routers and routers[1] then
 		local gateway, interface = routers[1].gateway, routers[1].interface
-		os.execute(string.format("ip route add default via %s dev %s table %s", gateway, interface, table))
-		print(string.format("ip route add default via %s dev %s table %s", gateway, interface, table))
+		log("info", "defaulroute", "setting defaultroute to %s (%s) for table %s", gateway, interface, table)
+		runtime.execute(interface, string.format("ip route add default via %s dev %s table %s", gateway, interface, table))
 	end
 end
 
@@ -168,7 +175,7 @@ local function interface_up(interface, dns, routers, vars)
 	-- Now update the resolvers and default routes
 	--
 	update_resolvers()
-	update_defaultroute()
+	update_defaultroute(vars["defaultroute-table"])
 end
 local function interface_down(interface, vars)
 	remove_resolvers(interface)
@@ -176,7 +183,7 @@ local function interface_down(interface, vars)
 	set_routes_for_interface(interface, "del")
 	set_status(interface, "down")
 	update_resolvers()
-	update_defaultroute()
+	update_defaultroute(vars["defaultroute-table"])
 end
 
 
@@ -193,6 +200,16 @@ local function redirect(filename)
 	local fd = posix.fcntl.open(filename, bit.bor(posix.O_WRONLY, posix.O_CREAT, posix.O_APPEND, posix.O_SYNC))
 	posix.dup(fd)
 end
+
+--
+-- Simple execute function that wraps os.execute, but also logs
+-- the commands
+--
+function execute(section, cmd)
+	log("cmd", section, cmd)
+	return os.execute(cmd)
+end
+
 
 --
 -- Gets the vars from a service definition, this should probably be in
@@ -220,6 +237,8 @@ return {
 
 	set_status = set_status,
 	get_status = get_stats,
+
+	execute = execute,
 }
 
 

@@ -17,6 +17,10 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
+require("log")
+local runtime = require("runtime")
+
+
 local DHCPC="/sbin/udhcpc"
 local DHCP_SCRIPT="/netcamel/scripts/dhcp.script"
 
@@ -66,7 +70,7 @@ local function start_dhcp(intf, cf)
 		["stop"] = "BYPIDFILE",
 	})
 
-	print("ARGS: " .. table.concat(args, " "))
+	log("info", intf, "starting dhcp")
 
 	local rc, err = service.start("dhcp."..intf)
 	print("service.start dhcp rc="..tostring(rc).." err="..tostring(err))
@@ -78,7 +82,7 @@ local function stop_dhcp(intf)
 	--
 	-- Setup enough so we can kill the process
 	--
-	print("Stopping dhcp")
+	log("info", intf, "stopping dhcp")
 	local rc, err = service.stop("dhcp."..intf)
 	print("rc="..tostring(rc).." err="..tostring(err))
 
@@ -102,11 +106,12 @@ local function ethernet_commit(changes)
 		local oldcf = node_vars("interface/ethernet/"..ifnum, CF_current) or {}
 		local physical = interface_name("ethernet/"..ifnum)
 
+		log("info", physical, "removing interface")
 		if oldcf["dhcp-enable"] then
 			stop_dhcp(physical)
 		end
-		os.execute(string.format("ip addr flush dev %s", physical))
-		os.execute(string.format("ip link set dev %s down", physical))
+		runtime.execute(physical, string.format("ip addr flush dev %s", physical))
+		runtime.execute(physical, string.format("ip link set dev %s down", physical))
 	end
 
 	--
@@ -119,6 +124,7 @@ local function ethernet_commit(changes)
 		local physical = interface_name("ethernet/"..ifnum)
 
 		local changed = values_to_keys(node_list("interface/ethernet/"..ifnum, changes))
+		log("info", physical, "changing interface")
 
 		--
 		-- If we have changed any of our dhcp settings then we definitely need to
@@ -139,7 +145,7 @@ local function ethernet_commit(changes)
 				start_dhcp(physical, cf)
 			else
 				if cf.ip then
-					os.execute(string.format("ip addr add %s dev %s", cf.ip, physical))
+					runtime.execute(physical, string.format("ip addr add %s dev %s", cf.ip, physical))
 				end
 			end
 		else
@@ -147,16 +153,16 @@ local function ethernet_commit(changes)
 			-- Handle standard IP address changes here
 			--
 			if changed.ip and not cf["dhcp-enable"] then
-				if oldcf.ip then os.execute(string.format("ip addr del %s dev %s", oldcf.ip, physical)) end
-				os.execute(string.format("ip addr add %s dev %s", cf.ip, physical))
+				if oldcf.ip then runtime.execute(physical, string.format("ip addr del %s dev %s", oldcf.ip, physical)) end
+				runtime.execute(physical, string.format("ip addr add %s dev %s", cf.ip, physical))
 			end
 		end
 	
 		if changed.mtu then
-			os.execute(string.format("ip link set dev %s mtu %s", physical, cf.mtu))
+			runtime.execute(physical, string.format("ip link set dev %s mtu %s", physical, cf.mtu))
 		end
 		if changed.disabled then
-			os.execute(string.format("ip link set dev %s %s", physical, 
+			runtime.execute(physical, string.format("ip link set dev %s %s", physical, 
 							(cf.disabled and "down") or "up" ))
 		end
 		
@@ -170,22 +176,23 @@ local function ethernet_commit(changes)
 	-- Add an interface
 	--
 	for ifnum in each(state.added) do 
-		print("Added: "..ifnum) 
 		local cf = node_vars("interface/ethernet/"..ifnum, CF_new)
 		local physical = interface_name("ethernet/"..ifnum)
+
+		log("info", physical, "creating interface")
 
 		--
 		-- Remove any addresses, and set the link up or down
 		--
-		os.execute(string.format("ip addr flush dev %s", physical))
-		os.execute(string.format("ip link set dev %s %s", physical, (cf.disabled and "down") or "up" ))
-		if(cf.mtu) then os.execute(string.format("ip link set dev %s mtu %s", physical, cf.mtu)) end
+		runtime.execute(physical, string.format("ip addr flush dev %s", physical))
+		runtime.execute(physical, string.format("ip link set dev %s %s", physical, (cf.disabled and "down") or "up" ))
+		if(cf.mtu) then runtime.execute(physical, string.format("ip link set dev %s mtu %s", physical, cf.mtu)) end
 
 		--
 		-- The IP address only goes on the interface if we don't have dhcp enabled
 		--
 		if(not cf["dhcp-enable"]) then
-			if(cf.ip) then os.execute(string.format("ip addr add %s brd + dev %s", cf.ip, physical)) end
+			if(cf.ip) then runtime.execute(physical, string.format("ip addr add %s brd + dev %s", cf.ip, physical)) end
 		else
 			start_dhcp(physical, cf)
 		end
