@@ -57,6 +57,7 @@ local action 			= arg[1]
 -- cleanup
 --
 if vars.logfile then runtime.redirect(vars.logfile) end
+runtime.block_on()
 
 --
 -- Remove anything stored from this interface so we are starting clean
@@ -96,4 +97,5 @@ if action == "renew" or action == "bound" then
 	runtime.interface_up(interface, dns, routers, vars)
 end
 
+runtime.block_off()
 os.exit(0)

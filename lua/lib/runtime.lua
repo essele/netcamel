@@ -28,6 +28,7 @@ local posix = {
 	fcntl = require("posix.fcntl"),
 	unistd = require("posix.unistd"),
 }
+posix.fcntl.FD_CLOEXEC = 1
 
 --
 -- We need to access the database
@@ -40,6 +41,38 @@ local db = require("db")
 require("bit")
 require("execute")
 require("log")
+
+
+--
+-- Support blocking so we can have only one process doing something at a time
+--
+local __block_fd = nil
+local __block_filename = "/tmp/.nc_block"
+
+function block_on()
+	local lock = {
+		l_type = posix.fcntl.F_WRLCK,
+		l_whence = posix.fcntl.SEEK_SET,
+		l_start = 0,
+		l_len = 0,
+	}
+	__block_fd = posix.fcntl.open(__block_filename, bit.bor(posix.fcntl.O_CREAT, posix.fcntl.O_WRONLY), tonumber(644, 8))
+	local rc = posix.fcntl.fcntl(__block_fd, posix.fcntl.F_SETFD, posix.fcntl.FD_CLOEXEC)
+	print("setfd="..rc)
+
+	local result = posix.fcntl.fcntl(__block_fd, posix.fcntl.F_SETLKW, lock)
+	if result == -1 then
+		print("result = "..result)
+	end
+end
+function block_off(name)
+	if __block_fd then
+		posix.unistd.close(__block_fd)
+		posix.unistd.unlink(__block_filename)
+		__block_fd = nil
+	end
+end
+
 
 --
 -- Allow set and get status 
@@ -64,7 +97,62 @@ local function add_resolver(source, value, priority)
 end
 
 --
--- Insert and remove routes from the routing database
+-- Now work out what the correct route and resolvers are
+--
+local function update_resolvers()
+	log("info", "selecting resolvers based on priority")
+
+	local resolvers = db.query("resolvers", "priority_resolvers")
+	local file = io.open("/etc/resolv.conf", "w")
+	for resolver in each(resolvers) do
+		file:write(string.format("nameserver %s # %s\n", resolver.value, resolver.source))
+		log("info", "- selected resolver %s (%s)", resolver.value, resolver.source)
+	end
+	file:close()
+	if #resolvers == 0 then log("info", "- no resolvers available") end
+end
+
+-- ------------------------------------------------------------------------------
+-- ROUTE MANIPULATION CODE
+-- ------------------------------------------------------------------------------
+
+--
+-- Read the routing table into a hash. First key is the table name, then we have
+-- interface and gateway.
+--
+function get_routes()
+	tbl = tbl or "main"
+	local status, routes = pipe_execute("/sbin/ip", { "-4", "route", "list", "type", "unicast", "table", "all" })
+	if status ~= 0 then 
+		print("AARRGH")
+		for _,v in ipairs(routes or {}) do print(">> "..v) end
+		return nil 
+	end
+
+	local rc = {}
+	for _, route in ipairs(routes) do
+		local dev, gateway, dest, tbl
+		local f = split(route, "%s")
+
+		dest = table.remove(f, 1)
+		while f[1] do
+			local cmd = table.remove(f, 1)
+			if cmd == "dev" then dev = table.remove(f, 1)
+			elseif cmd == "via" then gateway = table.remove(f, 1)
+			elseif cmd == "table" then tbl = table.remove(f, 1)
+			else table.remove(f, 1) table.remove(f, 1) end
+		end
+		tbl = tbl or "main"
+		if not rc[tbl] then rc[tbl] = {} end
+		rc[tbl][dest] = { interface = dev, gateway = gateway }
+	end
+	return rc
+end
+
+
+
+--
+-- Insert and remove routes from the transient routing database
 --
 local function insert_route(e)
 	local entry = copy_table(e)
@@ -81,21 +169,6 @@ local function delete_route(f)
 	print("route delete rc="..tostring(rc).." err="..tostring(err))
 end
 
---
--- Now work out what the correct route and resolvers are
---
-local function update_resolvers()
-	log("info", "selecting resolvers based on priority")
-
-	local resolvers = db.query("resolvers", "priority_resolvers")
-	local file = io.open("/etc/resolv.conf", "w")
-	for resolver in each(resolvers) do
-		file:write(string.format("nameserver %s # %s\n", resolver.value, resolver.source))
-		log("info", "- selected resolver %s (%s)", resolver.value, resolver.source)
-	end
-	file:close()
-	if #resolvers == 0 then log("info", "- no resolvers available") end
-end
 
 --
 -- Get all the non-defaulroute routes for the given interface where the
@@ -130,22 +203,58 @@ end
 local function update_defaultroute(table)
 	table = table or "main"
 
+	block_on()
 	log("info", "selecting defaultroute/%s", table)
-	
-	runtime.execute("/sbin/ip", { "route", "del", "default", "table", table })
+
+	--
+	-- Work out what we have currently
+	--
+	local routes = get_routes()
+	local current = routes[table] and routes[table]["default"]
+
+	--
+	-- Work out what the route should be...
+	--
+	local default = nil
 	local routers, err = db.query("routes", "priority_defaultroutes_for_table", table)
 	if not routers then
-		print("Err for pdft="..tostring(err))
-	else
-		print("count="..#routers)
+		log("error", "unable to get priority_defaultroutes_for_table %s: %s", table, tostring(err))
+		goto done
 	end
-	if routers and routers[1] then
-		local gateway, interface = routers[1].gateway, routers[1].interface
-		log("info", "- selecting defaultroute/%s %s", table, gateway)
-		runtime.execute("/sbin/ip", { "route", "add", "default", "via", gateway, "dev", interface, "table", table })
-	else
-		log("info", "- no defaultroute/%s available", table)
+	if routers and routers[1] then default = routers[1] end
+
+	--
+	-- See if we need to change
+	--
+	if current == nil and default == nil then 
+		log("info", "- no defaultroute available, already correct")
+		goto done 
 	end
+	if current and default then
+		if (current.interface == default.interface and current.gateway == default.gateway) then
+			log("info", "- gateway via %s, already correct", current.interface)
+			goto done
+		end
+	end
+
+	--
+	-- By now we know there is a difference, so remove and add as needed
+	--
+	if current then
+		log("info", "- removing %s via %s", current.gateway or "*", current.interface)
+		runtime.execute("/sbin/ip", { "route", "del", "default", "table", table })
+	end
+	if default then
+		log("info", "- adding %s via %s", default.gateway or "*", default.interface)
+		if default.gateway then
+			runtime.execute("/sbin/ip", { "route", "add", "default", "via", default.gateway, "dev", default.interface, "table", table })
+		else
+			runtime.execute("/sbin/ip", { "route", "add", "default", "dev", default.interface, "table", table })
+		end
+	end
+
+::done::
+	block_off()
 end
 
 --
@@ -236,10 +345,10 @@ end
 --
 local function get_vars(name)
 --	print("Get VARS: "..name)
-    local svc = db.query("services", "get_service", name)
-    if not svc or #svc ~= 1 then return nil, "unknown service" end
+	local svc = db.query("services", "get_service", name)
+	if not svc or #svc ~= 1 then return nil, "unknown service" end
 
-    svc = svc[1]
+	svc = svc[1]
 	if svc.vars then return unserialise(svc.vars) end
 	return nil
 end
@@ -257,8 +366,10 @@ return {
 	set_status = set_status,
 	get_status = get_stats,
 
-	exec = exec,
 	execute = execute,
+
+	block_on = block_on,
+	block_off = block_off,
 }
 
 
