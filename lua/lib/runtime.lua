@@ -73,6 +73,18 @@ function block_off(name)
 	end
 end
 
+--
+-- Simple execute function that wraps pipe_execute, but also logs
+-- the commands and output.
+--
+function execute(binary, args)
+	local rc, res = pipe_execute(binary, args, nil, nil)
+	log("cmd", "# %s%s (exit: %d)", binary,	args and " "..table.concat(args, " "), rc)
+	for _, out in pairs(res) do
+		log("cmd", "> %s", out)
+	end
+end
+
 
 --
 -- Allow set and get status 
@@ -87,6 +99,7 @@ local function set_status(node, status)
 	log("info", "%s is %s", node, status)
 	return rc, err
 end
+local function is_up(node) return ((get_status(node)) == "up") end
 
 local function remove_resolvers(source)
 	db.query("resolvers", "remove_source", source)
@@ -149,26 +162,6 @@ function get_routes()
 	return rc
 end
 
-
-
---
--- Insert and remove routes from the transient routing database
---
-local function insert_route(e)
-	local entry = copy_table(e)
-	entry.table = entry.table or "main"
-	local rc, err = db.insert("routes", entry)
-	print("route insert rc="..tostring(rc).." err="..tostring(err))
-end
-local function delete_route(f)
-	local entry = copy_table(f)
-	entry.dest = entry.dest or "default"
-	entry.table = entry.table or "main"
-
-	local rc, err = db.query("routes", "delete_route_for_source", entry)
-	print("route delete rc="..tostring(rc).." err="..tostring(err))
-end
-
 --
 -- Prepare a list of arguments for the ip route commands
 --
@@ -185,6 +178,46 @@ local function ip_route_args(cmd, route, tbl)
 	table.insert(rc, "table")
 	table.insert(rc, tbl)
 	return rc
+end
+
+
+
+--
+-- Insert and remove routes from the transient routing database, if they are from
+-- the 'routes' system then we check if we need to really apply the route.
+--
+local function insert_route(e)
+	local entry = copy_table(e)
+	entry.table = entry.table or "main"
+	local rc, err = db.insert("routes", entry)
+	print("route insert rc="..tostring(rc).." err="..tostring(err))
+
+	print("Source is: "..tostring(entry.source))
+	print("ISUP: "..entry.interface.." " ..tostring(is_up(entry.interface)))
+
+	if entry.source == "routes"	and is_up(entry.interface) then
+		--
+		-- TODO: only add if its not there
+		--
+		log("info", "interface is up - adding route")
+		execute("/sbin/ip", ip_route_args("add", entry, entry.table))
+	end
+end
+local function delete_route(f)
+	local entry = copy_table(f)
+	entry.dest = entry.dest or "default"
+	entry.table = entry.table or "main"
+
+	local rc, err = db.query("routes", "delete_route_for_source", entry)
+	print("route delete rc="..tostring(rc).." err="..tostring(err))
+
+	if entry.source == "routes"	and is_up(entry.interface) then
+		--
+		-- TODO: only delete if its in the list
+		--
+		log("info", "interface is up - deleting route")
+		execute("/sbin/ip", ip_route_args("del", entry, entry.table))
+	end
 end
 
 --
@@ -205,7 +238,7 @@ local function clear_routes_for_interface(interface)
 	--
 	for tbl, rl in pairs(routes) do
 		for dest, route in pairs(rl) do
-			if route.interface == interface then runtime.execute("/sbin/ip", ip_route_args("del", route, tbl)) end
+			if route.interface == interface then execute("/sbin/ip", ip_route_args("del", route, tbl)) end
 		end
 	end
 end
@@ -236,9 +269,9 @@ local function set_routes_for_interface(interface)
 				log("info", "- route for %s/%s via %s already installed", current.dest, current.table, current.interface)
 				goto continue
 			end
-			runtime.execute("/sbin/ip", ip_route_args("del", current, new.table))
+			execute("/sbin/ip", ip_route_args("del", current, new.table))
 		end
-		runtime.execute("/sbin/ip", ip_route_args("add", new, new.table))
+		execute("/sbin/ip", ip_route_args("add", new, new.table))
 
 ::continue::
 	end
@@ -292,11 +325,11 @@ local function update_defaultroute(table)
 	--
 	if current then
 		log("info", "- removing %s via %s", current.gateway or "*", current.interface)
-		runtime.execute("/sbin/ip", ip_route_args("del", current))
+		execute("/sbin/ip", ip_route_args("del", current))
 	end
 	if default then
 		log("info", "- adding %s via %s", default.gateway or "*", default.interface)
-		runtime.execute("/sbin/ip", ip_route_args("add", default))
+		execute("/sbin/ip", ip_route_args("add", default))
 	end
 
 ::done::
@@ -365,18 +398,6 @@ local function redirect(filename)
 end
 
 --
--- Simple execute function that wraps pipe_execute, but also logs
--- the commands and output.
---
-function execute(binary, args)
-	local rc, res = pipe_execute(binary, args, nil, nil)
-	log("cmd", "# %s%s (exit: %d)", binary,	args and " "..table.concat(args, " "), rc)
-	for _, out in pairs(res) do
-		log("cmd", "> %s", out)
-	end
-end
-
---
 -- Gets the vars from a service definition, this should probably be in
 -- lib/service but having it here saves all the posix stuff.
 --
@@ -394,6 +415,9 @@ end
 return {
 	interface_up = interface_up,
 	interface_down = interface_down,
+
+	insert_route = insert_route,
+	delete_route = delete_route,
 
 	redirect = redirect,
 	get_vars = get_vars,

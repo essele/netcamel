@@ -18,6 +18,7 @@
 ------------------------------------------------------------------------------
 
 local db = require("db")
+local runtime = require("runtime")
 
 --
 -- Commit will just remove all the routes and then re-add them
@@ -25,7 +26,43 @@ local db = require("db")
 -- TODO: what about live routes
 --
 local function routing_commit(changes)
+	runtime.block_on()
 	print("Hello From ROUTINGQ")
+
+	local state = process_changes(changes, "routing/route")
+
+	for name in each(state.added) do
+		print("Adding route: " .. name)
+		local cf = node_vars("routing/route/"..name, CF_new)
+		cf.interface = interface_name(cf.interface)
+		cf.source = "routes"
+		print("dest="..tostring(cf.dest).." interface="..tostring(cf.interface).." table="..tostring(cf.table))
+		runtime.insert_route(cf)		
+	end
+
+	for name in each(state.removed) do
+		print("Removing route: " .. name)
+		local cf = node_vars("routing/route/"..name, CF_current)
+		cf.interface = interface_name(cf.interface)
+		cf.source = "routes"
+		runtime.delete_route(cf)		
+	end
+
+	for name in each(state.changed) do
+		print("Changing route: " .. name)
+		local cf = node_vars("routing/route/"..ifnum, CF_new) or {}
+		local oldcf = node_vars("routing/route/"..ifnum, CF_current) or {}
+		cf.interface = interface_name(cf.interface)
+		cf.source = "routes"
+		oldcf.interface = interface_name(oldcf.interface)
+		oldcf.source = "routes"
+
+		runtime.delete_route(oldcf)		
+		runtime.insert_route(cf)		
+	end
+	runtime.block_off()
+
+--[[
 
 	local rc, err = db.query("routes", "remove_all_routes")
 	print("remove: rc="..tostring(rc).." err="..tostring(err))
@@ -44,6 +81,7 @@ local function routing_commit(changes)
 		local rc, err = db.insert("routes", entry)
 		print("add: rc="..tostring(rc).." err="..tostring(err))
 	end
+]]--
 	return true
 end
 
@@ -73,7 +111,7 @@ master["routing/route/*/table"] =		{ ["type"] = "OK", ["default"] = "main" }
 master["routing/route/*/priority"] = 	{ ["type"] = "2-digit" }
 
 TABLE["routes"] = {
-    schema = { 	source="string key",
+	schema = { 	source="string key",
 				dest="string",
 				gateway="string" ,
 				interface="string",
@@ -97,9 +135,6 @@ TABLE["routes"] = {
 	-- Find all non-default routes for the given interface (where the interface is up!)
 	--
 	routes_for_interface = "select * from routes where interface = :interface",
---	routes_for_interface = 
---			"select * from routes,status where routes.interface = status.node and " ..
---			"routes.dest != 'default' and status.status = 'up' and routes.interface = :interface",
 
 	remove_all_routes = "delete from routes where source = 'routes'",
 }
