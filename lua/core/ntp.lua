@@ -17,6 +17,8 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
+local service = require("service")
+
 local NTPD = "/usr/sbin/ntpd"
 local NTPD_NAME = "ntpd"
 local NTPD_CONFIG = "/tmp/ntpd.conf"

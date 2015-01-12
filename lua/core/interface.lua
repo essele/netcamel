@@ -19,6 +19,7 @@
 
 require("log")
 local runtime = require("runtime")
+local service = require("service")
 
 
 local DHCPC="/sbin/udhcpc"

@@ -31,11 +31,11 @@ require("validators")
 --require("api")
 
 -- different namespace packages
-base64 	= require("base64")
-ffi 	= require("ffi")
-service = require("service")
-posix   = require("posix")
-db 		= require("db")
+local posix		= { glob = require("posix.glob") }
+local base64 	= require("base64")
+local ffi 		= require("ffi")
+local service 	= require("service")
+local db 		= require("db")
 
 -- bring in our syntax checkers and completers
 -- this also brings in readline
@@ -54,7 +54,7 @@ new={}
 --
 local core_modules = {}
 --for m in lfs.dir("core") do
-for _,m in ipairs(posix.glob("core/*.lua")) do
+for _,m in ipairs(posix.glob.glob("core/*.lua")) do
 	local mname = m:match("^core/(.*)%.lua$")
 	if mname then table.insert(core_modules, mname) end
 end

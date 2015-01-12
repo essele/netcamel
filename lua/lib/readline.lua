@@ -19,10 +19,12 @@
 
 require("utils")
 
-ffi = require("ffi")
-bit = require("bit")
+local watcher = require("watcher")
+local ffi = require("ffi")
+local bit = require("bit")
 local posix = {
 	termio = require("posix.termio"),
+	fcntl = require("posix.fcntl"),
 	signal = require("posix.signal"),
 	unistd = require("posix.unistd"),
 	poll = require("posix.poll"),
@@ -31,7 +33,8 @@ local posix = {
 	},
 }
 
-
+-- watcher file handle
+local __ifd
 
 local __row = 0
 local __col = 0
@@ -125,6 +128,7 @@ function ti.init()
 		[ffi.string(ti.key_right)] = 		"RIGHT",
 		[ffi.string(ti.key_up)] = 			"UP",
 		[ffi.string(ti.key_down)] = 		"DOWN",
+		["\000"] =							"WATCH",
 		["\009"] =							"TAB",
 		["\127"] =							"BACKSPACE",
 		["\n"] =							"ENTER",
@@ -281,20 +285,22 @@ local function init()
 
 	__width = ti.columns
 	__height = ti.lines
+
+	__ifd = watcher.init()
+
+	watcher.add_watch("/tmp/nc.log")
 end
 local function finish()
 	posix.termio.tcsetattr(0, posix.termio.TCSANOW, __saved_tios)
 end
 
-
 --
 -- Wait up to a maximum time for a character, return the char
 -- and how much time is left (or nil if we didn't get one)
 --
-local function getchar(ms)
-	local fds = {
-		[0] = { events = { IN = true }},
-	}
+local function getchar(ms, watch)
+	local fds = { [0] = { events = { IN = true }}}
+	if watch then fds[__ifd] = { events = { IN = true }} end
 
 	local before = posix.sys.time.gettimeofday()
 	local rc, err = posix.poll.poll(fds, ms)
@@ -329,6 +335,9 @@ local function getchar(ms)
 		end
 		return char, ms
 	end
+	if fds[__ifd].revents.IN then
+		return "\000"
+	end
 	return nil
 end
 
@@ -339,7 +348,7 @@ local function read_key()
 	local buf = ""
 	local remaining = 0
 	
-	local c, time = getchar(-1)
+	local c, time = getchar(-1, true)
 	if c ~= "\027" then return keymap[c] or c end
 
 	buf = c
@@ -418,14 +427,6 @@ local function move_on(n, str)
 		ti.out(str)
 	end
 
---[[
-	local npos = __col + n
-	local extra_rows = math.floor(npos/__width)
-	local final_col = npos % __width
-
-	__col = final_col
-	__row = __row + extra_rows
---]]
 	__row, __col = row_and_col_from_pos(__col + n)
 
 	if (n > 0 and __col == 0) and ti.auto_right_margin then
@@ -767,6 +768,14 @@ local function readline(prompt, history, syntax_func, completer_func)
 				ti.out(ti.cursor_down) 
 				return nil 
 			end
+		elseif c == "WATCH" then
+			move_to(0, 0)
+			ti.out(ti.clr_eos)
+			local lines = watcher.read_inotify()
+			if lines then
+				for _, line in ipairs(lines) do print(line) end
+			end
+			needs_full_redraw = true
 		end
 
 ::continue::

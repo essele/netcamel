@@ -106,7 +106,7 @@ local function remove_resolvers(source)
 end
 local function add_resolver(source, value, priority)
 	db.insert("resolvers", { source = source, priority = priority, value = value })
-	log("info", "adding dns resovler option: %s (pri=%s)", value, priority)
+	log("info", "adding dns resolver option: %s (pri=%s)", value, priority)
 end
 
 --
