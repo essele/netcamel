@@ -64,7 +64,16 @@ if vars.logfile then runtime.redirect(vars.logfile) end
 -- Work out which action we are performing
 --
 local action = arg[0]:match("/?([^/]-)$")
+
+--
+-- Block all other interface related activity so that we have a clear tun
+-- and our logs are easier to read.
+--
 runtime.block_on()
+
+--
+-- Work out what the action is
+--
 print("Action is: " .. action)
 log("info", "PPPOE event action=%s", action)
 
@@ -80,4 +89,9 @@ if action == "ip-down" then
 	runtime.interface_down(interface, vars)
 end
 
+--
+-- Clear the block, will happen at exit anyway
+--
 runtime.block_off()
+
+os.exit(0)

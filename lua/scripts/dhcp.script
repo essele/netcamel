@@ -57,6 +57,11 @@ local action 			= arg[1]
 -- cleanup
 --
 if vars.logfile then runtime.redirect(vars.logfile) end
+
+--
+-- Block any other route/interface activity so we have a clear run and
+-- our logs are easier to read
+--
 runtime.block_on()
 
 --
@@ -97,5 +102,9 @@ if action == "renew" or action == "bound" then
 	runtime.interface_up(interface, dns, routers, vars)
 end
 
+--
+-- Clear the block (will happen at exit anyway)
+--
 runtime.block_off()
+
 os.exit(0)

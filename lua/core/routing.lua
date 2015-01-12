@@ -96,9 +96,10 @@ TABLE["routes"] = {
 	--
 	-- Find all non-default routes for the given interface (where the interface is up!)
 	--
-	routes_for_interface = 
-			"select * from routes,status where routes.interface = status.node and " ..
-			"routes.dest != 'default' and status.status = 'up' and routes.interface = :interface",
+	routes_for_interface = "select * from routes where interface = :interface",
+--	routes_for_interface = 
+--			"select * from routes,status where routes.interface = status.node and " ..
+--			"routes.dest != 'default' and status.status = 'up' and routes.interface = :interface",
 
 	remove_all_routes = "delete from routes where source = 'routes'",
 }

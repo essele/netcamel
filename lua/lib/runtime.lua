@@ -144,7 +144,7 @@ function get_routes()
 		end
 		tbl = tbl or "main"
 		if not rc[tbl] then rc[tbl] = {} end
-		rc[tbl][dest] = { interface = dev, gateway = gateway }
+		rc[tbl][dest] = { dest = dest, interface = dev, gateway = gateway }
 	end
 	return rc
 end
@@ -169,28 +169,78 @@ local function delete_route(f)
 	print("route delete rc="..tostring(rc).." err="..tostring(err))
 end
 
+--
+-- Prepare a list of arguments for the ip route commands
+--
+local function ip_route_args(cmd, route, tbl)
+	tbl = tbl or "main"
+
+	local rc = { "route", cmd, route.dest }
+	if route.gateway then 
+		table.insert(rc, "via") 
+		table.insert(rc, route.gateway)
+	end
+	table.insert(rc, "dev")
+	table.insert(rc, route.interface)
+	table.insert(rc, "table")
+	table.insert(rc, tbl)
+	return rc
+end
 
 --
--- Get all the non-defaulroute routes for the given interface where the
--- interface is up.
+-- Remove any routes for the given interface, this will generally happen
+-- automatically when the interface goes down, but we do this just in case
+-- we have other things going on.
 --
-local function set_routes_for_interface(interface, op)
-	op = op or "add"
-	local verb = (op == "add" and "installing") or "removing"
+local function clear_routes_for_interface(interface)
+	log("info", "clearing routes for interface")
 
-	log("info", "%s routes for interface", verb)
+	--
+	-- Get our current routing table
+	--
+	local routes = get_routes()
 
+	--
+	-- Now delete anything relevant, from all tables
+	--
+	for tbl, rl in pairs(routes) do
+		for dest, route in pairs(rl) do
+			if route.interface == interface then runtime.execute("/sbin/ip", ip_route_args("del", route, tbl)) end
+		end
+	end
+end
+
+--
+-- Make sure we have all the definied routes configured. Note that we won't delete extra
+-- routes, but we will change routes if the destination is the same.
+--
+local function set_routes_for_interface(interface)
+	log("info", "installing routes for interface")
+
+	--
+	-- Get our current routing table
+	--
+	local routes = get_routes()
+
+	--
+	-- Work out what routes we should have
+	--
 	local rc, err = db.query("routes", "routes_for_interface", interface)
 	if not rc then return rc, err end
 
-	for _, route in ipairs(rc) do
-		if route.gateway then
-			runtime.execute("/sbin/ip", { "route", op, route.dest, "via", route.gateway,
-								"dev", route.interface, "table", route.table }) 
-		else
-			runtime.execute("/sbin/ip", { "route", op, route.dest, "dev", route.interface,
-								"table", route.table })
+	for _, new in ipairs(rc) do
+		local current = routes[new.table] and routes[new.table][new.dest]
+
+		if current then
+			if current.interface == new.interface or current.gateway == new.gateway then
+				log("info", "- route for %s/%s via %s already installed", current.dest, current.table, current.interface)
+				goto continue
+			end
+			runtime.execute("/sbin/ip", ip_route_args("del", current, new.table))
 		end
+		runtime.execute("/sbin/ip", ip_route_args("add", new, new.table))
+
+::continue::
 	end
 end
 
@@ -242,15 +292,11 @@ local function update_defaultroute(table)
 	--
 	if current then
 		log("info", "- removing %s via %s", current.gateway or "*", current.interface)
-		runtime.execute("/sbin/ip", { "route", "del", "default", "table", table })
+		runtime.execute("/sbin/ip", ip_route_args("del", current))
 	end
 	if default then
 		log("info", "- adding %s via %s", default.gateway or "*", default.interface)
-		if default.gateway then
-			runtime.execute("/sbin/ip", { "route", "add", "default", "via", default.gateway, "dev", default.interface, "table", table })
-		else
-			runtime.execute("/sbin/ip", { "route", "add", "default", "dev", default.interface, "table", table })
-		end
+		runtime.execute("/sbin/ip", ip_route_args("add", default))
 	end
 
 ::done::
@@ -265,14 +311,9 @@ end
 --
 local function interface_up(interface, dns, routers, vars)
 	--
-	-- Mark the interface as up
-	--
-	set_status(interface, "up")
-
-	--
 	-- Install any routes associated with this interface
 	--
-	set_routes_for_interface(interface, "add")
+	set_routes_for_interface(interface)
 
 	--
 	-- Add the resolvers to the resolver table if we need to
@@ -300,14 +341,15 @@ local function interface_up(interface, dns, routers, vars)
 	--
 	update_resolvers()
 	update_defaultroute(vars["defaultroute-table"])
+	set_status(interface, "up")
 end
 local function interface_down(interface, vars)
 	remove_resolvers(interface)
 	delete_route({ source = interface, dest = "default", table = vars["defaultroute-table"] })
-	set_routes_for_interface(interface, "del")
-	set_status(interface, "down")
+	clear_routes_for_interface(interface)
 	update_resolvers()
 	update_defaultroute(vars["defaultroute-table"])
+	set_status(interface, "down")
 end
 
 
@@ -323,13 +365,9 @@ local function redirect(filename)
 end
 
 --
--- Simple execute function that wraps os.execute, but also logs
--- the commands
+-- Simple execute function that wraps pipe_execute, but also logs
+-- the commands and output.
 --
---function execute(cmd)
---	log("cmd", "# %s", cmd)
---	return os.execute(cmd)
---end
 function execute(binary, args)
 	local rc, res = pipe_execute(binary, args, nil, nil)
 	log("cmd", "# %s%s (exit: %d)", binary,	args and " "..table.concat(args, " "), rc)
@@ -337,7 +375,6 @@ function execute(binary, args)
 		log("cmd", "> %s", out)
 	end
 end
-
 
 --
 -- Gets the vars from a service definition, this should probably be in
@@ -355,8 +392,6 @@ end
 
 
 return {
-	set_routes_for_interface = set_routes_for_interface,
-
 	interface_up = interface_up,
 	interface_down = interface_down,
 
@@ -371,6 +406,4 @@ return {
 	block_on = block_on,
 	block_off = block_off,
 }
-
-
 
