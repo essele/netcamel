@@ -96,8 +96,6 @@ end
 
 local function ethernet_commit(changes)
 	logroot("intf")
-	print("Hello From Interface")
-
 	local state = process_changes(changes, "interface/ethernet")
 
 	--
@@ -111,9 +109,11 @@ local function ethernet_commit(changes)
 		log("info", "removing interface")
 		if oldcf["dhcp-enable"] then
 			stop_dhcp(physical)
+		else
+			runtime.execute("/sbin/ip", {"addr", "flush", "dev", physical })
+			runtime.execute("/sbin/ip", {"link", "set", "dev", physical, "down"})
+			runtime.interface_down(physical, {table = cf["defaultroute-table"]})
 		end
-		runtime.execute("/sbin/ip", {"addr", "flush", "dev", physical})
-		runtime.execute("/sbin/ip", {"link", "set", "dev", physical, "down"})
 	end
 
 	--
@@ -195,7 +195,10 @@ local function ethernet_commit(changes)
 		-- The IP address only goes on the interface if we don't have dhcp enabled
 		--
 		if(not cf["dhcp-enable"]) then
-			if(cf.ip) then runtime.execute("/sbin/ip", {"addr", "add", cf.ip, "brd", "+", "dev", physical}) end
+			if cf.ip then
+				runtime.execute("/sbin/ip", {"addr", "add", cf.ip, "brd", "+", "dev", physical})
+				runtime.interface_up(physical, cf.resolver or {}, {cf.defaultroute}, cf)
+			end
 		else
 			start_dhcp(physical, cf)
 		end
@@ -513,21 +516,26 @@ master["interface/ethernet"] = {
 	["with_children"] = 1
 }
 
-master["interface/ethernet/*"] = 			{ ["style"] = "ethernet_unit",
-											  ["options"] = { "0", "1", "2" } }
-master["interface/ethernet/*/ip"] = 		{ ["type"] = "ipv4_nm" }
-master["interface/ethernet/*/ipx"] = 		{ ["type"] = "ipv4" }
-master["interface/ethernet/*/mtu"] = 		{ ["type"] = "mtu" }
-master["interface/ethernet/*/disabled"] = 	{ ["type"] = "boolean" }
+master["interface/ethernet/*"] = 					{ ["style"] = "ethernet_unit",
+											  		  ["options"] = { "0", "1", "2" } }
+master["interface/ethernet/*/ip"] = 				{ ["type"] = "ipv4_nm" }
+master["interface/ethernet/*/resolver"] =			{ ["type"] = "ipv4", ["list"] = true }
+master["interface/ethernet/*/defaultroute"] =		{ ["type"] = "ipv4" }
+master["interface/ethernet/*/resolv-pri"] =			{ ["type"] = "2-digit", ["default"] = "20" }
+master["interface/ethernet/*/defaultroute-pri"] =	{ ["type"] = "2-digit", ["default"] = "20" }
+master["interface/ethernet/*/defaultroute-table"] =	{ ["type"] = "OK", ["default"] = "main" }
+master["interface/ethernet/*/mtu"] = 				{ ["type"] = "mtu" }
+master["interface/ethernet/*/disabled"] = 			{ ["type"] = "boolean" }
 
 --
 -- Support DHCP on the interface (off by default)
 --
-master["interface/ethernet/*/dhcp-enable"] = 			{ ["type"] = "boolean", ["default"] = false }
-master["interface/ethernet/*/dhcp-no-resolv"] = 		{ ["type"] = "boolean", ["default"] = false }
-master["interface/ethernet/*/dhcp-no-defaultroute"] = 	{ ["type"] = "boolean", ["default"] = false }
-master["interface/ethernet/*/dhcp-resolv-pri"] = 		{ ["type"] = "2-digit", ["default"] = "60" }
-master["interface/ethernet/*/dhcp-defaultroute-pri"] = 	{ ["type"] = "2-digit", ["default"] = "60" }
+master["interface/ethernet/*/dhcp-enable"] = 				{ ["type"] = "boolean", ["default"] = false }
+master["interface/ethernet/*/dhcp-no-resolv"] = 			{ ["type"] = "boolean", ["default"] = false }
+master["interface/ethernet/*/dhcp-no-defaultroute"] = 		{ ["type"] = "boolean", ["default"] = false }
+master["interface/ethernet/*/dhcp-resolv-pri"] = 			{ ["type"] = "2-digit", ["default"] = "60" }
+master["interface/ethernet/*/dhcp-defaultroute-pri"] = 		{ ["type"] = "2-digit", ["default"] = "60" }
+master["interface/ethernet/*/dhcp-defaultroute-table"] = 	{ ["type"] = "OK", ["default"] = "main" }
 
 --
 -- pppoe interfaces...
@@ -538,17 +546,18 @@ master["interface/pppoe"] = {
 	["with_children"] = 1,
 }
 
-master["interface/pppoe/*"] =					{ ["style"] = "pppoe_if" }
-master["interface/pppoe/*/attach"] =			{ ["type"] = "eth_interface",
-											  	  ["options"] = options_eth_interfaces }
-master["interface/pppoe/*/no-defaultroute"] =	{ ["type"] = "boolean", ["default"] = false }
-master["interface/pppoe/*/no-resolv"] =			{ ["type"] = "boolean", ["default"] = false }
-master["interface/pppoe/*/mtu"] =				{ ["type"] = "mtu" }
-master["interface/pppoe/*/resolv-pri"] = 		{ ["type"] = "2-digit", ["default"] = "40" }
-master["interface/pppoe/*/defaultroute-pri"] = 	{ ["type"] = "2-digit", ["default"] = "40" }
-master["interface/pppoe/*/username"] =			{ ["type"] = "OK" }
-master["interface/pppoe/*/password"] =			{ ["type"] = "OK" }
-master["interface/pppoe/*/disabled"] = 			{ ["type"] = "boolean" }
+master["interface/pppoe/*"] =						{ ["style"] = "pppoe_if" }
+master["interface/pppoe/*/attach"] =				{ ["type"] = "eth_interface",
+											  		  ["options"] = options_eth_interfaces }
+master["interface/pppoe/*/no-defaultroute"] =		{ ["type"] = "boolean", ["default"] = false }
+master["interface/pppoe/*/no-resolv"] =				{ ["type"] = "boolean", ["default"] = false }
+master["interface/pppoe/*/mtu"] =					{ ["type"] = "mtu" }
+master["interface/pppoe/*/resolv-pri"] = 			{ ["type"] = "2-digit", ["default"] = "40" }
+master["interface/pppoe/*/defaultroute-pri"] = 		{ ["type"] = "2-digit", ["default"] = "40" }
+master["interface/pppoe/*/defaultroute-table"] = 	{ ["type"] = "OK", ["default"] = "main" }
+master["interface/pppoe/*/username"] =				{ ["type"] = "OK" }
+master["interface/pppoe/*/password"] =				{ ["type"] = "OK" }
+master["interface/pppoe/*/disabled"] = 				{ ["type"] = "boolean" }
 
 --
 -- We will use a table to manage the resolvers that come in from various sources

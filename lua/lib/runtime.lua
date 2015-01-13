@@ -48,8 +48,15 @@ require("log")
 --
 local __block_fd = nil
 local __block_filename = "/tmp/.nc_block"
+local __block_i = 0
 
 function block_on()
+	--
+	-- Only actually lock the first time, otherwise just keep count
+	--
+	__block_i = __block_i + 1
+	if __block_i > 1 then return end
+
 	local lock = {
 		l_type = posix.fcntl.F_WRLCK,
 		l_whence = posix.fcntl.SEEK_SET,
@@ -66,6 +73,9 @@ function block_on()
 	end
 end
 function block_off(name)
+	__block_i = __block_i - 1
+	if __block_i > 0 then return end
+
 	if __block_fd then
 		posix.unistd.close(__block_fd)
 		posix.unistd.unlink(__block_filename)
@@ -189,6 +199,7 @@ end
 local function insert_route(e)
 	local entry = copy_table(e)
 	entry.table = entry.table or "main"
+
 	local rc, err = db.insert("routes", entry)
 	print("route insert rc="..tostring(rc).." err="..tostring(err))
 
@@ -357,7 +368,6 @@ local function interface_up(interface, dns, routers, vars)
 			add_resolver(interface, resolver, vars["resolv-pri"])
 		end
 	end
-
 	--
 	-- Add the defaultroutes to the routes table
 	--
