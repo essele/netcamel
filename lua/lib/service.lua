@@ -46,6 +46,7 @@ function define(name, svc)
 	if svc.args then svc.args = serialise(svc.args) end
 	if svc.env then svc.env = serialise(svc.env) end
 	if svc.vars then svc.vars = serialise(svc.vars) end
+	if svc.stop_args then svc.vars = serialise(svc.stop_args) end
 	rc, err = db.query("services", "remove_service", name)
 	print("remove rc="..tostring(rc).." err="..tostring(err))
 	rc, err = db.insert("services", svc)
@@ -70,6 +71,7 @@ function get(name)
 	svc = svc[1]
 	if svc.args then svc.args = unserialise(svc.args) end
 	if svc.env then svc.env = unserialise(svc.env) end
+	if svc.stop_args then svc.stop_args = unserialise(svc.stop_args) end
 	svc.create_pidfile = (svc.create_pidfile == 1)
 	return svc
 end
@@ -188,6 +190,21 @@ local function kill_by_pidfile(svc)
 	local pids = get_pids_from_pidfile(svc)
 	kill_and_wait_to_die(pids, svc.maxkilltime)
 end
+local function kill_by_command(svc)
+	print("stop command: " .. tostring(svc.stop_binary))
+
+	local rc, err = pipe_execute(svc.stop_binary, svc.stop_args, nil, svc.env )
+	print("rc="..tostring(rc))
+	if not rc then return false, err end
+
+	if svc.logfile then
+		local file = io.open(svc.logfile, "a+")
+		if file then
+			for _,line in ipairs(err) do file:write(line.."\n") end
+			file:close()
+		end
+	end
+end
 
 --
 -- Check whether the service is runing by checking pids using one
@@ -225,7 +242,7 @@ local function start_normally(svc)
 	if not rc then return false, err end
 
 	if svc.logfile then
-		local file = io.open(svc.logfile, "w")
+		local file = io.open(svc.logfile, "a+")
 		if file then
 			for _,line in ipairs(err) do file:write(line.."\n") end
 			file:close()
@@ -336,6 +353,8 @@ local function stop(name)
 		rc, err = kill_by_binary(svc)
 	elseif svc.stop == "BYPIDFILE" then
 		rc, err = kill_by_pidfile(svc)
+	elseif svc.stop == "BYCOMMAND" then
+		rc, err = kill_by_command(svc)
 	else
 		return false, "unknown stop method"
 	end
@@ -385,7 +404,9 @@ TABLE["services"] = {
 				args="string",
 				env="string",
 				vars="string",
-				maxkilltime="integer"
+				maxkilltime="integer",
+				stop_binary="string",
+				stop_args="string",
 	},
 	["get_service"] = "select * from services where service = :service",
 	["remove_service"] = "delete from services where service = :service",

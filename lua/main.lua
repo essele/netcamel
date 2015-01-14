@@ -316,7 +316,7 @@ end
 readline.finish()
 
 -- Save history
-local file = io.open("etc/__history", "w")
+local file = io.open("etc/__history", "w+")
 if file then
 	for h in each(history) do file:write(h .. "\n") end
 	file:close()
