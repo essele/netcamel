@@ -521,8 +521,8 @@ master["interface/ethernet/*"] = 					{ ["style"] = "ethernet_unit",
 master["interface/ethernet/*/ip"] = 				{ ["type"] = "ipv4_nm" }
 master["interface/ethernet/*/resolver"] =			{ ["type"] = "ipv4", ["list"] = true }
 master["interface/ethernet/*/defaultroute"] =		{ ["type"] = "ipv4" }
-master["interface/ethernet/*/resolv-pri"] =			{ ["type"] = "2-digit", ["default"] = "20" }
-master["interface/ethernet/*/defaultroute-pri"] =	{ ["type"] = "2-digit", ["default"] = "20" }
+master["interface/ethernet/*/resolv-pri"] =			{ ["type"] = "2-digit", ["default"] = "80" }
+master["interface/ethernet/*/defaultroute-pri"] =	{ ["type"] = "2-digit", ["default"] = "80" }
 master["interface/ethernet/*/defaultroute-table"] =	{ ["type"] = "OK", ["default"] = "main" }
 master["interface/ethernet/*/mtu"] = 				{ ["type"] = "mtu" }
 master["interface/ethernet/*/disabled"] = 			{ ["type"] = "boolean" }
