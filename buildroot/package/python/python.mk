@@ -33,6 +33,7 @@ HOST_PYTHON_CONF_OPTS += 	\
 	--disable-test-modules	\
 	--disable-bz2		\
 	--disable-ssl		\
+	--disable-ossaudiodev	\
 	--disable-pyo-build
 
 # Make sure that LD_LIBRARY_PATH overrides -rpath.
@@ -117,6 +118,12 @@ endif
 
 ifeq ($(BR2_PACKAGE_PYTHON_HASHLIB),y)
 PYTHON_DEPENDENCIES += openssl
+endif
+
+ifeq ($(BR2_PACKAGE_PYTHON_OSSAUDIODEV),y)
+PYTHON_CONF_OPTS += --enable-ossaudiodev
+else
+PYTHON_CONF_OPTS += --disable-ossaudiodev
 endif
 
 PYTHON_CONF_ENV += \

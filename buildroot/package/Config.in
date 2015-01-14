@@ -190,9 +190,11 @@ menu "Graphic libraries and applications (graphic/text)"
 
 comment "Graphic applications"
 	source "package/fswebcam/Config.in"
+	source "package/glmark2/Config.in"
 	source "package/gnuplot/Config.in"
 	source "package/jhead/Config.in"
 	source "package/mesa3d-demos/Config.in"
+	source "package/qt5cinex/Config.in"
 	source "package/rrdtool/Config.in"
 
 comment "Graphic libraries"
@@ -312,6 +314,7 @@ endif
 	source "package/evemu/Config.in"
 	source "package/evtest/Config.in"
 	source "package/fan-ctrl/Config.in"
+	source "package/fbtft/Config.in"
 	source "package/fconfig/Config.in"
 	source "package/fis/Config.in"
 	source "package/flashrom/Config.in"
@@ -496,6 +499,7 @@ menu "external python modules"
 	source "package/python-crc16/Config.in"
 	source "package/python-daemon/Config.in"
 	source "package/python-dialog/Config.in"
+	source "package/python-django/Config.in"
 	source "package/python-docopt/Config.in"
 	source "package/python-dpkt/Config.in"
 	source "package/python-enum/Config.in"
@@ -528,6 +532,7 @@ menu "external python modules"
 	source "package/python-psutil/Config.in"
 	source "package/python-pyasn/Config.in"
 	source "package/python-pycrypto/Config.in"
+	source "package/python-pyftpdlib/Config.in"
 	source "package/python-pygame/Config.in"
 	source "package/python-pyparsing/Config.in"
 	source "package/python-pypcap/Config.in"
@@ -738,6 +743,7 @@ menu "Hardware handling"
 endmenu
 
 menu "Javascript"
+	source "package/bootstrap/Config.in"
 	source "package/explorercanvas/Config.in"
 	source "package/flot/Config.in"
 	source "package/jquery/Config.in"
@@ -1054,6 +1060,9 @@ if BR2_PACKAGE_BUSYBOX_SHOW_OTHERS
 	source "package/ifplugd/Config.in"
 endif
 	source "package/iftop/Config.in"
+if BR2_PACKAGE_BUSYBOX_SHOW_OTHERS
+	source "package/ifupdown/Config.in"
+endif
 	source "package/igh-ethercat/Config.in"
 	source "package/igmpproxy/Config.in"
 	source "package/inadyn/Config.in"
@@ -1167,6 +1176,7 @@ endif
 	source "package/ushare/Config.in"
 	source "package/ussp-push/Config.in"
 	source "package/vde2/Config.in"
+	source "package/vnstat/Config.in"
 	source "package/vpnc/Config.in"
 	source "package/vsftpd/Config.in"
 	source "package/vtun/Config.in"
@@ -1181,6 +1191,7 @@ endif
 	source "package/wvdial/Config.in"
 	source "package/xinetd/Config.in"
 	source "package/xl2tp/Config.in"
+	source "package/xtables-addons/Config.in"
 	source "package/znc/Config.in"
 
 endmenu
@@ -1247,6 +1258,7 @@ endif
 	source "package/getent/Config.in"
 	source "package/htop/Config.in"
 	source "package/iprutils/Config.in"
+	source "package/irqbalance/Config.in"
 	source "package/keyutils/Config.in"
 	source "package/kmod/Config.in"
 	source "package/lxc/Config.in"
@@ -1267,6 +1279,9 @@ if BR2_PACKAGE_BUSYBOX_SHOW_OTHERS
 	source "package/rsyslog/Config.in"
 endif
 	source "package/smack/Config.in"
+if BR2_PACKAGE_BUSYBOX_SHOW_OTHERS
+	source "package/start-stop-daemon/Config.in"
+endif
 	source "package/supervisor/Config.in"
 if BR2_PACKAGE_BUSYBOX_SHOW_OTHERS
 	source "package/sysklogd/Config.in"
