@@ -104,7 +104,7 @@ master["routing"] = {
 master["routing/route"] = { ["with_children"] = 1 }
 master["routing/route/*"] = 			{ ["style"] = "text_label" }
 master["routing/route/*/interface"] = 	{ ["type"] = "any_interface",
-										  ["options"] = options_all_interfaces }
+										  ["options"] = "all_interfaces" }
 master["routing/route/*/dest"] = 		{ ["type"] = "ipv4_nm_default" }
 master["routing/route/*/gateway"] = 	{ ["type"] = "OK" }
 master["routing/route/*/table"] =		{ ["type"] = "OK", ["default"] = "main" }

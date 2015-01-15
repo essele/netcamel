@@ -141,8 +141,8 @@ function cfsetitem_completer(tokens, n, prefix)
 
 	if type(master_opts) == "table" then
 		add_to_list(options, master_opts)
-	elseif type(master_opts) == "function" then
-		add_to_list(options, master_opts(kp, mp))
+	elseif type(master_opts) == "string" then
+		add_to_list(options, OPTIONS[master_opts](kp, mp))
 	elseif TYPEOPTS[master[mp]["type"]] then
 		add_to_list(options, TYPEOPTS[master[mp]["type"]])
 	end

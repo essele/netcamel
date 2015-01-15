@@ -499,10 +499,10 @@ function options_from_interfaces(types)
 	return rc
 end
 		
-function options_eth_interfaces(kp, mp)
+OPTIONS["eth_interfaces"] = function(kp, mp)
 	return options_from_interfaces({"ethernet"})
 end
-function options_all_interfaces(kp, mp)
+OPTIONS["all_interfaces"] = function(kp, mp)
 	return options_from_interfaces({"ethernet", "pppoe"})
 end
 
@@ -548,7 +548,7 @@ master["interface/pppoe"] = {
 
 master["interface/pppoe/*"] =						{ ["style"] = "pppoe_if" }
 master["interface/pppoe/*/attach"] =				{ ["type"] = "eth_interface",
-											  		  ["options"] = options_eth_interfaces }
+											  		  ["options"] = "eth_interfaces" }
 master["interface/pppoe/*/no-defaultroute"] =		{ ["type"] = "boolean", ["default"] = false }
 master["interface/pppoe/*/no-resolv"] =				{ ["type"] = "boolean", ["default"] = false }
 master["interface/pppoe/*/mtu"] =					{ ["type"] = "mtu" }

@@ -20,8 +20,9 @@
 --
 -- Globals for the validation routines
 --
-VALIDATOR = {}
-TYPEOPTS = {}
+VALIDATOR = {}		-- validator by type
+TYPEOPTS = {}		-- options by type
+OPTIONS = {}		-- options by name
 FAIL=0
 OK=1
 PARTIAL=2
@@ -96,6 +97,7 @@ end
 -- See if a given node exists in the kv
 --
 function node_exists(prefix, kv)
+	assert(prefix ~= nil, "node_exists provided nil for prefix")
 	for k,_ in pairs(kv) do
 		if prefix_match(k, prefix, "/") then return true end
 	end
@@ -289,8 +291,8 @@ function execute_work_using_func(funcname, work_list)
 			if func then
 				local work_hash = values_to_keys(work_list[key])
 
-				local ok, rc, err = pcall(func, work_hash)
-				if not ok then return false, string.format("[%s]: %s code error: %s", key, funcname, rc) end
+				local rc, err = func(work_hash)
+--				if not ok then return false, string.format("[%s]: %s code error: %s", key, funcname, rc) end
 				if not rc then return false, string.format("[%s]: %s failed: %s", key, funcname, err) end
 
 			end

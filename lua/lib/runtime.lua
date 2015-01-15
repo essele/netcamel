@@ -126,7 +126,7 @@ local function update_resolvers()
 	log("info", "selecting resolvers based on priority")
 
 	local resolvers = db.query("resolvers", "priority_resolvers")
-	local file = io.open("/etc/resolv.conf", "w+")
+	local file = io.open("/tmp/resolv.conf.auto", "w+")
 	for resolver in each(resolvers) do
 		file:write(string.format("nameserver %s # %s\n", resolver.value, resolver.source))
 		log("info", "- selected resolver %s (%s)", resolver.value, resolver.source)

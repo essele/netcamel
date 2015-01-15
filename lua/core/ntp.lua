@@ -176,7 +176,7 @@ master["service/ntp"] = {
 master["service/ntp/enable"] = { ["type"] = "boolean" }
 master["service/ntp/provide-service"] = { ["type"] = "boolean" }
 master["service/ntp/listen-on"] = { ["type"] = "any_interface", 
-									["options"] = options_all_interfaces,
+									["options"] = "all_interfaces",
 									["list"] = 1 }
 master["service/ntp/server"] = { ["type"] = "OK", ["list"] = 1 }
 
