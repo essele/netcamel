@@ -30,13 +30,22 @@ readline = require("readline")
 --
 local __cmds = {
 	["set"] = { desc = "blah blah" },
+	["cd"] = {},
 	["show"] = {},
 	["delete"] = {},
 	["commit"] = {},
 	["save"] = {},
 	["revert"] = {},
 }
-function match_list(list, t)
+
+--
+-- Our 'path' ... i.e. where are we in the config structure
+--
+local __path_kp = "/interface"
+local __path_mp = "/interface"
+
+
+local function match_list(list, t)
 	local rc = {}
 	for k,v in pairs(list) do
 		if k:sub(1, t:len()) == t then table.insert(rc, k) end
@@ -44,29 +53,86 @@ function match_list(list, t)
 	table.sort(rc)
 	return rc
 end
+--
+-- Simple routine to append a token onto a string, we add a slash if
+-- needed
+--
+local function append_token(s, t)
+	local rc = s
+	if s:sub(-1) ~= "/" then rc = rc .. "/" end
+	rc = rc .. t
+	return rc
+end
+
+--
+-- Build a list of possible children from master or CF_new considering
+-- constraints about container only.
+--
+local function populate_options(options, mp, kp, containeronly)
+	if mp then
+		for item in each(node_list(mp, master)) do
+			if containeronly and master[append_token(mp, item)]["type"] ~= nil then goto nextmp end
+			if item == "*" then
+				local master_opts = master[append_token(mp, "*")]["options"]
+				if type(master_opts) == "function" then
+					master_opts = master_opts(append_token(kp, "*"), append_token(mp, "*"))
+				end
+
+				for item in each(master_opts or {}) do
+					options[item] = { mp = "*", kp = "*"..item }
+				end
+			else
+				options[item] = { mp = item, kp = item }
+			end
+::nextmp::
+		end
+	end
+	if kp then
+		for item in each(node_list(kp, CF_new)) do
+			if containeronly and CF_new[append_token(kp, item)] ~= nil then goto nextkp end
+			local wc, nitem = item:match("^(%*?)(.-)$")
+			options[nitem] = { mp = (wc == "" and item) or "*", kp = item }
+::nextkp::
+		end
+	end
+end
 
 --
 -- We handle the token containing paths, so we first need to
 -- work out which subtoken we are being referenced from.
 --
-function cfpath_completer(tokens, n, prefix)
+local function cfpath_completer(tokens, n, prefix)
 	--
 	-- Map to the subtoken, keeping mtoken
 	--
 	local mtoken = tokens[1]
 	local pos = tokens[n].start + prefix:len()
+	local is_absolute = tokens[n].value:sub(1,1) == "/"
 
 	tokens = tokens[n].subtokens
 	n, prefix = readline.which_token(tokens, pos)
-	token = tokens[n]
-	value = token.value
+	local token = tokens[n]
+	local value = token.value
 
 	--
 	-- Get our values of mp and kp
 	--
-	local kp, mp, slash
-	if n==1 then kp, mp, slash = "", "", ""
-	else kp, mp, slash = tokens[n-1].kp, tokens[n-1].mp, "/" end
+	local kp, mp
+	if n==1 then 
+		if is_absolute then
+			kp, mp = "", ""
+		else
+			kp, mp = __path_kp, __path_mp
+		end
+	else 
+		kp, mp = tokens[n-1].kp, tokens[n-1].mp
+	end
+
+	--
+	-- Autocomplete . and ..
+	--
+	if prefix == "." and token.status ~= FAIL then return "./" end
+	if prefix == ".." and token.status ~= FAIL then return "/" end
 
 	--
 	-- Retrieve matches from our pre-cached list...
@@ -96,12 +162,24 @@ function cfpath_completer(tokens, n, prefix)
 	-- check if we are a wildcard and add a dummy entry.
 	--
 	local more = {}
-	populate_options(more, mtoken.use_master and mp..slash..node.mp, 
-								mtoken.use_new and kp..slash..node.kp, mtoken.containeronly)
+	populate_options(more, mtoken.use_master and append_token(mp, node.mp),
+								mtoken.use_new and append_token(kp, node.kp), mtoken.containeronly)
 	if #more == 0 then
-		local wc = node_list(mp..slash..node.mp, master)
--- TODO: containeronly check here???
-		if #wc > 0 then table.insert(more, "dummy") end
+		--
+		-- See if we are a wildcard, if we are then add a dummy more since there will be
+		-- more fields. If we are containeronly then we need to check the extra
+		-- fields to see if they are containers
+		--
+		local moreflag = false
+		local moremp = append_token(mp, node.mp)
+		local wc = node_list(moremp, master)
+		if mtoken.containeronly then
+			for n in each(wc) do
+				if master[append_token(moremp, n)]["type"] == nil then moreflag = true end
+			end
+		elseif #wc > 0 then moreflag = true end
+
+		if moreflag then table.insert(more, "dummy") end
 	end
 
 	local match, more = next(matches), next(more)
@@ -116,7 +194,7 @@ end
 --
 -- TODO: if we are a list item then should we add a space after completion?
 --
-function cfsetitem_completer(tokens, n, prefix)
+local function cfsetitem_completer(tokens, n, prefix)
 	local token = tokens[n]
 	local pos = token.start + prefix:len()
 	local mp = tokens[2].mp
@@ -165,53 +243,24 @@ function cfsetitem_completer(tokens, n, prefix)
 	return matches[1]:sub(#prefix+1)
 end
 
---
--- Build a list of possible children from master or CF_new considering
--- constraints about container only.
---
-function populate_options(options, mp, kp, containeronly)
-	if mp then
-		local slash = (mp == "" and "") or "/"
-		for item in each(node_list(mp, master)) do
-			if containeronly and master[mp..slash..item]["type"] ~= nil then goto nextmp end
-			if item == "*" then
-				local master_opts = master[mp..slash.."*"]["options"]
-				if type(master_opts) == "function" then
-					master_opts = master_opts(kp..slash.."*", mp..slash.."*")
-				end
-
-				for item in each(master_opts or {}) do
-					options[item] = { mp = "*", kp = "*"..item }
-				end
-			else
-				options[item] = { mp = item, kp = item }
-			end
-::nextmp::
-		end
-	end
-	if kp then
-		local slash = (kp == "" and "") or "/"
-		for item in each(node_list(kp, CF_new)) do
-			if containeronly and CF_new[kp..slash..item] then goto nextkp end
-			local wc, nitem = item:match("^(%*?)(.-)$")
-			options[nitem] = { mp = (wc == "" and item) or "*", kp = item }
-::nextkp::
-		end
-	end
-end
 
 --
 -- We get called for the path token (usually token 2) so we can 
 -- re-tokenise and then run through each token that needs validating
 --
-function cfpath_validator(tokens, n, input)
+local function cfpath_validator(tokens, n, input)
 	local ptoken = tokens[n]
 	local value = ptoken.value
 	local allfail = false
-	local mp, kp, slash = "", "", ""
 
 	if not ptoken.subtokens then ptoken.subtokens = {} end
 	readline.tokenise(ptoken.subtokens, value, "/", ptoken.start-1)
+
+	if value:sub(1,1) == "/" then 
+		mp, kp = "/", "/"
+	else
+		mp, kp = __path_mp, __path_kp
+	end
 
 	for i,token in ipairs(ptoken.subtokens) do
 		local value = token.value
@@ -229,6 +278,21 @@ function cfpath_validator(tokens, n, input)
 		end
 
 		--
+		-- Allow the use of .. to go back if there is room
+		--
+		if value:sub(1,1) == "." and mp:match("/[^/]+$") then
+			if value == "." then
+				token.status = PARTIAL
+			elseif value == ".." then
+				mp = mp:gsub("/[^/]+$", "")
+				kp = kp:gsub("/[^/]+$", "")
+				if #mp == 0 then mp, kp = "/", "/" end
+				token.status = OK
+			end
+			goto done
+		end
+
+		--
 		-- * is not allowed, so instant fail.
 		--
 		if value:sub(1,1) == "*" then token.status = FAIL goto done end
@@ -236,8 +300,8 @@ function cfpath_validator(tokens, n, input)
 		-- try match against full values
 		--
 		if token.options[value] then
-			mp = mp..slash..token.options[value].mp
-			kp = kp..slash..token.options[value].kp
+			mp = append_token(mp, token.options[value].mp)
+			kp = append_token(kp, token.options[value].kp)
 			token.status = OK
 			goto done
 		end
@@ -246,9 +310,9 @@ function cfpath_validator(tokens, n, input)
 		-- master list)
 		--
 		if tokens[1].use_master then
-			if master[mp..slash.."*"] then
-				mp = mp..slash.."*"
-				kp = kp..slash.."*"..value
+			if master[append_token(mp, "*")] then
+				mp = append_token(mp, "*")
+				kp = append_token(kp, "*"..value)
 				local rc, err = VALIDATOR[master[mp].style](value, kp)
 				if rc ~= FAIL then token.status = rc goto done end
 			end
@@ -272,13 +336,12 @@ function cfpath_validator(tokens, n, input)
 		if token.status == OK then token.mp, token.kp = mp, kp end
 
 ::continue::
-		slash = "/"
 	end
 
 	-- if we want to non-container then we are partial unless we have it
 	local finalstatus = ptoken.subtokens[#ptoken.subtokens].status
 	if tokens[1].mustbenode and finalstatus ~= FAIL then
-		if master[mp] and master[mp]["type"] == nil then
+		if #mp == 0 or (master[mp] and master[mp]["type"] == nil) then
 			readline.mark_all(ptoken.subtokens, 1, PARTIAL)
 		end
 	end
@@ -289,7 +352,7 @@ function cfpath_validator(tokens, n, input)
 	tokens[n].mp = ptoken.subtokens[#ptoken.subtokens].mp
 end
 
-function tv2(tokens, n, input)
+local function tv2(tokens, n, input)
 	local ptoken = tokens[n]
 	local value = ptoken.value
 	local mp = tokens[2].mp
@@ -307,7 +370,7 @@ function tv2(tokens, n, input)
 end
 
 
-function syntax_set(tokens)
+local function syntax_set(tokens)
 	--
 	-- Only allow the cfpath completer unless the cfpath
 	-- gets properly validated
@@ -339,7 +402,7 @@ function syntax_set(tokens)
 	end
 end
 
-function syntax_delete(tokens)
+local function syntax_delete(tokens)
 	tokens[2].completer = cfpath_completer
 	tokens[1].default_completer = nil
 	tokens[1].use_master = false
@@ -365,9 +428,20 @@ function syntax_delete(tokens)
 	end
 end
 
+local function syntax_cd(tokens)
+	tokens[2].completer = cfpath_completer
+	tokens[1].default_completer = nil
+	tokens[1].use_master = true
+	tokens[1].use_new = true
+	tokens[1].mustbenode = false
+	tokens[1].containeronly = true
 
+	if tokens[2].status ~= OK then cfpath_validator(tokens, 2) end
+	if tokens[2].status ~= OK then readline.mark_all(tokens, 3, FAIL) return end
+	if tokens[3] then readline.mark_all(tokens, 3, FAIL) return end
+end
 
-function syntax_level1(tokens)
+local function syntax_level1(tokens)
 	local token = tokens[1]
 	local value = token.value
 	local status
@@ -378,6 +452,8 @@ function syntax_level1(tokens)
 			syntax_set(tokens, input)
 		elseif value == "delete" and tokens[2] then
 			syntax_delete(tokens, input)
+		elseif value == "cd" and tokens[2] then
+			syntax_cd(tokens, input)
 		end
 	elseif tokens[2] then
 		token.status = FAIL
@@ -397,7 +473,7 @@ end
 -- Keep the previous setting if we have one since nothing would have
 -- changed. If we need to recalc then do so.
 --
-function syntax_checker(tokens, input)
+local function syntax_checker(tokens, input)
 	local allfail = false
 
 	syntax_level1(tokens)
@@ -413,7 +489,7 @@ end
 -- Or a list that will be output to the screen (and not used in any other
 -- way so the format is free)
 --
-function system_completer(tokens, n, prefix)
+local function system_completer(tokens, n, prefix)
 	local matches = match_list(__cmds, prefix)
 	local ppos = prefix:len() + 1
 
@@ -438,7 +514,7 @@ end
 -- The completer will work out which function to call
 -- to provide completion information
 --
-function initial_completer(tokens, input, pos)
+local function initial_completer(tokens, input, pos)
 	local n, prefix = readline.which_token(tokens, pos)
 
 	if n == 1 then
@@ -450,6 +526,83 @@ function initial_completer(tokens, input, pos)
 	end
 end
 
+
+local function setprompt(kp)
+	local str = kp:gsub("%*", "")
+
+	local prompt = {
+		{ txt = "[", clr = 7 },
+		{ txt = str, clr = 6 },
+		{ txt = "] ", clr = 7 },
+		{ txt = "", clr = 9 } }
+	return prompt
+end
+
+
+function interactive()
+	-- Read History
+	history = {}
+	local file = io.open("etc/__history", "r")
+	if file then
+		for h in file:lines() do table.insert(history, h) end
+	end
+
+	local prompt = setprompt(__path_kp)
+
+	readline.init()
+	while true do
+		local cmdline, tags = readline.readline(prompt, history, syntax_checker, initial_completer)
+		if not cmdline then break end
+		if cmdline:match("^%s*$") then goto continue end
+		table.insert(history, cmdline)
+
+		if tags[1].value == "show" then
+			show(CF_current, CF_new)
+		elseif tags[1].value == "cd" then
+			__path_kp = tags[2].kp
+			__path_mp = tags[2].mp
+			prompt = setprompt(__path_kp)
+		elseif tags[1].value == "set" then
+			print("2="..tags[2].value)
+			print("3="..tags[3].value)
+
+			local has_quotes = tags[3].value:match("^\"(.*)\"$")
+			if has_quotes then
+				tags[3].value = has_quotes
+			end
+		
+			local rc, err = set(CF_new, tags[2].value, tags[3].value)
+			if not rc then print("Error: " .. tostring(err)) end
+		elseif tags[1].value == "delete" then
+			print("2="..tostring(tags[2].value))
+			print("3="..tostring(tags[3] and tags[3].value))
+			local list_elem = (tags[3] and tags[3].value ~= "" and tags[3].value) or nil
+
+			local rc, err = delete(CF_new, tags[2].value, list_elem)
+			if not rc then print("Error: " .. tostring(err)) end
+		elseif tags[1].value == "commit" then
+			local rc, err = commit(CF_current, CF_new)
+			if not rc then 
+				print("Error: " .. err)
+			else
+				CF_current = copy_table(CF_new)
+			end
+		elseif tags[1].value == "save" then
+			local rc, err = save(CF_current)
+			if not rc then print("Error: " .. err) end
+		end
+
+	::continue::
+	end
+	readline.finish()
+
+	-- Save history
+	local file = io.open("etc/__history", "w+")
+	if file then
+		for h in each(history) do file:write(h .. "\n") end
+		file:close()
+	end
+end
 
 
 

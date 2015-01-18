@@ -61,8 +61,8 @@ local function build_config()
 	--
 	-- First process the forwarding section
 	--
-	if node_exists("service/dns/forwarding", CF_new) then
-		local forwarding = node_vars("service/dns/forwarding", CF_new)
+	if node_exists("/service/dns/forwarding", CF_new) then
+		local forwarding = node_vars("/service/dns/forwarding", CF_new)
 		push(conf, "# -- forwarding --")
 		push(conf, string.format("cache-size=%s", forwarding["cache-size"]))
 		for interface in each(forwarding["listen-on"] or {}) do
@@ -90,11 +90,11 @@ local function build_config()
 	--
 	-- DHCP Ranges
 	--
-	if node_exists("service/dhcp/range", CF_new) then
+	if node_exists("/service/dhcp/range", CF_new) then
 		push(conf, "# -- dhcp ranges --")
-		for rangename in each(node_list("service/dhcp/range", CF_new)) do
+		for rangename in each(node_list("/service/dhcp/range", CF_new)) do
 			print("RANGENAME="..rangename)
-			local cf = node_vars("service/dhcp/range/"..rangename, CF_new)
+			local cf = node_vars("/service/dhcp/range/"..rangename, CF_new)
 			local rc = "dhcp-range="..cf.start
 			if(cf["end"]) then rc = rc .. "," .. cf["end"] end
 			if(cf.netmask) then rc = rc .. "," .. cf.netmask end
@@ -108,10 +108,10 @@ local function build_config()
 	--
 	-- Domain-Match
 	--
-	if node_exists("service/dns/domain-match", CF_new) then
+	if node_exists("/service/dns/domain-match", CF_new) then
 		push(conf, "# -- domain-match --")
-		for v in each(node_list("service/dns/domain-match", CF_new)) do
-			local dmatch = node_vars("service/dns/domain-match/"..v, CF_new)
+		for v in each(node_list("/service/dns/domain-match", CF_new)) do
+			local dmatch = node_vars("/service/dns/domain-match/"..v, CF_new)
 			if dmatch.group then
 				push(conf, "# ("..v:sub(2)..")")
 				for domain in each(dmatch.domain) do
@@ -138,14 +138,14 @@ local function dnsmasq_commit(changes)
 	--
 	-- If we were running then we need to stop
 	--
-	if node_exists("service/dns", CF_current) or node_exists("service/dhcp/range", CF_current) then
+	if node_exists("/service/dns", CF_current) or node_exists("/service/dhcp/range", CF_current) then
 		stop_dnsmasq()
 	end
 
 	--
 	-- Check to see if we have a config at all!
 	--
-	if not node_exists("service/dns", CF_new) and not node_exists("service/dhcp", CF_new) then
+	if not node_exists("/service/dns", CF_new) and not node_exists("/service/dhcp", CF_new) then
 		print("No DNSMASQ config required, stopping daemon")
 		return true
 	end
@@ -180,21 +180,21 @@ local function dnsmasq_precommit(changes)
 	--
 	-- dns/forwarding has a 'listen-on' interface list
 	--
-	if CF_new["service/dns/forwarding/listen-on"] then
-		for interface in each(CF_new["service/dns/forwarding/listen-on"]) do
+	if CF_new["/service/dns/forwarding/listen-on"] then
+		for interface in each(CF_new["/service/dns/forwarding/listen-on"]) do
 			if not node_exists(interface_path(interface), CF_new) then
-				return false, string.format("service/dns/forwarding/listen-on interface not valid: %s", interface)
+				return false, string.format("/service/dns/forwarding/listen-on interface not valid: %s", interface)
 			end
 		end
 	end
 	--
 	-- dns/domain-match has an ipset reference
 	--
-	if node_exists("service/dns/domain-match", CF_new) then
+	if node_exists("/service/dns/domain-match", CF_new) then
 		print("DOMAINMATCH")
-		for node in each(matching_list("service/dns/domain-match/%/group", CF_new)) do
+		for node in each(matching_list("/service/dns/domain-match/%/group", CF_new)) do
 			local set = CF_new[node]
-			if not node_exists("iptables/set/*"..set, CF_new) then
+			if not node_exists("/iptables/set/*"..set, CF_new) then
 				return false, string.format("%s ipset not valid: %s", node, set)
 			end
 		end
@@ -203,13 +203,13 @@ local function dnsmasq_precommit(changes)
 	-- dhcp ranges need a start point, and if they have a broadcast they must
 	-- have a netmask
 	--
-	if node_exists("service/dhcp/range", CF_new) then
-		for node in each(node_list("service/dhcp/range", CF_new)) do
-			local cf = node_vars("service/dhcp/range/"..node, CF_new)
+	if node_exists("/service/dhcp/range", CF_new) then
+		for node in each(node_list("/service/dhcp/range", CF_new)) do
+			local cf = node_vars("/service/dhcp/range/"..node, CF_new)
 			local rangename = node:gsub("^*", "")
-			if not cf.start then return false, "service/dhcp/range/"..rangename.." requires start address" end
+			if not cf.start then return false, "/service/dhcp/range/"..rangename.." requires start address" end
 			if cf.broadcast and not cf.netmask then
-				return false, "service/dhcp/range/"..rangename.." broadcast requires netmask entry"
+				return false, "/service/dhcp/range/"..rangename.." broadcast requires netmask entry"
 			end
 		end
 	end
@@ -248,31 +248,31 @@ end
 --
 -- Main interface config definition
 --
-master["service/dns"] = 						{ ["commit"] = dnsmasq_commit,
+master["/service/dns"] = 						{ ["commit"] = dnsmasq_commit,
 												  ["precommit"] = dnsmasq_precommit }
 
-master["service/dns/forwarding"] = {}
-master["service/dns/forwarding/cache-size"] = 	{ ["type"] = "OK", ["default"] = 200 }
-master["service/dns/forwarding/listen-on"] = 	{ ["type"] = "any_interface", 
+master["/service/dns/forwarding"] = {}
+master["/service/dns/forwarding/cache-size"] = 	{ ["type"] = "OK", ["default"] = 200 }
+master["/service/dns/forwarding/listen-on"] = 	{ ["type"] = "any_interface", 
 												  ["options"] = "all_interfaces",
 												  ["list"] = 1 }
-master["service/dns/forwarding/server"] = 		{ ["type"] = "OK", ["list"] = 1 }
-master["service/dns/forwarding/options"] = 		{ ["type"] = "OK", ["list"] = 1 }
+master["/service/dns/forwarding/server"] = 		{ ["type"] = "OK", ["list"] = 1 }
+master["/service/dns/forwarding/options"] = 		{ ["type"] = "OK", ["list"] = 1 }
 
-master["service/dns/domain-match"] = {}
-master["service/dns/domain-match/*"] = 			{ ["style"] = "text_label" }
-master["service/dns/domain-match/*/domain"] = 	{ ["type"] = "OK", ["list"] = 1 }
-master["service/dns/domain-match/*/group"] = 	{ ["type"] = "ipset" }
+master["/service/dns/domain-match"] = {}
+master["/service/dns/domain-match/*"] = 			{ ["style"] = "text_label" }
+master["/service/dns/domain-match/*/domain"] = 	{ ["type"] = "OK", ["list"] = 1 }
+master["/service/dns/domain-match/*/group"] = 	{ ["type"] = "ipset" }
 
-master["service/dns/file"] = 					{ ["type"] = "file/text" }
+master["/service/dns/file"] = 					{ ["type"] = "file/text" }
 
-master["service/dhcp"] = 						{  ["delegate"] = "service/dns" }
-master["service/dhcp/range"] =					{}
-master["service/dhcp/range/*"] =				{ ["style"] = "OK" }
-master["service/dhcp/range/*/start"] = 			{ ["type"] = "ipv4" }
-master["service/dhcp/range/*/end"] = 			{ ["type"] = "ipv4" }
-master["service/dhcp/range/*/broadcast"] = 		{ ["type"] = "ipv4" }
-master["service/dhcp/range/*/netmask"] = 		{ ["type"] = "ipv4" }
-master["service/dhcp/range/*/leasetime"] =		{ ["type"] = "OK" }
+master["/service/dhcp"] = 						{  ["delegate"] = "/service/dns" }
+master["/service/dhcp/range"] =					{}
+master["/service/dhcp/range/*"] =				{ ["style"] = "OK" }
+master["/service/dhcp/range/*/start"] = 			{ ["type"] = "ipv4" }
+master["/service/dhcp/range/*/end"] = 			{ ["type"] = "ipv4" }
+master["/service/dhcp/range/*/broadcast"] = 		{ ["type"] = "ipv4" }
+master["/service/dhcp/range/*/netmask"] = 		{ ["type"] = "ipv4" }
+master["/service/dhcp/range/*/leasetime"] =		{ ["type"] = "OK" }
 
 

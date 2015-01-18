@@ -96,13 +96,13 @@ end
 
 local function ethernet_commit(changes)
 	logroot("intf")
-	local state = process_changes(changes, "interface/ethernet")
+	local state = process_changes(changes, "/interface/ethernet")
 
 	--
 	-- Remove any interface that has been removed from the system...
 	--
 	for ifnum in each(state.removed) do 
-		local oldcf = node_vars("interface/ethernet/"..ifnum, CF_current) or {}
+		local oldcf = node_vars("/interface/ethernet/"..ifnum, CF_current) or {}
 		local physical = interface_name("ethernet/"..ifnum)
 
 		logroot("intf", physical)
@@ -120,11 +120,11 @@ local function ethernet_commit(changes)
 	-- Modify an interface ... we'll work through the actual changes
 	--
 	for ifnum in each(state.changed) do 
-		local cf = node_vars("interface/ethernet/"..ifnum, CF_new) or {}
-		local oldcf = node_vars("interface/ethernet/"..ifnum, CF_current) or {}
+		local cf = node_vars("/interface/ethernet/"..ifnum, CF_new) or {}
+		local oldcf = node_vars("/interface/ethernet/"..ifnum, CF_current) or {}
 		local physical = interface_name("ethernet/"..ifnum)
 
-		local changed = values_to_keys(node_list("interface/ethernet/"..ifnum, changes))
+		local changed = values_to_keys(node_list("/interface/ethernet/"..ifnum, changes))
 		logroot("intf", physical)
 		log("info", "changing interface")
 
@@ -178,7 +178,7 @@ local function ethernet_commit(changes)
 	-- Add an interface
 	--
 	for ifnum in each(state.added) do 
-		local cf = node_vars("interface/ethernet/"..ifnum, CF_new)
+		local cf = node_vars("/interface/ethernet/"..ifnum, CF_new)
 		local physical = interface_name("ethernet/"..ifnum)
 
 		logroot("intf", physical)
@@ -215,8 +215,8 @@ end
 --
 --------------------------------------------------------------------------------
 local function pppoe_precommit(changes)
-	for ifnum in each(node_list("interface/pppoe", CF_new)) do
-		local cf = node_vars("interface/pppoe/"..ifnum, CF_new) or {}
+	for ifnum in each(node_list("/interface/pppoe", CF_new)) do
+		local cf = node_vars("/interface/pppoe/"..ifnum, CF_new) or {}
 		print("PPPOE Precommit -- node: " .. ifnum)
 
 		--
@@ -324,7 +324,7 @@ end
 --
 local function pppoe_commit(changes)
 	print("PPPOE")
-	local state = process_changes(changes, "interface/pppoe")
+	local state = process_changes(changes, "/interface/pppoe")
 
 	--
 	-- If we have added, modified or changed any of the interfaces we are
@@ -339,8 +339,8 @@ local function pppoe_commit(changes)
 
 	for ifnum in each(todo) do
 		print("WOULD PROCESS: pppoe"..ifnum)
-		local cf = node_vars("interface/pppoe/"..ifnum, CF_new) or {}
-		local oldcf = node_vars("interface/pppoe/"..ifnum, CF_current) or {}
+		local cf = node_vars("/interface/pppoe/"..ifnum, CF_new) or {}
+		local oldcf = node_vars("/interface/pppoe/"..ifnum, CF_current) or {}
 		local physical = interface_name("pppoe/"..ifnum)
 
 		logroot("intf", physical)
@@ -465,7 +465,7 @@ end
 --
 function interface_path(interface)
 	local t, i = interface:match("^([^/]+)/%*?(%d+)$")
-	if t then return string.format("interface/%s/*%s", t, i) end
+	if t then return string.format("/interface/%s/*%s", t, i) end
 	return nil
 end
 
@@ -492,7 +492,7 @@ end
 function options_from_interfaces(types)
 	local rc = {}
 	for _,t in ipairs(types) do
-		for node in each(node_list("interface/"..t, CF_new)) do
+		for node in each(node_list("/interface/"..t, CF_new)) do
 			push(rc, t .."/"..node:gsub("^%*", ""))
 		end
 	end
@@ -509,55 +509,55 @@ end
 --
 -- Ethernet interfaces...
 --
-master["interface"] = {}
-master["interface/ethernet"] = { 
+master["/interface"] = {}
+master["/interface/ethernet"] = { 
 	["commit"] = ethernet_commit,
 	["depends"] = { "iptables" }, 
 	["with_children"] = 1
 }
 
-master["interface/ethernet/*"] = 					{ ["style"] = "ethernet_unit",
+master["/interface/ethernet/*"] = 					{ ["style"] = "ethernet_unit",
 											  		  ["options"] = { "0", "1", "2" } }
-master["interface/ethernet/*/ip"] = 				{ ["type"] = "ipv4_nm" }
-master["interface/ethernet/*/resolver"] =			{ ["type"] = "ipv4", ["list"] = true }
-master["interface/ethernet/*/defaultroute"] =		{ ["type"] = "ipv4" }
-master["interface/ethernet/*/resolv-pri"] =			{ ["type"] = "2-digit", ["default"] = "80" }
-master["interface/ethernet/*/defaultroute-pri"] =	{ ["type"] = "2-digit", ["default"] = "80" }
-master["interface/ethernet/*/defaultroute-table"] =	{ ["type"] = "OK", ["default"] = "main" }
-master["interface/ethernet/*/mtu"] = 				{ ["type"] = "mtu" }
-master["interface/ethernet/*/disabled"] = 			{ ["type"] = "boolean" }
+master["/interface/ethernet/*/ip"] = 				{ ["type"] = "ipv4_nm" }
+master["/interface/ethernet/*/resolver"] =			{ ["type"] = "ipv4", ["list"] = true }
+master["/interface/ethernet/*/defaultroute"] =		{ ["type"] = "ipv4" }
+master["/interface/ethernet/*/resolv-pri"] =			{ ["type"] = "2-digit", ["default"] = "80" }
+master["/interface/ethernet/*/defaultroute-pri"] =	{ ["type"] = "2-digit", ["default"] = "80" }
+master["/interface/ethernet/*/defaultroute-table"] =	{ ["type"] = "OK", ["default"] = "main" }
+master["/interface/ethernet/*/mtu"] = 				{ ["type"] = "mtu" }
+master["/interface/ethernet/*/disabled"] = 			{ ["type"] = "boolean" }
 
 --
 -- Support DHCP on the interface (off by default)
 --
-master["interface/ethernet/*/dhcp-enable"] = 				{ ["type"] = "boolean", ["default"] = false }
-master["interface/ethernet/*/dhcp-no-resolv"] = 			{ ["type"] = "boolean", ["default"] = false }
-master["interface/ethernet/*/dhcp-no-defaultroute"] = 		{ ["type"] = "boolean", ["default"] = false }
-master["interface/ethernet/*/dhcp-resolv-pri"] = 			{ ["type"] = "2-digit", ["default"] = "60" }
-master["interface/ethernet/*/dhcp-defaultroute-pri"] = 		{ ["type"] = "2-digit", ["default"] = "60" }
-master["interface/ethernet/*/dhcp-defaultroute-table"] = 	{ ["type"] = "OK", ["default"] = "main" }
+master["/interface/ethernet/*/dhcp-enable"] = 				{ ["type"] = "boolean", ["default"] = false }
+master["/interface/ethernet/*/dhcp-no-resolv"] = 			{ ["type"] = "boolean", ["default"] = false }
+master["/interface/ethernet/*/dhcp-no-defaultroute"] = 		{ ["type"] = "boolean", ["default"] = false }
+master["/interface/ethernet/*/dhcp-resolv-pri"] = 			{ ["type"] = "2-digit", ["default"] = "60" }
+master["/interface/ethernet/*/dhcp-defaultroute-pri"] = 		{ ["type"] = "2-digit", ["default"] = "60" }
+master["/interface/ethernet/*/dhcp-defaultroute-table"] = 	{ ["type"] = "OK", ["default"] = "main" }
 
 --
 -- pppoe interfaces...
 --
-master["interface/pppoe"] = {
+master["/interface/pppoe"] = {
 	["commit"] = pppoe_commit,
 	["precommit"] = pppoe_precommit,
 	["with_children"] = 1,
 }
 
-master["interface/pppoe/*"] =						{ ["style"] = "pppoe_if" }
-master["interface/pppoe/*/attach"] =				{ ["type"] = "eth_interface",
+master["/interface/pppoe/*"] =						{ ["style"] = "pppoe_if" }
+master["/interface/pppoe/*/attach"] =				{ ["type"] = "eth_interface",
 											  		  ["options"] = "eth_interfaces" }
-master["interface/pppoe/*/no-defaultroute"] =		{ ["type"] = "boolean", ["default"] = false }
-master["interface/pppoe/*/no-resolv"] =				{ ["type"] = "boolean", ["default"] = false }
-master["interface/pppoe/*/mtu"] =					{ ["type"] = "mtu" }
-master["interface/pppoe/*/resolv-pri"] = 			{ ["type"] = "2-digit", ["default"] = "40" }
-master["interface/pppoe/*/defaultroute-pri"] = 		{ ["type"] = "2-digit", ["default"] = "40" }
-master["interface/pppoe/*/defaultroute-table"] = 	{ ["type"] = "OK", ["default"] = "main" }
-master["interface/pppoe/*/username"] =				{ ["type"] = "OK" }
-master["interface/pppoe/*/password"] =				{ ["type"] = "OK" }
-master["interface/pppoe/*/disabled"] = 				{ ["type"] = "boolean" }
+master["/interface/pppoe/*/no-defaultroute"] =		{ ["type"] = "boolean", ["default"] = false }
+master["/interface/pppoe/*/no-resolv"] =				{ ["type"] = "boolean", ["default"] = false }
+master["/interface/pppoe/*/mtu"] =					{ ["type"] = "mtu" }
+master["/interface/pppoe/*/resolv-pri"] = 			{ ["type"] = "2-digit", ["default"] = "40" }
+master["/interface/pppoe/*/defaultroute-pri"] = 		{ ["type"] = "2-digit", ["default"] = "40" }
+master["/interface/pppoe/*/defaultroute-table"] = 	{ ["type"] = "OK", ["default"] = "main" }
+master["/interface/pppoe/*/username"] =				{ ["type"] = "OK" }
+master["/interface/pppoe/*/password"] =				{ ["type"] = "OK" }
+master["/interface/pppoe/*/disabled"] = 				{ ["type"] = "boolean" }
 
 --
 -- We will use a table to manage the resolvers that come in from various sources
@@ -585,11 +585,11 @@ function interface_init()
 	--
 	-- Trigger the pppoe work if the underlying ethernet changes
 	--
-	add_trigger("interface/ethernet/*", "interface/pppoe/@ethernet_change")
+	add_trigger("/interface/ethernet/*", "/interface/pppoe/@ethernet_change")
 
 	--
 	-- Make sure we deal with ethernet before we consider pppoe
 	--
-	add_dependency("interface/pppoe", "interface/ethernet")
+	add_dependency("/interface/pppoe", "/interface/ethernet")
 end
 

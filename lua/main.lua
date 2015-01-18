@@ -97,116 +97,6 @@ function other()
 end
 
 
-master["test"] = { ["commit"] = other }
-master["test/lee"] = { ["type"] = "name" }
-
-
-
---current["interface/ethernet/*0/ip"] = "192.168.95.1/24"
-current["interface/ethernet/*1/ip"] = "192.168.95.2/24"
-current["interface/ethernet/*2/ip"] = "192.168.95.33"
-current["interface/ethernet/*2/mtu"] = 1500
---current["interface/ethernet/*0/mtu"] = 1500
-
-current["dns/file"] = "afgljksdhfglkjsdhf glsjdfgsdfg\nsdfgkjsdfkljg\nsdfgsdg\nsdfgsdfg\n"
-
-current["interface/pppoe/*0/user-id"] = "lee"
-current["interface/pppoe/*0/attach"] = "eth0"
-current["interface/pppoe/*0/password"] = "hidden"
-current["interface/pppoe/*0/default-route"] = "auto"
-current["interface/pppoe/*0/mtu"] = 1492
-current["interface/pppoe/*0/disabled"] = true
-
-new = copy_table(current)
-new["interface/ethernet/*1/ip"] = "192.168.95.4/24"
-new["interface/ethernet/*1/disabled"] = true
-new["interface/ethernet/*0/ip"] = "192.168.98.44/24"
-new["interface/ethernet/*0/ip"] = nil
---new["interface/ethernet/*0/disabled"] = true
-new["interface/ethernet/*0/mtu"] = 1492
---current["interface/ethernet/bill"] = "nope"
-
-new["iptables/*filter/*INPUT/rule/*0001"] = "(stateful-firewall)"
-new["iptables/*filter/*INPUT/rule/*0002"] = "(input-allowed-services)"
-new["iptables/*filter/*FORWARD/policy"] = "ACCEPT"
-new["iptables/*filter/*FORWARD/rule/*10"] = "-s 12.3.4 -p {{fred}} -j ACCEPT"
-new["iptables/*filter/*FORWARD/rule/*20"] = "-d -a {{bill}} -b {{fred}} 2.3.4.5 -j DROP"
-new["iptables/*filter/*FORWARD/rule/*30"] = "-d 2.3.4.5 -j DROP"
-new["iptables/*filter/*FORWARD/rule/*40"] = "-d 2.3.4.5 -j another-chain -m fred"
-
-new["iptables/*filter/*custom-chain/rule/*10"] = "-d 2.3.4.5 -j another-chain -m fred"
-new["iptables/*filter/*another-chain/rule/*10"] = "-d 2.3.4.5 -j ACCEPT -m fred"
---new["iptables/*filter/*another-chain/rule/*20"] = "-d 2.3.4.5 -j custom-chain -m fred"
-
-new["service/ntp/enable"] = true
-new["service/ntp/provide-service"] = true
-new["service/ntp/listen-on"] = { "ethernet/0", "pppoe/0" }
-new["service/ntp/server"] = { "0.pool.ntp.org", "1.pool.ntp.org" }
-
---
---
-current["iptables/set/*vpn-dst/type"] = "hash:ip"
-current["iptables/set/*vpn-dst/item"] = { "1.2.3.4", "2.2.2.2", "8.8.8.8" }
-
-new["iptables/set/*vpn-dst/type"] = "hash:ip"
-new["iptables/set/*vpn-dst/item"] = { "2.2.2.2", "8.8.8.8" }
-
-new["iptables/variable/*fred/value"] = { "fred-one", "fred-two" }
-new["iptables/variable/*bill/value"] = { "billX" }
-
-new["dns/forwarding/server"] = { "one", "three", "four" }
-new["dns/forwarding/cache-size"] =150
-new["dns/forwarding/listen-on"] = { "ethernet/0" }
---new["dns/forwarding/listen-on"] = { "pppoe4" }
---new["dns/forwarding/options"] = { "no-resolv", "other-stuff" }
-
-new["dns/domain-match/*xbox/domain"] = { "XBOXLIVE.COM", "xboxlive.com", "live.com" }
-new["dns/domain-match/*xbox/group"] = "vpn-dst"
-new["dns/domain-match/*iplayer/domain"] = { "bbc.co.uk", "bbci.co.uk" }
-new["dns/domain-match/*iplayer/group"] = "vpn-dst"
-
-new["dhcp/flag"] = "hello"
-
-
---new = nil
---current = nil
-
-CF_new = new
-CF_current = current
-
-
---[[
---rc, err = set(new, "interface/ethernet/0/mtu", "1234")
---if not rc then print("ERROR: " .. err) end
-rc, err = set(new, "iptables/filter/INPUT/rule/0030", "-a -b -c")
-if not rc then print("ERROR: " .. err) end
-
-rc, err = set(new, "iptables/nat/PREROUTING/rule/0010", "-a -b -c")
-rc, err = set(new, "iptables/mangle/PREROUTING/rule/0010", "-a -b -x {{fred}} -c")
-rc, err = set(new, "iptables/nat/POSTROUTING/rule/0020", "-a -b -c")
-
-
---delete(new, "iptables")
-delete(new, "interface/ethernet/2")
---delete(new, "dns")
---delete(new, "dhcp")
-
-show(current, new)
---dump(new)
-
---os.exit(0)
-
---dump(new)
-----local xx = import("sample")
---
-----show(xx, xx)
---
-
---print("\n\n")
-
-]]--
-
-
 --
 -- INIT (commit)
 --
@@ -228,7 +118,25 @@ show(current, new)
 CF_current = {}
 CF_new = {}
 
+--[[
+CF_new["/system/hostname"] = "blahblah"
 
+
+show(CF_current, CF_new)
+set(CF_new, "/system/hostname", "freddy")
+set(CF_new, "/service/ntp/server", "freddy")
+set(CF_new, "/interface/ethernet/2/ip", "1.2.3.4/16")
+
+show(CF_current, CF_new)
+
+dump("/tmp/lee", CF_new)
+
+
+xx = import("/tmp/lee")
+show(CF_current, xx)
+
+os.exit(0)
+]]--
 --
 -- If we are called with "init" as the arg then we load and commit the boot config
 --
@@ -247,15 +155,6 @@ if arg[1] == "init" then
 	os.exit(0)
 end
 
-
-history = {}
-
--- Read History
-local file = io.open("etc/__history", "r")
-if file then
-	for h in file:lines() do table.insert(history, h) end
-end
-
 -- Read current config
 CF_current = import("etc/boot.conf")
 if not CF_current then
@@ -263,6 +162,18 @@ if not CF_current then
 	CF_current = {}
 end
 CF_new = copy_table(CF_current)
+
+interactive()
+os.exit(0)
+
+
+-- Read History
+history = {}
+local file = io.open("etc/__history", "r")
+if file then
+	for h in file:lines() do table.insert(history, h) end
+end
+
 
 prompt = {
 	{ txt = "[", clr = 7 },
@@ -305,8 +216,6 @@ while true do
 			CF_current = copy_table(CF_new)
 		end
 	elseif tags[1].value == "save" then
-		-- TODO
-		-- Save current config
 		local rc, err = save(CF_current)
 		if not rc then print("Error: " .. err) end
 	end

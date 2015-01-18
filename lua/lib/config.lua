@@ -63,12 +63,32 @@ end
 --
 -- If wc is true, then we only match wildcard elements
 --
+
+--
+-- Make sure there is a slash on the end, escape any special chars
+--
 function node_list(prefix, kv, wc)
+	local uniq, rc, match = {}, {}, ""
+
+	if prefix:sub(-1) ~= "/" then prefix = prefix .. "/" end
+	match = prefix:gsub("([%-%+%.%*])", "%%%1")
+	match = match .. "(" .. ((wc and "%*") or "") .. "[^/]+)"
+
+	for k,_ in pairs(kv) do
+		local elem = k:match(match)
+		if elem then uniq[elem] = 1 end
+	end
+	for k,_ in pairs(uniq) do table.insert(rc, k) end
+	table.sort(rc)
+	return rc
+end
+
+function Xnode_list(prefix, kv, wc)
 	local uniq, rc, match = {}, {}, ""
 
 	if #prefix > 0 then match = prefix:gsub("([%-%+%.%*])", "%%%1") .. "/" end
 	match = match .. "(" .. ((wc and "%*") or "") .. "[^/]+)"
-	
+
 	for k,_ in pairs(kv) do
 		local elem = k:match(match)
 		if elem then uniq[elem] = 1 end
@@ -433,6 +453,7 @@ function import(filename)
 		if not line then break end
 
 		local kp, value = string.match(line, "^([^:]+): (.*)$")
+
 		local mc = master[find_master_key(kp)] or {}
 		local vtype = mc["type"]
 
@@ -566,7 +587,7 @@ function show(current, new, kp)
 	function display_value(mc, indent, parent, kp)
 		if(mc["list"]) then return display_list(mc, indent, parent, kp) end
 		if(mc["type"]:sub(1,5) == "file/") then return display_file(mc, indent, parent, kp) end
-	
+
 		local disposition, value = disposition_and_value(kp)
 		local key = kp:gsub("^.*/%*?([^/]+)$", "%1")
 		if(mc["quoted"]) then value = "\"" .. value .. "\"" end
@@ -597,7 +618,7 @@ function show(current, new, kp)
 
 		for key in each(node_list(kp, combined)) do
 			local dispkey = key:gsub("^%*", "")
-			local newkp = join(kp, key, "/")
+			local newkp = kp .. "/" .. key
 			local mc = master[find_master_key(newkp)] or {}
 			local disposition, value = disposition_and_value(newkp)
 
@@ -623,13 +644,6 @@ function show(current, new, kp)
 	end	
 
 	int_show(kp, combined)
-end
-
---
--- Simple conditional join of strings
---
-function join(v1, v2, joiner)
-	return v1 .. ((#v1 > 0 and joiner) or "") .. v2
 end
 
 --
@@ -665,14 +679,14 @@ function rework_kp(config, kp)
 		--
 		-- Pull out each key in turn and work out if its a wildcard...
 		--
-		local k = kp:match("^([^/]+)/?")
+		local k = kp:match("^/([^/]+)")
 		if not k then break end
 		kp = kp:sub(#k + 2)
 
 		--
 		-- It's either a keypath or a wildcard path...
 		--
-		local master_kp = join(mp, k, "/")
+		local master_kp = mp .. "/" .. k
 		local master_wp = mp .. "/*"
 
 		if master[master_wp] then
@@ -680,7 +694,7 @@ function rework_kp(config, kp)
 			-- We are a wildcard key, so check we match style...
 			--
 			mp = master_wp
-			rkp = join(rkp, "*"..k, "/")
+			rkp = rkp .. "/*" .. k
 
 			local rc, err = validate(master[mp]["style"], rkp, k)
 			if not rc then return rc, err end
@@ -689,7 +703,7 @@ function rework_kp(config, kp)
 			-- We are a fixed key, so just build the path for now
 			--
 			mp = master_kp
-			rkp = join(rkp, k, "/")
+			rkp = rkp .. "/" .. k
 		else
 			return false, "unknown configuration node: " .. master_kp
 		end
@@ -718,8 +732,13 @@ function set(config, kp, value)
 
 	local mp = find_master_key(rkp)
 
+	print("mp="..mp)
+	print("type="..tostring(master[mp]["type"]))
+
 	if master[mp]["type"] then
+		print("HERE")
 		local rc, newval = validate(master[mp]["type"], rkp, value)
+		print("rc="..tostring(rc))
 		if not rc then return false, newval end
 		if type(newval) ~= "nil" then value = newval end
 	else

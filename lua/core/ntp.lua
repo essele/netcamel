@@ -32,7 +32,7 @@ local NTPD_ARGS = { "-c", NTPD_CONFIG, "-g" }
 local function ntp_commit(changes)
 	print("Hello From NTP")
 
-	local cf = node_vars("service/ntp", CF_new) or {}
+	local cf = node_vars("/service/ntp", CF_new) or {}
 
 	--
 	-- Stop the daemon...
@@ -108,7 +108,7 @@ end
 -- interfaces.
 --
 local function ntp_precommit(changes)
-	local cf = node_vars("service/ntp", CF_new) or {}
+	local cf = node_vars("/service/ntp", CF_new) or {}
 
 	--
 	-- if we are not enabled then we don't really care about anything
@@ -119,7 +119,7 @@ local function ntp_precommit(changes)
 	-- make sure we have at least one server configured
 	--
 	if #(cf.server or {}) < 1 then
-		return false, "service/ntp/server must have at least one server configured"
+		return false, "/service/ntp/server must have at least one server configured"
 	end
 
 	--
@@ -128,11 +128,11 @@ local function ntp_precommit(changes)
 	--
 	if not cf["provide-service"] then return true end
 	if #(cf["listen-on"] or {}) < 1 then
-		return false, "service/ntp/listen-on must list at least one interface for provide-service"
+		return false, "/service/ntp/listen-on must list at least one interface for provide-service"
 	end
 	for interface in each(cf["listen-on"]) do
 		if not node_exists(interface_path(interface), CF_new) then
-			return false, string.format("service/ntp/listen-on interface not valid: %s", interface)
+			return false, string.format("/service/ntp/listen-on interface not valid: %s", interface)
 		end
 	end
 	return true
@@ -148,12 +148,12 @@ local function ntp_iptables_rules()
 
 	print("AT NTP_IPTABLES_RULES")
 
-	print("eable="..tostring(CF_new["service/ntp/enable"]))
-	print("prov-svc="..tostring(CF_new["service/ntp/provide-service"]))
+	print("eable="..tostring(CF_new["/service/ntp/enable"]))
+	print("prov-svc="..tostring(CF_new["/service/ntp/provide-service"]))
 
-	if CF_new["service/ntp/enable"] == true and CF_new["service/ntp/provide-service"] == true then
+	if CF_new["/service/ntp/enable"] == true and CF_new["/service/ntp/provide-service"] == true then
 		print("We are enabled")
-		for interface in each(CF_new["service/ntp/listen-on"] or {}) do
+		for interface in each(CF_new["/service/ntp/listen-on"] or {}) do
 			print("Interface is: "..interface)
 			interface = interface_name(interface)
 			table.insert(rules, string.format("-i %s -p udp --dport 123 -j ACCEPT", interface))
@@ -167,18 +167,18 @@ end
 --
 -- Main interface config definition
 --
-master["service"] = {}
-master["service/ntp"] = { 
+master["/service"] = {}
+master["/service/ntp"] = { 
 	["commit"] = ntp_commit,
 	["precommit"] = ntp_precommit 
 }
 
-master["service/ntp/enable"] = { ["type"] = "boolean" }
-master["service/ntp/provide-service"] = { ["type"] = "boolean" }
-master["service/ntp/listen-on"] = { ["type"] = "any_interface", 
+master["/service/ntp/enable"] = { ["type"] = "boolean" }
+master["/service/ntp/provide-service"] = { ["type"] = "boolean" }
+master["/service/ntp/listen-on"] = { ["type"] = "any_interface", 
 									["options"] = "all_interfaces",
 									["list"] = 1 }
-master["service/ntp/server"] = { ["type"] = "OK", ["list"] = 1 }
+master["/service/ntp/server"] = { ["type"] = "OK", ["list"] = 1 }
 
 
 function ntp_init()
@@ -200,9 +200,9 @@ function ntp_init()
 	-- If we change the settings we will need to adjust the iptables
 	-- macro
 	--
-	add_trigger("service/ntp/enable", "iptables/*MACROS/@(input-allowed-services)")
-	add_trigger("service/ntp/provide-service", "iptables/*MACROS/@(input-allowed-services)")
-	add_trigger("service/ntp/listen-on", "iptables/*MACROS/@(input-allowed-services)")
+	add_trigger("/service/ntp/enable", "/iptables/*MACROS/@(input-allowed-services)")
+	add_trigger("/service/ntp/provide-service", "/iptables/*MACROS/@(input-allowed-services)")
+	add_trigger("/service/ntp/listen-on", "/iptables/*MACROS/@(input-allowed-services)")
 
 	--
 	-- Make sure we can contribute to the allowed services list...

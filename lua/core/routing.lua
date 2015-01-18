@@ -29,11 +29,11 @@ local function routing_commit(changes)
 	runtime.block_on()
 	print("Hello From ROUTINGQ")
 
-	local state = process_changes(changes, "routing/route")
+	local state = process_changes(changes, "/routing/route")
 
 	for name in each(state.added) do
 		print("Adding route: " .. name)
-		local cf = node_vars("routing/route/"..name, CF_new)
+		local cf = node_vars("/routing/route/"..name, CF_new)
 		cf.interface = interface_name(cf.interface)
 		cf.source = "routes"
 		print("dest="..tostring(cf.dest).." interface="..tostring(cf.interface).." table="..tostring(cf.table))
@@ -42,7 +42,7 @@ local function routing_commit(changes)
 
 	for name in each(state.removed) do
 		print("Removing route: " .. name)
-		local cf = node_vars("routing/route/"..name, CF_current)
+		local cf = node_vars("/routing/route/"..name, CF_current)
 		cf.interface = interface_name(cf.interface)
 		cf.source = "routes"
 		runtime.delete_route(cf)		
@@ -50,8 +50,8 @@ local function routing_commit(changes)
 
 	for name in each(state.changed) do
 		print("Changing route: " .. name)
-		local cf = node_vars("routing/route/"..ifnum, CF_new) or {}
-		local oldcf = node_vars("routing/route/"..ifnum, CF_current) or {}
+		local cf = node_vars("/routing/route/"..ifnum, CF_new) or {}
+		local oldcf = node_vars("/routing/route/"..ifnum, CF_current) or {}
 		cf.interface = interface_name(cf.interface)
 		cf.source = "routes"
 		oldcf.interface = interface_name(oldcf.interface)
@@ -96,19 +96,19 @@ end
 --
 -- Main routing config definition
 --
-master["routing"] = { 
+master["/routing"] = { 
 	["commit"] = routing_commit,
 	["precommit"] = routing_precommit 
 }
 
-master["routing/route"] = { ["with_children"] = 1 }
-master["routing/route/*"] = 			{ ["style"] = "text_label" }
-master["routing/route/*/interface"] = 	{ ["type"] = "any_interface",
+master["/routing/route"] = { ["with_children"] = 1 }
+master["/routing/route/*"] = 			{ ["style"] = "text_label" }
+master["/routing/route/*/interface"] = 	{ ["type"] = "any_interface",
 										  ["options"] = "all_interfaces" }
-master["routing/route/*/dest"] = 		{ ["type"] = "ipv4_nm_default" }
-master["routing/route/*/gateway"] = 	{ ["type"] = "OK" }
-master["routing/route/*/table"] =		{ ["type"] = "OK", ["default"] = "main" }
-master["routing/route/*/priority"] = 	{ ["type"] = "2-digit" }
+master["/routing/route/*/dest"] = 		{ ["type"] = "ipv4_nm_default" }
+master["/routing/route/*/gateway"] = 	{ ["type"] = "OK" }
+master["/routing/route/*/table"] =		{ ["type"] = "OK", ["default"] = "main" }
+master["/routing/route/*/priority"] = 	{ ["type"] = "2-digit" }
 
 TABLE["routes"] = {
 	schema = { 	source="string key",

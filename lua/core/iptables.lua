@@ -21,11 +21,11 @@
 -- Sets should be a simple case of create/delete/modify
 --
 local function ipt_set_commit(changes)
-	local state = process_changes(changes, "iptables/set")
+	local state = process_changes(changes, "/iptables/set")
 
 	for set in each(state.added) do
 		local setname = set:gsub("*", "")
-		local cf = node_vars("iptables/set/"..set, CF_new)
+		local cf = node_vars("/iptables/set/"..set, CF_new)
 
 		io.write(string.format("# (add set %s)\n", setname))
 		io.write(string.format("# ipset create %s %s\n", setname, cf["type"]))
@@ -40,8 +40,8 @@ local function ipt_set_commit(changes)
 	end
 	for set in each(state.changed) do
 		local setname = set:gsub("*", "")
-		local old_cf = node_vars("iptables/set/"..set, CF_current) or {}
-		local cf = node_vars("iptables/set/"..set, CF_new) or {}
+		local old_cf = node_vars("/iptables/set/"..set, CF_current) or {}
+		local cf = node_vars("/iptables/set/"..set, CF_new) or {}
 		io.write(string.format("# (change set %s)\n", setname))
 
 		if old_cf["type"] ~= cf["type"] then
@@ -129,7 +129,7 @@ local function needs_rebuild(changes)
 	--
 	function find_variable_references(var)
 		local rc = {}
-		for rule in each(matching_list("iptables/%/%/rule/%", CF_new)) do
+		for rule in each(matching_list("/iptables/%/%/rule/%", CF_new)) do
 			if CF_new[rule]:match("{{"..var.."}}") then
 				-- pull out the table name
 				rc[rule:match("^iptables/(%*[^/]+)")] = 1
@@ -143,8 +143,8 @@ local function needs_rebuild(changes)
 	--
 	function find_tables_with_macro(macro)
 		local rc = {}
-		for iptable in each(node_list("iptables", CF_new, true)) do
-			for rule in each(matching_list("iptables/"..iptable.."/%/rule/%", CF_new)) do
+		for iptable in each(node_list("/iptables", CF_new, true)) do
+			for rule in each(matching_list("/iptables/"..iptable.."/%/rule/%", CF_new)) do
 				if(CF_new[rule] == macro) then
 					rc[iptable] = 1
 				end
@@ -156,7 +156,7 @@ local function needs_rebuild(changes)
 	-- ------------------------------------------------------------------------------
 	-- NEEDS REBUILD ENTRY POINT
 	-- ------------------------------------------------------------------------------
-	local state = process_changes(changes, "iptables", true)
+	local state = process_changes(changes, "/iptables", true)
 	local rebuild = {}
 
 	--
@@ -165,7 +165,7 @@ local function needs_rebuild(changes)
 	-- to the list
 	--
 	for trigger in each(state.triggers) do
-		for macro in each(node_list("iptables/"..trigger, changes)) do
+		for macro in each(node_list("/iptables/"..trigger, changes)) do
 			add_to_list(rebuild, find_tables_with_macro(macro:gsub("^@", "")))
 		end
 	end
@@ -180,7 +180,7 @@ local function needs_rebuild(changes)
 	-- See if we have any variables that would cause additional
 	-- tables to be reworked
 	--
-	for var in each(node_list("iptables/variable", changes)) do
+	for var in each(node_list("/iptables/variable", changes)) do
 		add_to_list(rebuild, find_variable_references(var))
 	end
 
@@ -219,8 +219,8 @@ local function ipt_generate()
 	--
 	function load_variables()
 		local vars = {}
-		for var in each(node_list("iptables/variable", CF_new)) do
-			local value = CF_new["iptables/variable/"..var.."/value"]
+		for var in each(node_list("/iptables/variable", CF_new)) do
+			local value = CF_new["/iptables/variable/"..var.."/value"]
 			vars[var:gsub("^%*", "")] = value
 		end
 		return vars
@@ -278,7 +278,7 @@ local function ipt_generate()
 	-- Build a full list of chains for each of the tables
 	--
 	for iptable in each(tables) do
-		for chain in each(node_list("iptables/*"..iptable.name, CF_new, true)) do
+		for chain in each(node_list("/iptables/*"..iptable.name, CF_new, true)) do
 			chain = chain:sub(2)
 			if not in_list(iptable.chains, chain) then
 				table.insert(iptable.chains, chain)
@@ -297,14 +297,14 @@ local function ipt_generate()
 			table.insert(output, string.format(":%s ACCEPT [0:0]", chain))
 		end
 		for chain in each(iptable.chains) do
-			local base = string.format("iptables/*%s/*%s/rule", iptable.name, chain)
+			local base = string.format("/iptables/*%s/*%s/rule", iptable.name, chain)
 
 			for rule in each(node_list(base, CF_new, true)) do
 				local value = CF_new[base.."/"..rule]
 				local rules = (macros[value] and expand_macro(value)) or { value }
 				local vrules, err = variable_expand(rules, vars)	
 				if not vrules then
-					return false, string.format("iptables/%s/%s/rule/%s %s", 
+					return false, string.format("/iptables/%s/%s/rule/%s %s", 
 								iptable.name, chain, rule, err)
 				end
 				for vr in each(vrules) do
@@ -358,12 +358,12 @@ local function ipt_rebuild(testonly)
 		if line then
 			local iptable, chain, rule = map_to_details(tonumber(line), rules)
 			if iptable then
-				return false, string.format("iptables/%s/%s error in rule %s",
+				return false, string.format("/iptables/%s/%s error in rule %s",
 								iptable, chain, rule)
 			end
 		end
 	end
-	return false, string.format("iptables unknown error trying to load rules")
+	return false, string.format("/iptables unknown error trying to load rules")
 end
 
 --
@@ -417,36 +417,36 @@ end
 --
 -- Master Structure for iptables
 --
-master["iptables"] = 					{}
+master["/iptables"] = 					{}
 
 --
 -- The main tables/chains/rules definition
 --
-master["iptables/*"] = 					{ ["commit"] = ipt_commit,
+master["/iptables/*"] = 					{ ["commit"] = ipt_commit,
 										  ["precommit"] = ipt_precommit,
 										  ["options"] = { "filter", "nat", "mangle", "raw" },
 										  ["style"] = "iptables_table" }
-master["iptables/*/*"] = 				{ ["style"] = "iptables_chain" }
-master["iptables/*/*/policy"] = 		{ ["type"] = "iptables_policy" }
-master["iptables/*/*/rule"] = 			{ ["with_children"] = 1 }
-master["iptables/*/*/rule/*"] = 		{ ["style"] = "OK",
+master["/iptables/*/*"] = 				{ ["style"] = "iptables_chain" }
+master["/iptables/*/*/policy"] = 		{ ["type"] = "iptables_policy" }
+master["/iptables/*/*/rule"] = 			{ ["with_children"] = 1 }
+master["/iptables/*/*/rule/*"] = 		{ ["style"] = "OK",
     	                               	  ["type"] = "iptables_rule",
        	                            	  ["quoted"] = 1 }
 --
 -- Support variables for replacement into iptables rules
 --
-master["iptables/variable"] =			{ ["delegate"] = "iptables/*" }
-master["iptables/variable/*"] =			{ ["style"] = "ipt_variable" }
-master["iptables/variable/*/value"] =	{ ["type"] = "OK",
+master["/iptables/variable"] =			{ ["delegate"] = "/iptables/*" }
+master["/iptables/variable/*"] =			{ ["style"] = "ipt_variable" }
+master["/iptables/variable/*/value"] =	{ ["type"] = "OK",
 										  ["list"] = 1 }
 --
 -- Creation of ipset with pre-poulation of items if needed
 --
-master["iptables/set"] = 				{ ["commit"] = ipt_set_commit }
-master["iptables/set/*"] = 				{ ["style"] = "iptables_set" }
-master["iptables/set/*/type"] = 		{ ["type"] = "iptables_set_type", 
+master["/iptables/set"] = 				{ ["commit"] = ipt_set_commit }
+master["/iptables/set/*"] = 				{ ["style"] = "iptables_set" }
+master["/iptables/set/*/type"] = 		{ ["type"] = "iptables_set_type", 
 										  ["default"] = "hash:ip" }
-master["iptables/set/*/item"] = 		{ ["type"] = "hostname_or_ip",
+master["/iptables/set/*/item"] = 		{ ["type"] = "hostname_or_ip",
 										  ["list"] = 1 }
 
 --
@@ -458,7 +458,7 @@ function iptables_init()
 	--
 	-- We need to make sure the ipsets happen before the main chains
 	--
-	add_dependency("iptables/*", "iptables/set")
+	add_dependency("/iptables/*", "/iptables/set")
 end
 
 
