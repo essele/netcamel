@@ -83,21 +83,6 @@ function node_list(prefix, kv, wc)
 	return rc
 end
 
-function Xnode_list(prefix, kv, wc)
-	local uniq, rc, match = {}, {}, ""
-
-	if #prefix > 0 then match = prefix:gsub("([%-%+%.%*])", "%%%1") .. "/" end
-	match = match .. "(" .. ((wc and "%*") or "") .. "[^/]+)"
-
-	for k,_ in pairs(kv) do
-		local elem = k:match(match)
-		if elem then uniq[elem] = 1 end
-	end
-	for k,_ in pairs(uniq) do table.insert(rc, k) end
-	table.sort(rc)
-	return rc
-end
-
 --
 -- Return all items that match the prefix (no slash is added), we escape
 -- a few of the regex chars, but do allow % as a wildcard for a whole section

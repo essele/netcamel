@@ -28,15 +28,21 @@ readline = require("readline")
 -- The token will always be anything up to (and including) a space
 -- (quoted stuff tbd)
 --
+local CMDS = {}
 local __cmds = {
 	["set"] = { desc = "blah blah" },
-	["cd"] = {},
+	["cd"] = { cmd = cmd_cd },
 	["show"] = {},
 	["delete"] = {},
 	["commit"] = {},
 	["save"] = {},
 	["revert"] = {},
 }
+
+--
+-- Our prompt string
+--
+local __prompt
 
 --
 -- Our 'path' ... i.e. where are we in the config structure
@@ -159,31 +165,42 @@ local function cfpath_completer(tokens, n, prefix)
 
 	--
 	-- Find out if we have more after this one ... if we don't get any options then just
-	-- check if we are a wildcard and add a dummy entry.
+	-- check if we are a wildcard.
 	--
 	local more = {}
+	local container_only = mtoken.allow_container and not mtoken.allow_value
+
 	populate_options(more, mtoken.use_master and append_token(mp, node.mp),
-								mtoken.use_new and append_token(kp, node.kp), mtoken.containeronly)
-	if #more == 0 then
+								mtoken.use_new and append_token(kp, node.kp), container_only)
+
+	local match, moreflag = next(matches), next(more) ~= nil
+
+	if not moreflag then
 		--
 		-- See if we are a wildcard, if we are then add a dummy more since there will be
 		-- more fields. If we are containeronly then we need to check the extra
 		-- fields to see if they are containers
 		--
-		local moreflag = false
 		local moremp = append_token(mp, node.mp)
 		local wc = node_list(moremp, master)
-		if mtoken.containeronly then
+		if container_only then
 			for n in each(wc) do
 				if master[append_token(moremp, n)]["type"] == nil then moreflag = true end
 			end
+			
 		elseif #wc > 0 then moreflag = true end
-
-		if moreflag then table.insert(more, "dummy") end
 	end
 
-	local match, more = next(matches), next(more)
-	return ((match and match:sub(#prefix+1)) or "") .. ((more and "/") or " ")
+	--
+	-- If we allow_container then we only put the slash on after a second tab
+	-- on a full match
+	--
+	if mtoken.allow_container and moreflag then
+		if match == prefix then return "/" end
+		return (match and match:sub(#prefix+1))
+	end
+
+	return ((match and match:sub(#prefix+1)) or "") .. ((moreflag and "/") or " ")
 end
 
 --
@@ -252,6 +269,7 @@ local function cfpath_validator(tokens, n, input)
 	local ptoken = tokens[n]
 	local value = ptoken.value
 	local allfail = false
+	local mp, kp
 
 	if not ptoken.subtokens then ptoken.subtokens = {} end
 	readline.tokenise(ptoken.subtokens, value, "/", ptoken.start-1)
@@ -272,10 +290,16 @@ local function cfpath_validator(tokens, n, input)
 		-- for a wildcard
 		--
 		if not token.options then
+			local container_only = tokens[1].allow_container and not tokens[1].allow_value
 			token.options = {}
 			populate_options(token.options, tokens[1].use_master and mp, 
-								tokens[1].use_new and kp, tokens[1].containeronly)
+								tokens[1].use_new and kp, container_only)
 		end
+
+		--
+		-- Handle the case of "/" for a container
+		--
+		if tokens[1].allow_container and value == "" then token.status = OK goto done end
 
 		--
 		-- Allow the use of .. to go back if there is room
@@ -340,7 +364,9 @@ local function cfpath_validator(tokens, n, input)
 
 	-- if we want to non-container then we are partial unless we have it
 	local finalstatus = ptoken.subtokens[#ptoken.subtokens].status
-	if tokens[1].mustbenode and finalstatus ~= FAIL then
+	local must_be_node = tokens[1].allow_value and not tokens[1].allow_container
+
+	if must_be_node and finalstatus ~= FAIL then
 		if #mp == 0 or (master[mp] and master[mp]["type"] == nil) then
 			readline.mark_all(ptoken.subtokens, 1, PARTIAL)
 		end
@@ -379,8 +405,9 @@ local function syntax_set(tokens)
 	tokens[1].default_completer = nil
 	tokens[1].use_master = true
 	tokens[1].use_new = true
-	tokens[1].containeronly = false
-	tokens[1].mustbenode = true
+
+	tokens[1].allow_value = true
+	tokens[1].allow_container = false
 
 	--
 	-- Make sure the cfpath is ok
@@ -407,7 +434,9 @@ local function syntax_delete(tokens)
 	tokens[1].default_completer = nil
 	tokens[1].use_master = false
 	tokens[1].use_new = true
-	tokens[1].mustbenode = false
+
+	tokens[1].allow_value = true
+	tokens[1].allow_container = true
 
 	if tokens[2].status ~= OK then cfpath_validator(tokens, 2) end
 	if tokens[2].status ~= OK then readline.mark_all(tokens, 3, FAIL) return end
@@ -433,8 +462,9 @@ local function syntax_cd(tokens)
 	tokens[1].default_completer = nil
 	tokens[1].use_master = true
 	tokens[1].use_new = true
-	tokens[1].mustbenode = false
-	tokens[1].containeronly = true
+
+	tokens[1].allow_value = false
+	tokens[1].allow_container = true
 
 	if tokens[2].status ~= OK then cfpath_validator(tokens, 2) end
 	if tokens[2].status ~= OK then readline.mark_all(tokens, 3, FAIL) return end
@@ -538,6 +568,27 @@ local function setprompt(kp)
 	return prompt
 end
 
+local function usage(cmd)
+	print("Usage: "..cmd.usage)
+end
+
+-- ------------------------------------------------------------------------------
+-- CD COMMAND
+-- ------------------------------------------------------------------------------
+CMDS["cd"] = {
+	help = "change to a particular area of config",
+	usage = "cd <cfg_path>",
+}
+CMDS["cd"].func = function(cmd, cmdline, tags)
+	if not tags[2] then usage(cmd) return end
+
+	print("kp="..tags[2].kp)
+	print("mp="..tags[2].mp)
+	__path_kp = tags[2].kp
+	__path_mp = tags[2].mp
+	__prompt = setprompt(__path_kp)
+end
+
 
 function interactive()
 	-- Read History
@@ -547,18 +598,23 @@ function interactive()
 		for h in file:lines() do table.insert(history, h) end
 	end
 
-	local prompt = setprompt(__path_kp)
+	__prompt = setprompt(__path_kp)
 
 	readline.init()
 	while true do
-		local cmdline, tags = readline.readline(prompt, history, syntax_checker, initial_completer)
+		local cmdline, tags = readline.readline(__prompt, history, syntax_checker, initial_completer)
 		if not cmdline then break end
 		if cmdline:match("^%s*$") then goto continue end
 		table.insert(history, cmdline)
 
-		if tags[1].value == "show" then
+		local cmd = CMDS[tags[1].value]
+		if cmd then
+			cmd.func(cmd, cmdline, tags)
+		elseif tags[1].value == "show" then
 			show(CF_current, CF_new)
 		elseif tags[1].value == "cd" then
+			print("kp="..tags[2].kp)
+			print("mp="..tags[2].mp)
 			__path_kp = tags[2].kp
 			__path_mp = tags[2].mp
 			prompt = setprompt(__path_kp)
