@@ -141,10 +141,10 @@ end
 --
 local function cfpath_completer(tokens, n, prefix)
 	--
-	-- Map to the subtoken, keeping mtoken
+	-- Map to the subtoken
 	--
-	local mtoken = tokens[1]
 	local pos = tokens[n].start + prefix:len()
+	local opts = tokens[n].opts
 	local is_absolute = tokens[n].value:sub(1,1) == "/"
 
 	tokens = tokens[n].subtokens
@@ -173,9 +173,11 @@ local function cfpath_completer(tokens, n, prefix)
 	if prefix == ".." and token.status ~= FAIL then return "/" end
 
 	--
-	-- Retrieve matches from our pre-cached list...
+	-- Retrieve matches from our pre-cached list, and remove the
+	-- wildcard if its there.
 	--
 	local matches = prefixmatches(token.options or {}, prefix)
+	matches["*"] = nil
 
 	--
 	-- If we have multiple matches then find the common prefix
@@ -199,7 +201,6 @@ local function cfpath_completer(tokens, n, prefix)
 	-- Find out if we have more after this one ... if we don't get any options then just
 	-- check if we are a wildcard.
 	--
-	local opts = mtoken.opts
 	local container_only = opts.allow_container and not opts.allow_value
 	local more = node_selector(append_token(mp, node.mp), append_token(kp, node.kp), opts)
 
@@ -226,7 +227,7 @@ end
 --
 -- TODO: if we are a list item then should we add a space after completion?
 --
-local function cfsetitem_completer(tokens, n, prefix)
+local function cfvalue_completer(tokens, n, prefix)
 	local token = tokens[n]
 	local pos = token.start + prefix:len()
 	local mp = tokens[2].mp
@@ -294,7 +295,7 @@ local function cfpath_validator(tokens, n, input)
 		mp, kp = __path_mp, __path_kp
 	end
 
-	local opts = tokens[1].opts
+	local opts = tokens[n].opts
 	local container_only = opts.allow_container and not opts.allow_value
 
 	for i,token in ipairs(ptoken.subtokens) do
@@ -392,23 +393,25 @@ local function cfpath_validator(tokens, n, input)
 	tokens[n].status = ptoken.subtokens[#ptoken.subtokens].status
 	tokens[n].kp = ptoken.subtokens[#ptoken.subtokens].kp
 	tokens[n].mp = ptoken.subtokens[#ptoken.subtokens].mp
+
+	-- TODO: make the error right for value vs. container
+	if tokens[n].status ~= OK then tokens[n].err = "not a valid configuration path" end
 end
 
-local function tv2(tokens, n, input)
+local function cfvalue_validator(tokens, n, pathn)
 	local ptoken = tokens[n]
 	local value = ptoken.value
-	local mp = tokens[2].mp
-	local kp = tokens[2].kp
+	local mp = tokens[pathn].mp
+	local kp = tokens[pathn].kp
 
 	--
 	-- Right hand side, need to run the validator
 	--
 	local m = master[mp]
 	local mtype = m["type"]
+	local err
 
---	print("type="..tostring(mtype))
-	ptoken.status = VALIDATOR[mtype](value, kp)
---	print("st="..ptoken.status)
+	ptoken.status, ptoken.err = VALIDATOR[mtype](value, kp)
 end
 
 
@@ -420,12 +423,7 @@ local function syntax_set(tokens)
 	tokens[2].completer = cfpath_completer
 	tokens[1].default_completer = nil
 
-	tokens[1].opts = { use_master = true, use_new = true, allow_value = true, allow_container = false }
-
-	tokens[1].use_master = true
-	tokens[1].use_new = true
-	tokens[1].allow_value = true
-	tokens[1].allow_container = false
+	tokens[2].opts = { use_master = true, use_new = true, allow_value = true, allow_container = false }
 
 	--
 	-- Make sure the cfpath is ok
@@ -436,13 +434,13 @@ local function syntax_set(tokens)
 	--
 	-- Setup the completer for all other fields
 	--
-	if tokens[3] then tokens[3].completer = cfsetitem_completer end
+	if tokens[3] then tokens[3].completer = cfvalue_completer end
 	--
 	-- Check all other fields are correct
 	--
 	n = 3
 	while tokens[n] do
-		tv2(tokens, n)
+		cfvalue_validator(tokens, n, 2)
 		n = n + 1
 	end
 end
@@ -451,12 +449,7 @@ local function syntax_delete(tokens)
 	tokens[2].completer = cfpath_completer
 	tokens[1].default_completer = nil
 
-	tokens[1].opts = { use_master = false, use_new = true, allow_value = true, allow_container = true }
-
-	tokens[1].use_master = false
-	tokens[1].use_new = true
-	tokens[1].allow_value = true
-	tokens[1].allow_container = true
+	tokens[2].opts = { use_master = false, use_new = true, allow_value = true, allow_container = true }
 
 	if tokens[2].status ~= OK then cfpath_validator(tokens, 2) end
 	if tokens[2].status ~= OK then readline.mark_all(tokens, 3, FAIL) return end
@@ -465,10 +458,10 @@ local function syntax_delete(tokens)
 	-- We support additional tokens if we are deleting from a list
 	--
 	if tokens[2].status == OK and tokens[2].mp and master[tokens[2].mp].list then
-		tokens[1].default_completer = cfsetitem_completer
+		tokens[1].default_completer = cfvalue_completer
 		local n = 3
 		while tokens[n] do
-			tv2(tokens, n)
+			cfvalue_validator(tokens, n, 2)
 			n = n + 1
 		end
 	else
@@ -481,11 +474,7 @@ local function syntax_cd(tokens)
 	tokens[2].completer = cfpath_completer
 	tokens[1].default_completer = nil
 
-	tokens[1].opts = { use_master = true, use_new = true, allow_value = false, allow_container = true }
-	tokens[1].use_master = true
-	tokens[1].use_new = true
-	tokens[1].allow_value = false
-	tokens[1].allow_container = true
+	tokens[2].opts = { use_master = true, use_new = true, allow_value = false, allow_container = true }
 
 	if tokens[2].status ~= OK then cfpath_validator(tokens, 2) end
 	if tokens[2].status ~= OK then readline.mark_all(tokens, 3, FAIL) return end
@@ -516,6 +505,48 @@ local function syntax_level1(tokens)
 	if token.status == FAIL then readline.mark_all(tokens, 2, FAIL) end
 end
 
+
+local function syntax_action(cmd, tokens)
+	local i = 2
+
+	tokens[1].default_completer = nil
+
+	for a in each(cmd.args) do
+		--
+		-- If we don't have a token then we can't go on
+		--
+		if not tokens[i] then break end
+
+		--
+		-- Handle a cfpath argument, if we're not ok then all else must be FAIL
+		--
+		if a.arg == "cfpath" then
+			tokens[i].completer = cfpath_completer
+			tokens[i].opts = a.opts
+			if tokens[i].status ~= OK then cfpath_validator(tokens, i) end
+			if tokens[i].status ~= OK then i = i + 1 break end
+		end
+
+		--
+		-- Handle a cfitem argument, need to work out which cfpath it refers to
+		-- assume i-1 as a default
+		--
+		if a.arg == "cfvalue" then
+			local path_index = a.path_index or i-1
+
+			if a.only_if_list and not master[tokens[path_index].mp].list then break end
+
+			tokens[i].completer = cfvalue_completer
+			if tokens[i].status ~= OK then cfvalue_validator(tokens, i, path_index) end
+			if tokens[i].status ~= OK then i = i + 1 break end
+		end
+		i = i + 1
+	end
+	readline.mark_all(tokens, i, FAIL)
+	return
+end
+
+
 --
 -- The syntax checker needs to put a status on each token so that
 -- we can incorporate colour as we print the line out for syntax
@@ -525,9 +556,22 @@ end
 -- changed. If we need to recalc then do so.
 --
 local function syntax_checker(tokens, input)
-	local allfail = false
+--	syntax_level1(tokens)
 
-	syntax_level1(tokens)
+	local token = tokens[1]
+	local value = token.value
+	local status
+
+	if CMDS[value] then
+		token.status = OK
+		syntax_action(CMDS[value], tokens)
+	elseif tokens[2] then
+		token.status = FAIL
+	else
+		local matches = match_list(CMDS, value)
+		token.status = (#matches > 0 and PARTIAL) or FAIL
+	end
+	if token.status == FAIL then readline.mark_all(tokens, 2, FAIL) end
 	return
 end
 
@@ -594,11 +638,84 @@ local function usage(cmd)
 end
 
 -- ------------------------------------------------------------------------------
+-- SHOW COMMAND
+-- ------------------------------------------------------------------------------
+CMDS["show"] = {
+	help = "show the configuration with delta to current",
+	usage = "show [<cfg_path>]",
+	min_args = 0,
+	max_args = 1,
+	args = {
+		{ arg = "cfpath", opts = { use_master = true, use_new = true, allow_value = false, allow_container = true }}
+	}
+}
+CMDS["show"].func = function(cmd, cmdline, tags)
+	show(CF_current, CF_new)
+end
+
+-- ------------------------------------------------------------------------------
+-- DELETE COMMAND
+-- ------------------------------------------------------------------------------
+CMDS["delete"] = {
+	help = "delete sections or items from the confinguration",
+	usage = "delete <cfg_path> [<list value>]",
+	min_args = 1,
+	max_args = 2,
+	args = {
+		{ arg = "cfpath", opts = { use_master = true, use_new = true, allow_value = true, allow_container = true }},
+		{ arg = "cfvalue", only_if_list = true },
+	}
+}
+CMDS["delete"].func = function(cmd, cmdline, tags)
+	for t in each(tags) do
+		print("tag: ["..t.value.."]  status="..t.status)
+	end
+	print("2="..tostring(tags[2].value))
+	print("2kp="..tostring(tags[2].kp))
+	print("3="..tostring(tags[3] and tags[3].value))
+	local list_elem = (tags[3] and tags[3].value ~= "" and tags[3].value) or nil
+
+	local rc, err = delete(CF_new, tags[2].value, list_elem)
+	if not rc then print("Error: " .. tostring(err)) end
+end
+
+-- ------------------------------------------------------------------------------
+-- SET COMMAND
+-- ------------------------------------------------------------------------------
+CMDS["set"] = {
+	help = "set values for items in the configuration",
+	usage = "set <cfg_path> <value>",
+	min_args = 2,
+	max_args = 2,
+	args = {
+		{ arg = "cfpath", opts = { use_master = true, use_new = true, allow_value = true, allow_container = false }},
+		{ arg = "cfvalue" },
+	}
+}
+CMDS["set"].func = function(cmd, cmdline, tags)
+	print("2="..tags[2].value)
+	print("3="..tags[3].value)
+
+	local has_quotes = tags[3].value:match("^\"(.*)\"$")
+	if has_quotes then
+		tags[3].value = has_quotes
+	end
+
+	local rc, err = set(CF_new, tags[2].value, tags[3].value)
+	if not rc then print("Error: " .. tostring(err)) end
+end
+
+-- ------------------------------------------------------------------------------
 -- CD COMMAND
 -- ------------------------------------------------------------------------------
 CMDS["cd"] = {
 	help = "change to a particular area of config",
 	usage = "cd <cfg_path>",
+	min_args = 1,
+	max_args = 1,
+	args = {
+		{ arg = "cfpath", opts = { use_master = true, use_new = true, allow_value = false, allow_container = true }}
+	}
 }
 CMDS["cd"].func = function(cmd, cmdline, tags)
 	if not tags[2] then usage(cmd) return end
@@ -625,10 +742,38 @@ function interactive()
 	while true do
 		local cmdline, tags = readline.readline(__prompt, history, syntax_checker, initial_completer)
 		if not cmdline then break end
-		if cmdline:match("^%s*$") then goto continue end
+
+		--
+		-- Remove any trailing empty tags
+		--
+		if tags[#tags].value == "" then table.remove(tags) end
+
+		--
+		-- Ignore just empty lines
+		--
+		if #tags == 0 then goto continue end
+
+		--
+		-- Add to the history
+		--
 		table.insert(history, cmdline)
 
+		--
+		-- Find our command and do some basic usage checking, are all
+		-- the tags OK, and do we have the right amount
+		--
 		local cmd = CMDS[tags[1].value]
+		if not cmd then print("unknown command: "..tags[1].value) goto continue end
+		if #tags-1 < cmd.min_args or #tags-1 > cmd.max_args then usage(cmd) goto continue end
+			
+		for i=1, #tags do
+			if tags[i].status ~= OK then
+				print(string.format("%s: arg %d: %s", tags[1].value, i-1, tags[i].err or "unknown error"))
+				goto continue
+			end
+		end	
+
+	
 		if cmd then
 			cmd.func(cmd, cmdline, tags)
 		elseif tags[1].value == "show" then

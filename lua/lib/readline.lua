@@ -574,8 +574,9 @@ local function mark_all(tokens, n, value)
 	while tokens[n] do
 		tokens[n].status = value
 		tokens[n].subtokens = nil
+		tokens[n].hash = nil
 		tokens[n].completer = nil
-		n =n + 1
+		n = n + 1
 	end
 end
 
