@@ -101,7 +101,6 @@ end
 function matching_list(prefix,kv)
 	local rc = {}
 
---	match = "^" .. prefix:gsub("([%-%+%.%*])", "\001%1"):gsub("%%", "[^/]+"):gsub("\001(.)", "%%%1")
 	match = "^" .. prefix:gsub("([%-%+%.%*])", "\001%1"):gsub("%%", "[^/]*"):gsub("\001(.)", "%%%1")
 	for k,_ in pairs(kv) do
 		if k:match(match) then table.insert(rc, k) end
@@ -308,9 +307,7 @@ function execute_work_using_func(funcname, work_list)
 				local work_hash = values_to_keys(work_list[key])
 
 				local rc, err = func(work_hash)
---				if not ok then return false, string.format("[%s]: %s code error: %s", key, funcname, rc) end
 				if not rc then return false, string.format("[%s]: %s failed: %s", key, funcname, err) end
-
 			end
 			work_list[key] = nil
 			activity = true
@@ -367,7 +364,6 @@ function process_changes(changes, keypath, wc)
 	end
 	return rc
 end
-
 
 --
 -- Return a hash containing a key for every node that is defined in
@@ -618,7 +614,6 @@ function show(current, new, kp)
 
 		for key in each(node_list(kp, combined)) do
 			local dispkey = key:gsub("^%*", "")
---			local newkp = kp .. "/" .. key
 			local newkp = append_token(kp, key)
 			local mc = master[find_master_key(newkp)] or {}
 			local disposition, value = disposition_and_value(newkp)
@@ -683,16 +678,10 @@ end
 -- for the type and then set the config.
 --
 function set(config, kp, value)
-	print("kp="..kp)
 	local mp = find_master_key(kp)
 
-	print("mp="..mp)
-	print("type="..tostring(master[mp]["type"]))
-
 	if master[mp]["type"] then
-		print("HERE")
 		local rc, newval = validate(master[mp]["type"], kp, value)
-		print("rc="..tostring(rc))
 		if not rc then return false, newval end
 		if type(newval) ~= "nil" then value = newval end
 	else
@@ -702,15 +691,12 @@ function set(config, kp, value)
 	-- If we get here then we must be ok, add to list or set value
 	-- accordingly
 	--
-	print("Adding: mp="..mp)
 	if master[mp]["list"] then
 		if not config[kp] then config[kp] = {} end
 		if not in_list(config[kp], value) then
 			table.insert(config[kp], value)
 		end
 	else
-		print("RKP="..kp)
-		print("VALUE="..tostring(value))
 		config[kp] = value
 	end
 	return true

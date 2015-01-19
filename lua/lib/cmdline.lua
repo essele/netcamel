@@ -45,18 +45,6 @@ local function match_list(list, t)
 	table.sort(rc)
 	return rc
 end
---
--- Simple routine to append a token onto a string, we add a slash if
--- needed
---
---[[
-local function append_token(s, t)
-	local rc = s
-	if s:sub(-1) ~= "/" then rc = rc .. "/" end
-	rc = rc .. t
-	return rc
-end
-]]--
 
 --
 -- Add any provided "options" from the master to the given list
@@ -71,7 +59,10 @@ local function add_master_options(options, mp)
 	end
 end
 
-
+--
+-- Given a path we need to work out what the possible options are, so we look
+-- at the master, the new config and also any options from master.
+--
 local function node_selector(mp, kp, opts)
 	--
 	-- Get all the master nodes that match the options we have provided
@@ -384,6 +375,9 @@ local function cfpath_validator(tokens, n, input)
 	if tokens[n].status ~= OK then tokens[n].err = "not a valid configuration path" end
 end
 
+--
+-- Validate a value for an item in a cfpath (index=pathn)
+--
 local function cfvalue_validator(tokens, n, pathn)
 	local ptoken = tokens[n]
 	local value = ptoken.value
@@ -398,6 +392,8 @@ local function cfvalue_validator(tokens, n, pathn)
 	local err
 
 	ptoken.status, ptoken.err = VALIDATOR[mtype](value, kp)
+
+	-- TODO: is it really this simple?
 end
 
 
@@ -442,7 +438,6 @@ local function syntax_action(cmd, tokens)
 	return
 end
 
-
 --
 -- The syntax checker needs to put a status on each token so that
 -- we can incorporate colour as we print the line out for syntax
@@ -483,9 +478,7 @@ local function system_completer(tokens, n, prefix)
 	local ppos = prefix:len() + 1
 
 	if #matches == 0 then return nil end
-
 	if #matches == 1 then return matches[1]:sub(ppos) .. " " end
-
 	if #matches > 1 then
 		local cp = icommon_prefix(matches)
 		if cp ~= prefix then
@@ -495,7 +488,6 @@ local function system_completer(tokens, n, prefix)
 	for i, m in ipairs(matches) do
 		matches[i] = string.format("%-20.20s %s", m, CMDS[m].help or "-")
 	end
-
 	return matches
 end
 

@@ -391,7 +391,6 @@ end
 -- We need to track our position relative to the start of the line
 -- where the input started.
 --
-
 local function move_back()
 	if __col == 0 then
 		ti.out(ti.cursor_up)
