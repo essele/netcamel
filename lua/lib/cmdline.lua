@@ -213,8 +213,6 @@ end
 --
 -- If it's delete then it's just limited to current values
 --
--- TODO: if we are a list item then should we add a space after completion?
---
 local function cfvalue_completer(tokens, n, prefix)
 	local token = tokens[n]
 	local pos = token.start + prefix:len()
@@ -403,101 +401,11 @@ local function cfvalue_validator(tokens, n, pathn)
 end
 
 
-local function syntax_set(tokens)
-	--
-	-- Only allow the cfpath completer unless the cfpath
-	-- gets properly validated
-	--
-	tokens[2].completer = cfpath_completer
-	tokens[1].default_completer = nil
-
-	tokens[2].opts = { use_master = true, use_new = true, allow_value = true, allow_container = false }
-
-	--
-	-- Make sure the cfpath is ok
-	--
-	if tokens[2].status ~= OK then cfpath_validator(tokens, 2) end
-	if tokens[2].status ~= OK then readline.mark_all(tokens, 3, FAIL) return end
-
-	--
-	-- Setup the completer for all other fields
-	--
-	if tokens[3] then tokens[3].completer = cfvalue_completer end
-	--
-	-- Check all other fields are correct
-	--
-	n = 3
-	while tokens[n] do
-		cfvalue_validator(tokens, n, 2)
-		n = n + 1
-	end
-end
-
-local function syntax_delete(tokens)
-	tokens[2].completer = cfpath_completer
-	tokens[1].default_completer = nil
-
-	tokens[2].opts = { use_master = false, use_new = true, allow_value = true, allow_container = true }
-
-	if tokens[2].status ~= OK then cfpath_validator(tokens, 2) end
-	if tokens[2].status ~= OK then readline.mark_all(tokens, 3, FAIL) return end
-
-	--
-	-- We support additional tokens if we are deleting from a list
-	--
-	if tokens[2].status == OK and tokens[2].mp and master[tokens[2].mp].list then
-		tokens[1].default_completer = cfvalue_completer
-		local n = 3
-		while tokens[n] do
-			cfvalue_validator(tokens, n, 2)
-			n = n + 1
-		end
-	else
-		local n = 3
-		while tokens[n] do tokens[n].status = FAIL n = n + 1 end
-	end
-end
-
-local function syntax_cd(tokens)
-	tokens[2].completer = cfpath_completer
-	tokens[1].default_completer = nil
-
-	tokens[2].opts = { use_master = true, use_new = true, allow_value = false, allow_container = true }
-
-	if tokens[2].status ~= OK then cfpath_validator(tokens, 2) end
-	if tokens[2].status ~= OK then readline.mark_all(tokens, 3, FAIL) return end
-	if tokens[3] then readline.mark_all(tokens, 3, FAIL) return end
-end
-
-local function syntax_level1(tokens)
-	local token = tokens[1]
-	local value = token.value
-	local status
-
-	if __cmds[value] then 
-		token.status = OK
-		if value == "set" and tokens[2] then
-			syntax_set(tokens, input)
-		elseif value == "delete" and tokens[2] then
-			syntax_delete(tokens, input)
-		elseif value == "cd" and tokens[2] then
-			syntax_cd(tokens, input)
-		end
-	elseif tokens[2] then
-		token.status = FAIL
-	else
-		local matches = match_list(__cmds, value)
-		if #matches > 0 then token.status = PARTIAL 
-		else token.status = FAIL end
-	end
-	if token.status == FAIL then readline.mark_all(tokens, 2, FAIL) end
-end
-
-
+--
+-- Handle the validation/syntax checking based on our supplied cmd and options
+--
 local function syntax_action(cmd, tokens)
 	local i = 2
-
-	tokens[1].default_completer = nil
 
 	for a in each(cmd.args) do
 		--
@@ -544,8 +452,6 @@ end
 -- changed. If we need to recalc then do so.
 --
 local function syntax_checker(tokens, input)
---	syntax_level1(tokens)
-
 	local token = tokens[1]
 	local value = token.value
 	local status
@@ -604,7 +510,6 @@ local function initial_completer(tokens, input, pos)
 		return system_completer(tokens, n, prefix)
 	else
 		if tokens[n].completer then return tokens[n].completer(tokens, n, prefix) end
-		if tokens[1].default_completer then return tokens[1].default_completer(tokens, n, prefix) end
 		return nil
 	end
 end
@@ -806,46 +711,11 @@ function interactive()
 			end
 		end	
 
-	
-		if cmd then
-			cmd.func(cmd, cmdline, tags)
-		elseif tags[1].value == "show" then
-			show(CF_current, CF_new)
-		elseif tags[1].value == "cd" then
-			print("kp="..tags[2].kp)
-			print("mp="..tags[2].mp)
-			__path_kp = tags[2].kp
-			__path_mp = tags[2].mp
-			prompt = setprompt(__path_kp)
-		elseif tags[1].value == "set" then
-			print("2="..tags[2].value)
-			print("3="..tags[3].value)
-
-			local has_quotes = tags[3].value:match("^\"(.*)\"$")
-			if has_quotes then
-				tags[3].value = has_quotes
-			end
-		
-			local rc, err = set(CF_new, tags[2].value, tags[3].value)
-			if not rc then print("Error: " .. tostring(err)) end
-		elseif tags[1].value == "delete" then
-			print("2="..tostring(tags[2].value))
-			print("3="..tostring(tags[3] and tags[3].value))
-			local list_elem = (tags[3] and tags[3].value ~= "" and tags[3].value) or nil
-
-			local rc, err = delete(CF_new, tags[2].value, list_elem)
-			if not rc then print("Error: " .. tostring(err)) end
-		elseif tags[1].value == "commit" then
-			local rc, err = commit(CF_current, CF_new)
-			if not rc then 
-				print("Error: " .. err)
-			else
-				CF_current = copy_table(CF_new)
-			end
-		elseif tags[1].value == "save" then
-			local rc, err = save(CF_current)
-			if not rc then print("Error: " .. err) end
-		end
+		--
+		-- Execute the command
+		--
+		cmd.func(cmd, cmdline, tags)
+		-- TODO: error checking
 
 	::continue::
 	end
