@@ -71,37 +71,69 @@ local function append_token(s, t)
 end
 
 --
--- Build a list of possible children from master or CF_new considering
--- constraints about container only.
+-- Add any provided "options" from the master to the given list
 --
-local function populate_options(options, mp, kp, containeronly)
-	if mp then
-		for item in each(node_list(mp, master)) do
-			if containeronly and master[append_token(mp, item)]["type"] ~= nil then goto nextmp end
-			if item == "*" then
-				local master_opts = master[append_token(mp, "*")]["options"]
-				if type(master_opts) == "function" then
-					master_opts = master_opts(append_token(kp, "*"), append_token(mp, "*"))
-				end
-
-				for item in each(master_opts or {}) do
-					options[item] = { mp = "*", kp = "*"..item }
-				end
-			else
-				options[item] = { mp = item, kp = item }
-			end
-::nextmp::
-		end
+local function add_master_options(options, mp)
+	local master_opts = master[mp]["options"]
+	if type(master_opts) == "function" then
+		master_opts = master_opts()
 	end
-	if kp then
-		for item in each(node_list(kp, CF_new)) do
-			if containeronly and CF_new[append_token(kp, item)] ~= nil then goto nextkp end
-			local wc, nitem = item:match("^(%*?)(.-)$")
-			options[nitem] = { mp = (wc == "" and item) or "*", kp = item }
-::nextkp::
-		end
+	for item in each(master_opts or {}) do
+		options[item] = { mp="*", kp="*"..item }
 	end
 end
+
+
+local function node_selector(mp, kp, opts)
+	--
+	-- Get all the master nodes that match the options we have provided
+	--
+	local m_list = {}
+	local match = mp:gsub("/$", ""):gsub("([%-%+%.%*])", "%%%1").."/([^/]+)"
+	for k, m in pairs(master) do
+		local item = k:match(match)
+		if item then
+			if opts.allow_container and master[k]["type"] == nil then m_list[item] = 1 end
+			if opts.allow_value and master[k]["type"] ~= nil then m_list[item] = 1 end
+		end
+	end
+	
+	--
+	-- Now build the final list
+	--
+	local list = {}
+
+	--
+	-- If use_master then add all master items (including * at this point)
+	--
+	if opts.use_master then
+		for item,_ in pairs(m_list) do list[item] = { mp=item, kp=item } end
+	end
+
+	--
+	-- Now add actuals where we have a match with the original master list
+	-- so that we only include containers/values as needed
+	--
+	if opts.use_new then
+		for item in each(node_list(kp, CF_new)) do
+			if m_list[item] then 
+				list[item] = { mp=item, kp=item }
+			elseif item:sub(1,1) == "*" and m_list["*"] then 
+				list[item:sub(2)] = { mp="*", kp=item }
+			end
+		end
+	end
+
+	--
+	-- If we have a * then add master options, we leave the * so we know
+	-- if we have options available (for 'more' calcs)
+	--
+	if list["*"] then
+		add_master_options(list, mp.."/*")
+	end
+	return list
+end
+
 
 --
 -- We handle the token containing paths, so we first need to
@@ -167,35 +199,18 @@ local function cfpath_completer(tokens, n, prefix)
 	-- Find out if we have more after this one ... if we don't get any options then just
 	-- check if we are a wildcard.
 	--
-	local more = {}
-	local container_only = mtoken.allow_container and not mtoken.allow_value
+	local opts = mtoken.opts
+	local container_only = opts.allow_container and not opts.allow_value
+	local more = node_selector(append_token(mp, node.mp), append_token(kp, node.kp), opts)
 
-	populate_options(more, mtoken.use_master and append_token(mp, node.mp),
-								mtoken.use_new and append_token(kp, node.kp), container_only)
 
-	local match, moreflag = next(matches), next(more) ~= nil
-
-	if not moreflag then
-		--
-		-- See if we are a wildcard, if we are then add a dummy more since there will be
-		-- more fields. If we are containeronly then we need to check the extra
-		-- fields to see if they are containers
-		--
-		local moremp = append_token(mp, node.mp)
-		local wc = node_list(moremp, master)
-		if container_only then
-			for n in each(wc) do
-				if master[append_token(moremp, n)]["type"] == nil then moreflag = true end
-			end
-			
-		elseif #wc > 0 then moreflag = true end
-	end
+	local match, moreflag = next(matches), next(more)
 
 	--
 	-- If we allow_container then we only put the slash on after a second tab
 	-- on a full match
 	--
-	if mtoken.allow_container and moreflag then
+	if opts.allow_container and moreflag then
 		if match == prefix then return "/" end
 		return (match and match:sub(#prefix+1))
 	end
@@ -260,7 +275,6 @@ local function cfsetitem_completer(tokens, n, prefix)
 	return matches[1]:sub(#prefix+1)
 end
 
-
 --
 -- We get called for the path token (usually token 2) so we can 
 -- re-tokenise and then run through each token that needs validating
@@ -280,6 +294,9 @@ local function cfpath_validator(tokens, n, input)
 		mp, kp = __path_mp, __path_kp
 	end
 
+	local opts = tokens[1].opts
+	local container_only = opts.allow_container and not opts.allow_value
+
 	for i,token in ipairs(ptoken.subtokens) do
 		local value = token.value
 		if allfail then token.status = FAIL goto continue end
@@ -289,17 +306,16 @@ local function cfpath_validator(tokens, n, input)
 		-- Build a list of the options we know about and add in the provided options
 		-- for a wildcard
 		--
-		if not token.options then
-			local container_only = tokens[1].allow_container and not tokens[1].allow_value
-			token.options = {}
-			populate_options(token.options, tokens[1].use_master and mp, 
-								tokens[1].use_new and kp, container_only)
-		end
+		if not token.options then token.options = node_selector(mp, kp, opts) end
 
 		--
 		-- Handle the case of "/" for a container
 		--
-		if tokens[1].allow_container and value == "" then token.status = OK goto done end
+		if opts.allow_container and ptoken.value == "/" then 
+			token.kp, token.mp = "/", "/"
+			token.status = OK 
+			goto done 
+		end
 
 		--
 		-- Allow the use of .. to go back if there is room
@@ -333,7 +349,7 @@ local function cfpath_validator(tokens, n, input)
 		-- try wildcard match (only if we are matching possibles from the
 		-- master list)
 		--
-		if tokens[1].use_master then
+		if opts.use_master then
 			if master[append_token(mp, "*")] then
 				mp = append_token(mp, "*")
 				kp = append_token(kp, "*"..value)
@@ -364,7 +380,7 @@ local function cfpath_validator(tokens, n, input)
 
 	-- if we want to non-container then we are partial unless we have it
 	local finalstatus = ptoken.subtokens[#ptoken.subtokens].status
-	local must_be_node = tokens[1].allow_value and not tokens[1].allow_container
+	local must_be_node = opts.allow_value and not opts.allow_container
 
 	if must_be_node and finalstatus ~= FAIL then
 		if #mp == 0 or (master[mp] and master[mp]["type"] == nil) then
@@ -403,9 +419,11 @@ local function syntax_set(tokens)
 	--
 	tokens[2].completer = cfpath_completer
 	tokens[1].default_completer = nil
+
+	tokens[1].opts = { use_master = true, use_new = true, allow_value = true, allow_container = false }
+
 	tokens[1].use_master = true
 	tokens[1].use_new = true
-
 	tokens[1].allow_value = true
 	tokens[1].allow_container = false
 
@@ -432,9 +450,11 @@ end
 local function syntax_delete(tokens)
 	tokens[2].completer = cfpath_completer
 	tokens[1].default_completer = nil
+
+	tokens[1].opts = { use_master = false, use_new = true, allow_value = true, allow_container = true }
+
 	tokens[1].use_master = false
 	tokens[1].use_new = true
-
 	tokens[1].allow_value = true
 	tokens[1].allow_container = true
 
@@ -444,7 +464,7 @@ local function syntax_delete(tokens)
 	--
 	-- We support additional tokens if we are deleting from a list
 	--
-	if tokens[2].status == OK and master[tokens[2].mp].list then
+	if tokens[2].status == OK and tokens[2].mp and master[tokens[2].mp].list then
 		tokens[1].default_completer = cfsetitem_completer
 		local n = 3
 		while tokens[n] do
@@ -460,9 +480,10 @@ end
 local function syntax_cd(tokens)
 	tokens[2].completer = cfpath_completer
 	tokens[1].default_completer = nil
+
+	tokens[1].opts = { use_master = true, use_new = true, allow_value = false, allow_container = true }
 	tokens[1].use_master = true
 	tokens[1].use_new = true
-
 	tokens[1].allow_value = false
 	tokens[1].allow_container = true
 

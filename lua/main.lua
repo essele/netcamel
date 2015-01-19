@@ -45,7 +45,7 @@ require("cmdline")
 --
 -- global configuration spaces
 --
-master={}
+master={ ["/"] = {} }
 current={}
 new={}
 
