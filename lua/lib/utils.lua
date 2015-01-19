@@ -196,6 +196,17 @@ function count(hash)
 end
 
 --
+-- Compare to indexed lists to see if they contain the same items
+--
+function icompare(t1, t2)
+	if #t1 ~= #t2 then return false end
+	local i = 1
+	while t1[i] do if t1[i] ~= t2[i] then return false end i = i + 1 end
+	return true
+end
+
+
+--
 -- Return only the uniq items in a list (keep order)
 --
 function uniq(t)
@@ -252,6 +263,7 @@ end
 --
 function prefix_match(line, token, sep)
 	if #token == 0 then return true end
+	if token == sep then return true end			-- / case
 	if line:sub(1, #token) == token then
 		local c = line:sub(#token+1, #token+1)
 		if c == "" or c == sep then return true end
@@ -321,7 +333,7 @@ end
 -- TODO: probably move somewhere else
 --
 function create_config_file(name, template, dict)
-    local input = lines(template, "\n")
+	local input = lines(template, "\n")
 
 	-- work out leading space
 	local lead = input[1]:match("^(%s+)") or ""

@@ -387,13 +387,17 @@ function hash_of_all_nodes(input)
 end
 
 --
--- If we dump the config then we only write out the set items
+-- If we dump the config then we only write out the set items, but we will
+-- do it in order so the dump file is easier to read.
 --
 function dump(filename, config)
 	local file = io.open(filename, "w+")
 	if not file then return false, "unable to create: "..filename end
+
+	local keys = sorted_keys(config)
 	
-	for k,v in pairs(config) do
+	for k in each(keys) do
+		local v = config[k]
 		local mc = master[find_master_key(k)] or {}
 
 		if mc["list"] then
@@ -664,51 +668,6 @@ function raw_validate(vtype, kp, value)
 end
 
 --
--- Rework the provided path into the master structure, make sure any 
--- wildcards match the validators.
---
--- We return the real keypath (i.e. with *'s in front where needed)
---
-function rework_kp(config, kp)
-	local mp, rkp = "", ""
-
-	while(1) do
-		--
-		-- Pull out each key in turn and work out if its a wildcard...
-		--
-		local k = kp:match("^/([^/]+)")
-		if not k then break end
-		kp = kp:sub(#k + 2)
-
-		--
-		-- It's either a keypath or a wildcard path...
-		--
-		local master_kp = mp .. "/" .. k
-		local master_wp = mp .. "/*"
-
-		if master[master_wp] then
-			--
-			-- We are a wildcard key, so check we match style...
-			--
-			mp = master_wp
-			rkp = rkp .. "/*" .. k
-
-			local rc, err = validate(master[mp]["style"], rkp, k)
-			if not rc then return rc, err end
-		elseif master[master_kp] then
-			--
-			-- We are a fixed key, so just build the path for now
-			--
-			mp = master_kp
-			rkp = rkp .. "/" .. k
-		else
-			return false, "unknown configuration node: " .. master_kp
-		end
-	end
-	return rkp
-end
-
---
 -- Save the current config
 --
 -- TODO: needs to be more configurable, filename etc
@@ -724,22 +683,20 @@ end
 -- for the type and then set the config.
 --
 function set(config, kp, value)
-	local rkp, err = rework_kp(config, kp)
-	if not rkp then return false, err end
-
-	local mp = find_master_key(rkp)
+	print("kp="..kp)
+	local mp = find_master_key(kp)
 
 	print("mp="..mp)
 	print("type="..tostring(master[mp]["type"]))
 
 	if master[mp]["type"] then
 		print("HERE")
-		local rc, newval = validate(master[mp]["type"], rkp, value)
+		local rc, newval = validate(master[mp]["type"], kp, value)
 		print("rc="..tostring(rc))
 		if not rc then return false, newval end
 		if type(newval) ~= "nil" then value = newval end
 	else
-		return false, "not a settable configuration node: "..rkp
+		return false, "not a settable configuration node: "..kp
 	end
 	--
 	-- If we get here then we must be ok, add to list or set value
@@ -747,31 +704,91 @@ function set(config, kp, value)
 	--
 	print("Adding: mp="..mp)
 	if master[mp]["list"] then
-		if not config[rkp] then config[rkp] = {} end
-		if not in_list(config[rkp], value) then
-			table.insert(config[rkp], value)
+		if not config[kp] then config[kp] = {} end
+		if not in_list(config[kp], value) then
+			table.insert(config[kp], value)
 		end
 	else
-		print("RKP="..rkp)
+		print("RKP="..kp)
 		print("VALUE="..tostring(value))
-		config[rkp] = value
+		config[kp] = value
 	end
 	return true
 end
 
 --
--- Rework the provided path and then delete anything that starts
--- with the same prefix (assuming there is something)
+-- Take a part of the config and put it back to the current settings, return
+-- how many items were affected.
 --
-function delete(config, kp)
-	local rkp, err = rework_kp(config, kp)
-	if not rkp then return false, err end
-
+function revert(config, kp)
 	local count = 0
-	for k,_ in pairs(config) do
-		if prefix_match(k, rkp, "/") then
+	
+	--
+	-- Get a list of all the items currently in new and current configs
+	--
+	local new = prefixmatches(config, kp)
+	local current = prefixmatches(CF_current, kp)
+
+	--
+	-- Now go through all new ones, if current is the same we leave it, if its
+	-- gone we remove it, if it's different we replace it.
+	--
+	for k, _ in pairs(new) do
+		if current[k] == nil then 
 			config[k] = nil
+			count = count + 1
+		elseif type(new[k]) == "table" then
+			if not icompare(config[k], current[k]) then 
+				config[k] = copy_table(current[k]) 
+				count = count + 1
+			end
+		elseif new[k] ~= current[k] then 
+			config[k] = current[k] 
+			count = count + 1
+		end
+		current[k] = nil
+	end
+
+	--
+	-- Now add any remaining current items
+	--
+	for k, _ in pairs(current) do 
+		config[k] = current[k] 
+		count = count + 1
+	end
+	return count
+end
+
+--
+-- Delete anything that matches the provided keypath, if we are provided
+-- with a third arg then it's a particular list element that we want to
+-- delete.
+--
+-- We can't use prefixmatches because we support as far at the value
+-- so don't stop at containers.
+--
+-- Return the number of items we deleted.
+--
+function delete(config, kp, value)
+	local count = 0
+	if not kp then return false, "no path provided" end
+
+	for k,_ in pairs(config) do
+		if prefix_match(k, kp, "/") then
+			if value and type(config[k]) == "table" then
+				local i = 1
+				while(config[k][i]) do
+					if config[k][i] == value then 
+						table.remove(config[k], i) 
+						count = count + 1
+					else i = i + 1 end
+				end
+			else 
+				count = count + ((type(config[k]) == "table" and #config[k]) or 1)
+				config[k] = nil
+			end
 		end
 	end
+	return count
 end
 

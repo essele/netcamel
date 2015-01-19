@@ -21,24 +21,9 @@ require("config")
 readline = require("readline")
 
 --
--- Sample initial tab completer
--- 
--- We need to continuously determin if the token is OK, PARTIAL or FAIL
--- and if it's OK then we need to return a next tokens completer.
---
--- The token will always be anything up to (and including) a space
--- (quoted stuff tbd)
+-- Will be populated with our cmdline commands
 --
 local CMDS = {}
-local __cmds = {
-	["set"] = { desc = "blah blah" },
-	["cd"] = { cmd = cmd_cd },
-	["show"] = {},
-	["delete"] = {},
-	["commit"] = {},
-	["save"] = {},
-	["revert"] = {},
-}
 
 --
 -- Our prompt string
@@ -48,8 +33,8 @@ local __prompt
 --
 -- Our 'path' ... i.e. where are we in the config structure
 --
-local __path_kp = "/interface"
-local __path_mp = "/interface"
+local __path_kp = "/"
+local __path_mp = "/"
 
 
 local function match_list(list, t)
@@ -588,7 +573,7 @@ end
 -- way so the format is free)
 --
 local function system_completer(tokens, n, prefix)
-	local matches = match_list(__cmds, prefix)
+	local matches = match_list(CMDS, prefix)
 	local ppos = prefix:len() + 1
 
 	if #matches == 0 then return nil end
@@ -602,7 +587,7 @@ local function system_completer(tokens, n, prefix)
 		end
 	end
 	for i, m in ipairs(matches) do
-		matches[i] = string.format("%-20.20s %s", m, __cmds[m].desc or "-")
+		matches[i] = string.format("%-20.20s %s", m, CMDS[m].help or "-")
 	end
 
 	return matches
@@ -654,8 +639,41 @@ CMDS["show"] = {
 }
 CMDS["show"].func = function(cmd, cmdline, tags)
 	local kp = (tags[2] and tags[2].kp) or __path_kp
---	show(CF_current, CF_new)
 	show(CF_current, CF_new, kp)
+end
+
+-- ------------------------------------------------------------------------------
+-- SAVE COMMAND
+-- ------------------------------------------------------------------------------
+CMDS["save"] = {
+	help = "save the currently active configuration so its applied at boot time",
+	usage = "save",
+	min_args = 0,
+	max_args = 0,
+	args = {}
+}
+CMDS["save"].func = function(cmd, cmdline, tags)
+	local rc, err = save(CF_current)
+	if not rc then print("Error: " .. err) end
+end
+
+-- ------------------------------------------------------------------------------
+-- COMMIT COMMAND
+-- ------------------------------------------------------------------------------
+CMDS["commit"] = {
+	help = "make the new configuration active",
+	usage = "commit",
+	min_args = 0,
+	max_args = 0,
+	args = {}
+}
+CMDS["commit"].func = function(cmd, cmdline, tags)
+	local rc, err = commit(CF_current, CF_new)
+	if not rc then 
+		print("Error: " .. err)
+	else
+		CF_current = copy_table(CF_new)
+	end
 end
 
 -- ------------------------------------------------------------------------------
@@ -672,16 +690,12 @@ CMDS["delete"] = {
 	}
 }
 CMDS["delete"].func = function(cmd, cmdline, tags)
-	for t in each(tags) do
-		print("tag: ["..t.value.."]  status="..t.status)
-	end
-	print("2="..tostring(tags[2].value))
-	print("2kp="..tostring(tags[2].kp))
-	print("3="..tostring(tags[3] and tags[3].value))
-	local list_elem = (tags[3] and tags[3].value ~= "" and tags[3].value) or nil
+	local kp = tags[2].kp
+	local list_elem = tags[3] and tags[3].value
 
-	local rc, err = delete(CF_new, tags[2].value, list_elem)
+	local rc, err = delete(CF_new, kp, list_elem)
 	if not rc then print("Error: " .. tostring(err)) end
+	print(string.format("delete: removed %s configuration item%s.", rc, (rc > 1 and "s") or ""))
 end
 
 -- ------------------------------------------------------------------------------
@@ -706,8 +720,26 @@ CMDS["set"].func = function(cmd, cmdline, tags)
 		tags[3].value = has_quotes
 	end
 
-	local rc, err = set(CF_new, tags[2].value, tags[3].value)
+	local rc, err = set(CF_new, tags[2].kp, tags[3].value)
 	if not rc then print("Error: " .. tostring(err)) end
+end
+
+-- ------------------------------------------------------------------------------
+-- REVERT COMMAND
+-- ------------------------------------------------------------------------------
+CMDS["revert"] = {
+	help = "revert part of the new config back to current settings",
+	usage = "revert <cfg_path>",
+	min_args = 1,
+	max_args = 1,
+	args = {
+		{ arg = "cfpath", opts = { use_master = true, use_new = true, allow_value = false, allow_container = true }}
+	}
+}
+CMDS["revert"].func = function(cmd, cmdline, tags)
+	local rc, err = revert(CF_new, tags[2].kp)
+	if not rc then print("Error: " .. tostring(err)) end
+	print(string.format("revert: considered %s configuration item%s.", rc, (rc > 1 and "s") or ""))
 end
 
 -- ------------------------------------------------------------------------------
@@ -723,10 +755,6 @@ CMDS["cd"] = {
 	}
 }
 CMDS["cd"].func = function(cmd, cmdline, tags)
-	if not tags[2] then usage(cmd) return end
-
-	print("kp="..tags[2].kp)
-	print("mp="..tags[2].mp)
 	__path_kp = tags[2].kp
 	__path_mp = tags[2].mp
 	__prompt = setprompt(__path_kp)
