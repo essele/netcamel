@@ -56,6 +56,17 @@ function find_master_key(k)
 	return k:gsub("/%*[^/]+", "/*")
 end
 
+--
+-- Simple routine to append a token onto a string, we add a slash if
+-- needed
+--
+function append_token(s, t)
+	local rc = s
+	if s:sub(-1) ~= "/" then rc = rc .. "/" end
+	rc = rc .. t
+	return rc
+end
+
 -- 
 -- Given a prefix and a kv return a list of the nodes that are within the
 -- prefix (a slash is added here to ensure we match something that can be
@@ -480,7 +491,7 @@ end
 -- cleaner and more readable
 --
 function show(current, new, kp)
-	kp = kp or ""
+	kp = kp or "/"
 
 	--
 	-- Build up a full list of nodes, and a combined list of all
@@ -603,7 +614,8 @@ function show(current, new, kp)
 
 		for key in each(node_list(kp, combined)) do
 			local dispkey = key:gsub("^%*", "")
-			local newkp = kp .. "/" .. key
+--			local newkp = kp .. "/" .. key
+			local newkp = append_token(kp, key)
 			local mc = master[find_master_key(newkp)] or {}
 			local disposition, value = disposition_and_value(newkp)
 

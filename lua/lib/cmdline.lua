@@ -17,6 +17,7 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -----------------------------------------------------------------------------
 
+require("config")
 readline = require("readline")
 
 --
@@ -63,12 +64,14 @@ end
 -- Simple routine to append a token onto a string, we add a slash if
 -- needed
 --
+--[[
 local function append_token(s, t)
 	local rc = s
 	if s:sub(-1) ~= "/" then rc = rc .. "/" end
 	rc = rc .. t
 	return rc
 end
+]]--
 
 --
 -- Add any provided "options" from the master to the given list
@@ -650,7 +653,9 @@ CMDS["show"] = {
 	}
 }
 CMDS["show"].func = function(cmd, cmdline, tags)
-	show(CF_current, CF_new)
+	local kp = (tags[2] and tags[2].kp) or __path_kp
+--	show(CF_current, CF_new)
+	show(CF_current, CF_new, kp)
 end
 
 -- ------------------------------------------------------------------------------
