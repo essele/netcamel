@@ -589,6 +589,7 @@ local function system_completer(tokens, n, prefix)
 	for i, m in ipairs(matches) do
 		matches[i] = string.format("%-20.20s %s", m, CMDS[m].help or "-")
 	end
+	matches.text = true
 	return matches
 end
 

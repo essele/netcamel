@@ -607,6 +607,39 @@ local function fword(line, pos)
 end
 
 --
+-- Tab completion output, depending on what kind of list it is we will
+-- format it differently.
+--
+-- If the text flag is set then we just output each line.
+-- Otherwise we consider it a list of smallish items, so we work out the
+-- longest, and see how many we can fit across a line.
+--
+local function completer_output(comp)
+	if comp.text then
+		for _,m in ipairs(comp) do ti.out(m .. "\n") end
+		return
+	end
+
+	local maxlen = 0
+	for _,m in ipairs(comp) do maxlen = math.max(maxlen, #m) end
+	maxlen = maxlen + 2
+	
+	local cols = math.floor(__width/maxlen)
+	local rows = math.ceil(#comp/cols)
+
+	local format = string.format("%%-%d.%ds", maxlen, maxlen)
+
+	for r = 1, rows do
+		for c = 1, cols do
+			local i = ((c-1)*rows) + r
+			ti.out(string.format(format, comp[i] or ""))
+		end
+		ti.out(ti.carriage_return)
+		ti.out(ti.cursor_down) 
+	end
+end
+
+--
 --
 --
 --
@@ -721,9 +754,12 @@ local function readline(prompt, history, syntax_func, completer_func)
 					ti.out(ti.carriage_return)
 					ti.out(ti.cursor_down)
 					__col, __row = 0, 0
+--[[
 					for _,m in ipairs(rc) do
 						ti.out(m .. "\n")
 					end
+]]--
+					completer_output(rc)
 					needs_full_redraw = true
 				end
 			end
