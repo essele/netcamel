@@ -581,7 +581,7 @@ TABLE["status"] = {
 --
 -- Deal with triggers and depdencies
 --
-function interface_init()
+function interface_ethernet_init()
 	--
 	-- Trigger the pppoe work if the underlying ethernet changes
 	--

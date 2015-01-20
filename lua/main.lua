@@ -31,7 +31,12 @@ require("validators")
 --require("api")
 
 -- different namespace packages
-local posix		= { glob = require("posix.glob") }
+local posix		= { 
+	dirent = require("posix.dirent"), 
+	glob = require("posix.glob"),
+	fnmatch = require("posix.fnmatch"),
+	sys = { stat = require("posix.sys.stat") }
+}
 local base64 	= require("base64")
 local ffi 		= require("ffi")
 local service 	= require("service")
@@ -49,22 +54,62 @@ master={ ["/"] = {} }
 current={}
 new={}
 
+
+--
+-- Find all files (recursively) in a directory that match a given
+-- shell like match (i.e. *.lua)
+--
+local function matching_files_in(dir, match)
+	local rc = {}
+	match = match or "*"
+
+	local function recursive_files(dir, match, rc)
+		for file in posix.dirent.files(dir) do
+			if file:sub(1,1) ~= "." then
+				local stat = posix.sys.stat.stat(dir.."/"..file)
+
+				if posix.sys.stat.S_ISDIR(stat.st_mode) ~= 0 then
+					recursive_files(dir.."/"..file, match, rc)
+				elseif posix.fnmatch.fnmatch(match, file) == 0 then
+					table.insert(rc, dir.."/"..file)
+				end
+			end
+		end
+	end
+
+	recursive_files(dir, match, rc)
+	table.sort(rc)
+	return rc
+end
+
+--
+-- Build a list of all the modules, working out the right init
+-- function name as well
+--
+local core_modules = {}
+for _,f in ipairs(matching_files_in("core", "*.lua")) do
+	local mname = f:gsub("^core/(.*)%.lua$", "%1"):gsub("/", "_")
+	table.insert(core_modules, { name = mname, file = f })
+end
+
+
 --
 -- work out which are all of the core modules
 --
+--[[
 local core_modules = {}
---for m in lfs.dir("core") do
 for _,m in ipairs(posix.glob.glob("core/*.lua")) do
 	local mname = m:match("^core/(.*)%.lua$")
 	if mname then table.insert(core_modules, mname) end
 end
 table.sort(core_modules)
-
+]]--
 --
 -- Import each of the modules...
 --
 for module in each(core_modules) do
-	dofile("core/" .. module .. ".lua")
+	print("Loading: "..module.file)
+	dofile(module.file)
 end
 
 --
@@ -83,18 +128,17 @@ end
 -- that all the structures are initialised.
 --
 for module in each(core_modules) do
-	local funcname = string.format("%s_init", module)
+--	local funcname = string.format("%s_init", module)
+	local funcname = module.name .. "_init"
 	if _G[funcname] then
 		-- TODO: return code (assert)
-		local ok, err = pcall(_G[funcname])
-		if not ok then assert(false, string.format("[%s]: %s code error: %s", key, funcname, err)) end
+--		local ok, err = pcall(_G[funcname])
+--		if not ok then assert(false, string.format("[%s]: %s code error: %s", key, funcname, err)) end
+		print("Initialising module: "..module.file)
+		_G[funcname]()
 	end
 end
 
-
-function other() 
-	print("other: dummy function called")
-end
 
 
 --
