@@ -203,9 +203,8 @@ end
 --
 function are_the_same(a, b)
 	if type(a) == "table" and type(b) == "table" then
-		local keys = {}
 		for k,v in pairs(a) do if not are_the_same(b[k], v) then return false end end
-		for k,v in pairs(b) do if not are_the_same(a[v], v) then return false end end
+		for k,v in pairs(b) do if not are_the_same(a[k], v) then return false end end
 		return true
 	else
 		return a == b

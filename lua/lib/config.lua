@@ -178,22 +178,6 @@ function find_master_function(wk)
 end
 
 --
--- Compare items a and b, if they are tables then do a table
--- comparison
---
-function are_the_same(a, b)
-	if type(a) == "table" and type(b) == "table" then
-		if #a ~= #b then return false end
-		for i, v in ipairs(a) do
-			if b[i] ~= v then return false end
-		end
-		return true
-	else 
-		return a == b
-	end
-end
-
---
 -- Add a trigger to a given node
 --
 function add_trigger(tonode, trigger)
