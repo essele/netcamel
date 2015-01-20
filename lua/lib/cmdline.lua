@@ -36,6 +36,11 @@ local __prompt
 local __path_kp = "/"
 local __path_mp = "/"
 
+--
+-- Undo capability
+--
+local __undo
+
 
 local function match_list(list, t)
 	local rc = {}
@@ -537,6 +542,32 @@ CMDS["show"].func = function(cmd, cmdline, tags)
 end
 
 -- ------------------------------------------------------------------------------
+-- UNDO COMMAND
+-- ------------------------------------------------------------------------------
+CMDS["undo"] = {
+	help = "undo the last activity",
+	usage = "undo",
+	min_args = 0,
+	max_args = 0,
+	args = {}
+}
+CMDS["undo"].func = function(cmd, cmdline, tags)
+	if not __undo then
+		print("undo: not available.")
+		return
+	end
+
+	local rc, err = undo(CF_new, __undo)
+	if not rc then 
+		print("error: " .. err) 
+		return
+	end
+	print(string.format("undo: undoing command: %s", __undo.cmd))
+	print(string.format("undo: processed %s configuration item%s.", rc, (rc > 1 and "s") or ""))
+	__undo = nil
+end
+
+-- ------------------------------------------------------------------------------
 -- SAVE COMMAND
 -- ------------------------------------------------------------------------------
 CMDS["save"] = {
@@ -548,7 +579,11 @@ CMDS["save"] = {
 }
 CMDS["save"].func = function(cmd, cmdline, tags)
 	local rc, err = save(CF_current)
-	if not rc then print("Error: " .. err) end
+	if not rc then 
+		print("error: " .. err)
+		return
+	end
+	__undo = nil
 end
 
 -- ------------------------------------------------------------------------------
@@ -564,10 +599,12 @@ CMDS["commit"] = {
 CMDS["commit"].func = function(cmd, cmdline, tags)
 	local rc, err = commit(CF_current, CF_new)
 	if not rc then 
-		print("Error: " .. err)
+		print("error: " .. err)
+		return
 	else
 		CF_current = copy(CF_new)
 	end
+	__undo = nil
 end
 
 -- ------------------------------------------------------------------------------
@@ -588,8 +625,13 @@ CMDS["delete"].func = function(cmd, cmdline, tags)
 	local list_elem = tags[3] and tags[3].value
 
 	local rc, err = delete(CF_new, kp, list_elem)
-	if not rc then print("Error: " .. tostring(err)) end
+	if not rc then 
+		print("error: " .. tostring(err))
+		return
+	end
 	print(string.format("delete: removed %s configuration item%s.", rc, (rc > 1 and "s") or ""))
+	__undo = err
+	__undo.cmd = cmdline
 end
 
 -- ------------------------------------------------------------------------------
@@ -615,7 +657,12 @@ CMDS["set"].func = function(cmd, cmdline, tags)
 	end
 
 	local rc, err = set(CF_new, tags[2].kp, tags[3].value)
-	if not rc then print("Error: " .. tostring(err)) end
+	if not rc then 
+		print("error: " .. tostring(err))
+		return
+	end
+	__undo = err
+	__undo.cmd = cmdline
 end
 
 -- ------------------------------------------------------------------------------
@@ -632,8 +679,13 @@ CMDS["revert"] = {
 }
 CMDS["revert"].func = function(cmd, cmdline, tags)
 	local rc, err = revert(CF_new, tags[2].kp)
-	if not rc then print("Error: " .. tostring(err)) end
+	if not rc then 
+		print("error: " .. tostring(err))
+		return
+	end
 	print(string.format("revert: considered %s configuration item%s.", rc, (rc > 1 and "s") or ""))
+	__undo = err
+	__undo.cmd = cmdline
 end
 
 -- ------------------------------------------------------------------------------

@@ -662,6 +662,7 @@ end
 -- for the type and then set the config.
 --
 function set(config, kp, value)
+	local undo = { delete = {}, add = {} }
 	local mp = find_master_key(kp)
 
 	if master[mp]["type"] then
@@ -675,6 +676,11 @@ function set(config, kp, value)
 	-- If we get here then we must be ok, add to list or set value
 	-- accordingly
 	--
+	if config[kp] == nil then
+		undo.delete[kp] = 1
+	else
+		undo.add[kp] = copy(config[kp])
+	end
 	if master[mp]["list"] then
 		if not config[kp] then config[kp] = {} end
 		if not in_list(config[kp], value) then
@@ -683,7 +689,7 @@ function set(config, kp, value)
 	else
 		config[kp] = value
 	end
-	return true
+	return true, undo
 end
 
 --
@@ -692,6 +698,7 @@ end
 --
 function revert(config, kp)
 	local count = 0
+	local undo = { delete = {}, add = {} }
 	
 	--
 	-- Get a list of all the items currently in new and current configs
@@ -703,11 +710,13 @@ function revert(config, kp)
 	-- Now go through all new ones, if current is the same we leave it, if its
 	-- gone we remove it, if it's different we replace it.
 	--
-	for k, _ in pairs(new) do
+	for k, v in pairs(new) do
 		if current[k] == nil then 
+			undo.add[k] = copy(v)
 			config[k] = nil
 			count = count + 1
-		elseif not are_the_same(new[k], current[k]) then 
+		elseif not are_the_same(v, current[k]) then 
+			undo.add[k] = copy(v)
 			config[k] = copy(current[k])
 			count = count + 1
 		end
@@ -717,11 +726,12 @@ function revert(config, kp)
 	--
 	-- Now add any remaining current items
 	--
-	for k, _ in pairs(current) do 
-		config[k] = current[k] 
+	for k, v in pairs(current) do 
+		undo.delete[k] = 1
+		config[k] = v
 		count = count + 1
 	end
-	return count
+	return count, undo
 end
 
 --
@@ -736,10 +746,12 @@ end
 --
 function delete(config, kp, value)
 	local count = 0
+	local undo = { delete = {}, add = {} }
 	if not kp then return false, "no path provided" end
 
 	for k,_ in pairs(config) do
 		if prefix_match(k, kp, "/") then
+			undo.add[k] = copy(config[k])
 			if value and type(config[k]) == "table" then
 				local i = 1
 				while(config[k][i]) do
@@ -754,6 +766,17 @@ function delete(config, kp, value)
 			end
 		end
 	end
-	return count
+	return count, undo
 end
 
+--
+-- Process an undo structure (delete and then add), we assume the undo
+-- structure already contains copies, so we don't need to copy again.
+--
+function undo(config, u)
+	local count = 0
+	for k,_ in pairs(u.delete) do config[k] = nil count = count + 1 end
+	for k,v in pairs(u.add) do config[k] = v count = count + 1 end
+	return count
+end
+	
