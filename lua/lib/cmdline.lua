@@ -215,11 +215,8 @@ local function cfvalue_completer(tokens, n, prefix)
 	-- Current value(s)
 	--
 	if CF_new[kp] then
-		if master[mp].list then
-			options = copy_table(CF_new[kp])
-		else
-			options = { tostring(CF_new[kp]) }
-		end
+		if master[mp].list then options = copy(CF_new[kp])
+		else options = { tostring(CF_new[kp]) } end
 	end
 
 	--
@@ -569,7 +566,7 @@ CMDS["commit"].func = function(cmd, cmdline, tags)
 	if not rc then 
 		print("Error: " .. err)
 	else
-		CF_current = copy_table(CF_new)
+		CF_current = copy(CF_new)
 	end
 end
 

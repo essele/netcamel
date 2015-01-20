@@ -161,7 +161,7 @@ if not CF_current then
 	print("Failed to load config, starting with nothing")
 	CF_current = {}
 end
-CF_new = copy_table(CF_current)
+CF_new = copy(CF_current)
 
 interactive()
 os.exit(0)

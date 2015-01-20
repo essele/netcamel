@@ -328,7 +328,7 @@ function commit(current, new)
 	--
 	-- Copy worklist and run precommit
 	--
-	local pre_work_list = copy_table(work_list)
+	local pre_work_list = copy(work_list)
 	local rc, err = execute_work_using_func("precommit", pre_work_list)
 	if not rc then return rc, err end
 
@@ -723,13 +723,8 @@ function revert(config, kp)
 		if current[k] == nil then 
 			config[k] = nil
 			count = count + 1
-		elseif type(new[k]) == "table" then
-			if not icompare(config[k], current[k]) then 
-				config[k] = copy_table(current[k]) 
-				count = count + 1
-			end
-		elseif new[k] ~= current[k] then 
-			config[k] = current[k] 
+		elseif not are_the_same(new[k], current[k]) then 
+			config[k] = copy(current[k])
 			count = count + 1
 		end
 		current[k] = nil

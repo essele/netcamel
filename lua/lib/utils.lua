@@ -25,15 +25,17 @@ function string_remove(src, pos, count)
 end
 
 --
--- Create a copy of the key/value list (or table)
+-- Create a copy of the item, including handling tables and
+-- nested tables
 --
-function copy_table(t)
-	local rc = {}
-	for k, v in pairs(t) do
-		if(type(v) == "table") then rc[k] = copy_table(v)
-		else rc[k] = v end
+function copy(t)
+	if type(t) == "table" then
+		local rc = {}
+		for k,v in pairs(t) do rc[k] = copy(v) end
+		return rc
+	else
+		return t
 	end
-	return rc
 end
 
 --
@@ -196,14 +198,20 @@ function count(hash)
 end
 
 --
--- Compare to indexed lists to see if they contain the same items
+-- Compare items a and b, if they are tables then do a table
+-- comparison
 --
-function icompare(t1, t2)
-	if #t1 ~= #t2 then return false end
-	local i = 1
-	while t1[i] do if t1[i] ~= t2[i] then return false end i = i + 1 end
-	return true
+function are_the_same(a, b)
+	if type(a) == "table" and type(b) == "table" then
+		local keys = {}
+		for k,v in pairs(a) do if not are_the_same(b[k], v) then return false end end
+		for k,v in pairs(b) do if not are_the_same(a[v], v) then return false end end
+		return true
+	else
+		return a == b
+	end
 end
+
 
 
 --

@@ -197,7 +197,7 @@ end
 -- the 'routes' system then we check if we need to really apply the route.
 --
 local function insert_route(e)
-	local entry = copy_table(e)
+	local entry = copy(e)
 	entry.table = entry.table or "main"
 
 	local rc, err = db.insert("routes", entry)
@@ -215,7 +215,7 @@ local function insert_route(e)
 	end
 end
 local function delete_route(f)
-	local entry = copy_table(f)
+	local entry = copy(f)
 	entry.dest = entry.dest or "default"
 	entry.table = entry.table or "main"
 

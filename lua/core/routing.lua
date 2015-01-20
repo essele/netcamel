@@ -61,27 +61,6 @@ local function routing_commit(changes)
 		runtime.insert_route(cf)		
 	end
 	runtime.block_off()
-
---[[
-
-	local rc, err = db.query("routes", "remove_all_routes")
-	print("remove: rc="..tostring(rc).." err="..tostring(err))
-
-	for routename in each(node_list("routing/route", CF_new)) do
-		local route = node_vars("routing/route/"..routename, CF_new)
-
-		print("Route: "..routename.." dest="..route.dest)
-		--
-		-- Build an entry for the database...
-		--
-		local entry = copy_table(route)
-		entry.source = "routes"
-		entry.interface = interface_name(entry.interface)
-	
-		local rc, err = db.insert("routes", entry)
-		print("add: rc="..tostring(rc).." err="..tostring(err))
-	end
-]]--
 	return true
 end
 
