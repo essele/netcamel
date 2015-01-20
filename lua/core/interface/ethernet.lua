@@ -222,89 +222,13 @@ VALIDATOR["ethernet_unit"] = function(v, kp)
 end
 
 --
--- The MTU needs to be a sensible number
+-- Where we expect an ethernet interface name...
 --
-VALIDATOR["mtu"] = function(v, kp)
-	--
-	-- TODO: check the proper range of MTU numbers, may need to support
-	--	   jumbo frames
-	--
-	if not v:match("^%d+$") then return FAIL, "mtu must be numeric only" end
-	local mtu = tonumber(v)
-
-	if mtu < 100 then return PARTIAL, "mtu must be above 100" end
-	if mtu > 1500 then return FAIL, "mtu must be 1500 or less" end
-	return OK
-end
-
-
-function interface_validator(v, types)
-	for _,item in ipairs(types) do
-		if (item.."/"):sub(1, v:len()) == v then return PARTIAL end
-	end
-	for _,item in ipairs(types) do
-		if v:match("^"..item.."/".."%d+$") then return OK end
-	end
-	return FAIL, "interfaces need to be ["..table.concat(types, "|").."]/nn"
-end
-
-
---
--- Where we expect an interface name...
---
-VALIDATOR["any_interface"] = function(v, kp)
-	return interface_validator(v, {"ethernet", "pppoe"})
-end
 VALIDATOR["eth_interface"] = function(v, kp)
 	return interface_validator(v, {"ethernet"})
 end
-
---
--- Convert any format into a full keypath, this is used by any function that
--- takes any interface as an argument. It allows complete flexibility in what
--- can be used.
---
-function interface_path(interface)
-	local t, i = interface:match("^([^/]+)/%*?(%d+)$")
-	if t then return string.format("/interface/%s/*%s", t, i) end
-	return nil
-end
-
---
--- Given a name in any format, work out what the physical interface
--- should be...
---
-function interface_name(path)
-	local i = path:match("ethernet/%*?(%d+)$") or path:match("eth(%d+)$")
-	if i then return string.format("eth%s", i) end
-	local i = path:match("pppoe/%*?(%d+)$") or path:match("pppoe(%d+)$")
-	if i then return string.format("pppoe%s", i) end
-end
-function interface_names(list)
-	local rc = {}
-	for interface in each(list) do table.insert(rc, interface_name(interface)) end
-	return rc
-end
-
---
--- Used to provide a list of configured ethernet interfaces for cmdline
--- completion.
---
-function options_from_interfaces(types)
-	local rc = {}
-	for _,t in ipairs(types) do
-		for node in each(node_list("/interface/"..t, CF_new)) do
-			push(rc, t .."/"..node:gsub("^%*", ""))
-		end
-	end
-	return rc
-end
-		
 OPTIONS["eth_interfaces"] = function(kp, mp)
 	return options_from_interfaces({"ethernet"})
-end
-OPTIONS["all_interfaces"] = function(kp, mp)
-	return options_from_interfaces({"ethernet", "pppoe"})
 end
 
 --
@@ -317,16 +241,16 @@ master["/interface/ethernet"] = {
 	["with_children"] = 1
 }
 
-master["/interface/ethernet/*"] = 					{ ["style"] = "ethernet_unit",
-											  		  ["options"] = { "0", "1", "2" } }
-master["/interface/ethernet/*/ip"] = 				{ ["type"] = "ipv4_nm" }
-master["/interface/ethernet/*/resolver"] =			{ ["type"] = "ipv4", ["list"] = true }
-master["/interface/ethernet/*/defaultroute"] =		{ ["type"] = "ipv4" }
+master["/interface/ethernet/*"] = 						{ ["style"] = "ethernet_unit",
+											  			  ["options"] = { "0", "1", "2" } }
+master["/interface/ethernet/*/ip"] = 					{ ["type"] = "ipv4_nm" }
+master["/interface/ethernet/*/resolver"] =				{ ["type"] = "ipv4", ["list"] = true }
+master["/interface/ethernet/*/defaultroute"] =			{ ["type"] = "ipv4" }
 master["/interface/ethernet/*/resolv-pri"] =			{ ["type"] = "2-digit", ["default"] = "80" }
-master["/interface/ethernet/*/defaultroute-pri"] =	{ ["type"] = "2-digit", ["default"] = "80" }
+master["/interface/ethernet/*/defaultroute-pri"] =		{ ["type"] = "2-digit", ["default"] = "80" }
 master["/interface/ethernet/*/defaultroute-table"] =	{ ["type"] = "OK", ["default"] = "main" }
-master["/interface/ethernet/*/mtu"] = 				{ ["type"] = "mtu" }
-master["/interface/ethernet/*/disabled"] = 			{ ["type"] = "boolean" }
+master["/interface/ethernet/*/mtu"] = 					{ ["type"] = "mtu" }
+master["/interface/ethernet/*/disabled"] = 				{ ["type"] = "boolean" }
 
 --
 -- Support DHCP on the interface (off by default)
@@ -335,25 +259,13 @@ master["/interface/ethernet/*/dhcp-enable"] = 				{ ["type"] = "boolean", ["defa
 master["/interface/ethernet/*/dhcp-no-resolv"] = 			{ ["type"] = "boolean", ["default"] = false }
 master["/interface/ethernet/*/dhcp-no-defaultroute"] = 		{ ["type"] = "boolean", ["default"] = false }
 master["/interface/ethernet/*/dhcp-resolv-pri"] = 			{ ["type"] = "2-digit", ["default"] = "60" }
-master["/interface/ethernet/*/dhcp-defaultroute-pri"] = 		{ ["type"] = "2-digit", ["default"] = "60" }
+master["/interface/ethernet/*/dhcp-defaultroute-pri"] = 	{ ["type"] = "2-digit", ["default"] = "60" }
 master["/interface/ethernet/*/dhcp-defaultroute-table"] = 	{ ["type"] = "OK", ["default"] = "main" }
 
---
--- We will use a table to manage the resolvers that come in from various sources
---
-TABLE["resolvers"] = {
-	schema = { source="string key", priority="integer", value="string" },
-	priority_resolvers = "select * from resolvers where priority = (select min(priority) from resolvers)",
-	remove_source = "delete from resolvers where source = :source"
-}
 
---
--- We'll also use a table to track status information so we know whether to apply
--- routes etc.
---
-TABLE["status"] = {
-	schema = { node="string primary key", status="string" },
-	set_status = "insert or replace into status (node, status) values (:node, :status)",
-	get_status = "select status from status where node = :node",
-}
-
+function interface_ethernet_init()
+	--
+	-- Tell the interface module we are here
+	--
+	interface_register("eth", "ethernet")
+end

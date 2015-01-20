@@ -250,6 +250,10 @@ master["/interface/pppoe/*/disabled"] = 			{ ["type"] = "boolean" }
 --
 function interface_pppoe_init()
 	--
+	-- Tell the interface module we are here
+	--
+	interface_register("pppoe", "pppoe")
+	--
 	-- Trigger the pppoe work if the underlying ethernet changes
 	--
 	add_trigger("/interface/ethernet/*", "/interface/pppoe/@ethernet_change")
