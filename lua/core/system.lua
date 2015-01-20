@@ -47,7 +47,8 @@ end
 -- Main interface config definition
 --
 master["/system"] = 								{ ["commit"] = system_commit,
-                                                  ["precommit"] = system_precommit }
+                                                	  ["precommit"] = system_precommit }
 master["/system/hostname"] =						{ ["type"] = "hostname" }
 
+master["/system/afile"] =							{ ["type"] = "file/text" }
 

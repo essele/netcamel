@@ -18,7 +18,11 @@
 -----------------------------------------------------------------------------
 
 require("config")
-readline = require("readline")
+local readline = require("readline")
+local posix = { 
+	dirent = require("posix.dirent"),
+	sys = { stat = require("posix.sys.stat") } 
+}
 
 --
 -- Will be populated with our cmdline commands
@@ -204,6 +208,41 @@ local function cfpath_completer(tokens, n, prefix)
 end
 
 --
+-- Handle completion for a filename value, this uses tables prepared
+-- by the cffilevalue_validator
+--
+-- TODO: options? perhaps limits of dir, or specific file types
+--
+local function cffilevalue_completer(tokens, n, prefix)
+	local token = tokens[n]
+
+	if token.status ~= PARTIAL then return nil end
+
+	local matches = prefixmatches(token.options, token.basename)
+	
+	local m1 = next(matches)
+	if not m1 then return nil end
+	local m2 = next(matches, m1)
+
+	--
+	-- If one match then complete and see if we should add the slash
+	--
+	if not m2 then
+		local match = m1:sub(#token.basename+1)
+		if matches[m1] == 2 then match = match .. "/" end
+		return match
+	end
+
+	--
+	-- If more than one match then handle the common prefix
+	--
+	local cp = common_prefix(matches)
+	if cp ~= token.basename then return cp:sub(#token.basename+1) end
+
+	return sorted_keys(prefixmatches(token.options, token.basename))
+end
+
+--
 -- For a set item we should look at potential values and see if we
 -- have any options to present. We'll also include current values.
 --
@@ -378,6 +417,57 @@ local function cfpath_validator(tokens, n, input)
 end
 
 --
+-- A simple file validator that uses glob to see if we are a partial match for
+-- a real filename
+--
+local function cffilevalue_validator(ptoken)
+	local value = ptoken.value
+	local dirname, basename = value:match("^(/?.-)/?([^/]*)$")
+
+	-- Set this before we put the "." in
+	ptoken.basename = basename
+
+	if dirname == "" then dirname = "." end
+	if basename == "" then basename = "." end
+
+	-- 
+	-- Check the dirname and populate the filelist if it's different from
+	-- last time
+	--
+	if dirname ~= ptoken.dirname then
+		local stat = posix.sys.stat.stat(dirname)
+		if not stat then return FAIL, "invalid path" end
+
+		ptoken.dirname = dirname
+		ptoken.options = {}
+		for file in each(posix.dirent.dir(dirname)) do
+			local stat = posix.sys.stat.stat(dirname.."/"..file)
+			if stat and bit.band(stat.st_mode, posix.sys.stat.S_IFREG) ~= 0 then
+				ptoken.options[file] = 1
+			elseif stat and bit.band(stat.st_mode, posix.sys.stat.S_IFDIR) ~= 0 then
+				ptoken.options[file] = 2
+			end
+		end
+	end
+
+	--
+	-- Check to see if we match any of the known files
+	--
+	local matches = prefixmatches(ptoken.options, basename)
+	
+	--
+	-- Matching scenarios ...
+	--
+	-- 1. Full match as file (but there might be others) = OK
+	-- 2. No matches = FAIL
+	-- 3. Anything else = PARTIAL
+	--
+	if matches[basename] and matches[basename] == 1 then return OK end
+	if not next(matches) then return FAIL, "invalid file name" end
+	return PARTIAL, "need full path to a file"
+end
+
+--
 -- Validate a value for an item in a cfpath (index=pathn)
 --
 local function cfvalue_validator(tokens, n, pathn)
@@ -393,7 +483,11 @@ local function cfvalue_validator(tokens, n, pathn)
 	local mtype = m["type"]
 	local err
 
-	ptoken.status, ptoken.err = VALIDATOR[mtype](value, kp)
+	if mtype:sub(1,5) == "file/" then
+		ptoken.status, ptoken.err = cffilevalue_validator(ptoken)
+	else
+		ptoken.status, ptoken.err = VALIDATOR[mtype](value, kp)
+	end
 
 	-- TODO: is it really this simple?
 end
@@ -427,10 +521,15 @@ local function syntax_action(cmd, tokens)
 		--
 		if a.arg == "cfvalue" then
 			local path_index = a.path_index or i-1
+			local value_type = master[tokens[path_index].mp]["type"]
 
 			if a.only_if_list and not master[tokens[path_index].mp].list then break end
 
-			tokens[i].completer = cfvalue_completer
+			if value_type:sub(1,5) == "file/" then
+				tokens[i].completer = cffilevalue_completer
+			else
+				tokens[i].completer = cfvalue_completer
+			end
 			if tokens[i].status ~= OK then cfvalue_validator(tokens, i, path_index) end
 			if tokens[i].status ~= OK then i = i + 1 break end
 		end
