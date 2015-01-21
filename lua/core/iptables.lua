@@ -379,7 +379,7 @@ local function ipt_precommit(changes)
 end
 
 
-VALIDATOR["iptables_table"] = function(v, kp)
+VALIDATOR["iptables_table"] = function(v, mp, kp)
 	local valid = { ["filter"] = 1, ["mangle"] = 1, ["nat"] = 1, ["raw"] = 1 }
 
 	if valid[v] then return OK end
@@ -388,7 +388,7 @@ VALIDATOR["iptables_table"] = function(v, kp)
 	end
 	return FAIL, "invalid table name"
 end
-VALIDATOR["iptables_policy"] = function(v, kp)
+VALIDATOR["iptables_policy"] = function(v, mp, kp)
 	local valid = { ["accept"] = 1, ["drop"] = 1 }
 
 	if valid[v] then return OK end
@@ -398,19 +398,19 @@ VALIDATOR["iptables_policy"] = function(v, kp)
 	return FAIL, "invalid policy"
 end	
 
-VALIDATOR["iptables_chain"] = function(v, kp)
+VALIDATOR["iptables_chain"] = function(v, mp, kp)
 	print("Validating chain ("..v..") for keypath ("..kp..")")
 	if v:len() < 1 then return PARTIAL end
 	return OK
 end
 
-VALIDATOR["iptables_rule"] = function(v, kp)
+VALIDATOR["iptables_rule"] = function(v, mp, kp)
 	print("Validating rule ("..v..") for keypath ("..kp..")")
 	if v:len() < 1 then return PARTIAL end
 	return OK
 end
 
-VALIDATOR["OK"] = function(v)
+VALIDATOR["OK"] = function(v, mp, kp)
 	return OK
 end
 

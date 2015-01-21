@@ -36,7 +36,7 @@ end
 
 
 
-VALIDATOR["hostname"] = function(v, kp)
+VALIDATOR["hostname"] = function(v, mp, kp)
 	if v:match("^%-") then return FAIL, "hostnames cannot start with hyphen" end
 	if v:match("%-$") then return FAIL, "hostnames cannot end with hyphen" end
 	if v:match("^[%w%-]+$") then return OK end

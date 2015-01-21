@@ -372,7 +372,7 @@ local function cfpath_validator(tokens, n, input)
 			if master[append_token(mp, "*")] then
 				mp = append_token(mp, "*")
 				kp = append_token(kp, "*"..value)
-				local rc, err = VALIDATOR[master[mp].style](value, kp)
+				local rc, err = VALIDATOR[master[mp].style](value, mp, kp)
 				if rc ~= FAIL then token.status = rc goto done end
 			end
 		end
@@ -486,7 +486,7 @@ local function cfvalue_validator(tokens, n, pathn)
 	if mtype:sub(1,5) == "file/" then
 		ptoken.status, ptoken.err = cffilevalue_validator(ptoken)
 	else
-		ptoken.status, ptoken.err = VALIDATOR[mtype](value, kp)
+		ptoken.status, ptoken.err = VALIDATOR[mtype](value, mp, kp)
 	end
 
 	-- TODO: is it really this simple?
@@ -748,15 +748,20 @@ CMDS["set"] = {
 	}
 }
 CMDS["set"].func = function(cmd, cmdline, tags)
-	print("2="..tags[2].value)
-	print("3="..tags[3].value)
+	local kp = tags[2].kp
+	local mp = tags[2].mp
+	local value = tags[3].value
 
-	local has_quotes = tags[3].value:match("^\"(.*)\"$")
-	if has_quotes then
-		tags[3].value = has_quotes
+	local has_quotes = value:match("^\"(.*)\"$")
+	if has_quotes then value = has_quotes end
+
+	if master[mp].action then
+		print("CALLING ACTION INSTEAD")
+		master[mp].action(value, mp, kp)
+		return
 	end
 
-	local rc, err = set(CF_new, tags[2].kp, tags[3].value)
+	local rc, err = set(CF_new, kp, value)
 	if not rc then 
 		print("error: " .. tostring(err))
 		return

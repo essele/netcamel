@@ -237,11 +237,11 @@ local function dnsmasq_precommit(changes)
 end
 
 
-VALIDATOR["text_label"] = function(v, kp)
+VALIDATOR["text_label"] = function(v, mp, kp)
 	return OK
 end
 
-VALIDATOR["ipset"] = function(v, kp)
+VALIDATOR["ipset"] = function(v, mp, kp)
 	return OK
 end
 

@@ -36,7 +36,7 @@ end
 --
 -- The MTU needs to be a sensible number
 --
-VALIDATOR["mtu"] = function(v, kp)
+VALIDATOR["mtu"] = function(v, mp, kp)
 	--
 	-- TODO: check the proper range of MTU numbers, may need to support
 	--	   jumbo frames
@@ -84,7 +84,7 @@ end
 --
 -- Where we expect an interface name...
 --
-VALIDATOR["any_interface"] = function(v, kp)
+VALIDATOR["any_interface"] = function(v, mp, kp)
 	return interface_validator(v, INTERFACE_NODE_LIST)
 end
 OPTIONS["all_interfaces"] = function(kp, mp)

@@ -208,7 +208,7 @@ end
 -- For ethernet interfaces we expect a simple number, but it needs
 -- to map to a real interface (or be a virtual)
 --
-VALIDATOR["ethernet_unit"] = function(v, kp)
+VALIDATOR["ethernet_unit"] = function(v, mp, kp)
 	--
 	-- TODO: once we know the numbers are ok, we need to test for a real
 	--	   interface.
@@ -224,7 +224,7 @@ end
 --
 -- Where we expect an ethernet interface name...
 --
-VALIDATOR["eth_interface"] = function(v, kp)
+VALIDATOR["eth_interface"] = function(v, mp, kp)
 	return interface_validator(v, {"ethernet"})
 end
 OPTIONS["eth_interfaces"] = function(kp, mp)

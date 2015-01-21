@@ -215,7 +215,7 @@ end
 --
 --
 --
-VALIDATOR["pppoe_if"] = function(v, kp)
+VALIDATOR["pppoe_if"] = function(v, mp, kp)
 	local err = "interface numbers should be [nnn] only"
 	if v:len() == 0 then return PARTIAL end
 	if v:match("^%d+$") then return OK end

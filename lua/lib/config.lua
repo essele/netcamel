@@ -627,26 +627,6 @@ function show(current, new, kp)
 end
 
 --
--- Find and execute a validator
---
-function validate(vtype, kp, value)
-	local validator = VALIDATOR[vtype]
-	
-	if not validator then return false, "undefined validator for "..vtype.." ["..value.."]" end
-	local rc, newval = validator(value, kp)
-
-	if rc ~= OK then return false, "validation failed for "..vtype.." ["..value.."]: "..newval end
-	return true, newval
-end
-function raw_validate(vtype, kp, value)
-	local validator = VALIDATOR[vtype]
-	
-	if not validator then return false, "undefined validator for "..vtype.." ["..value.."]" end
-	local rc, newval = validator(value, kp)
-	return rc, newval
-end
-
---
 -- Save the current config
 --
 -- TODO: needs to be more configurable, filename etc
@@ -666,7 +646,7 @@ function set(config, kp, value)
 	local mp = find_master_key(kp)
 
 	if master[mp]["type"] then
-		local rc, newval = validate(master[mp]["type"], kp, value)
+		local rc, newval = VALIDATOR[master[mp]["type"]](value, mp, kp)
 		if not rc then return false, newval end
 		if type(newval) ~= "nil" then value = newval end
 	else

@@ -33,9 +33,20 @@ TYPEOPTS["__index"] = function(t, k)
 end
 
 --
+-- Validator for a select type
+--
+VALIDATOR["select"] = function(v, mp, kp)
+	for _, item in ipairs(master[mp].options) do
+		if item == v then return OK end
+		if item:sub(1, v:len()) == v then return PARTIAL end
+	end
+	return FAIL, "must be one of "..table.concat(master[mp].options, ", ")
+end
+
+--
 -- Standard validator and type options for boolean
 --
-VALIDATOR["boolean"] = function(v,kp)
+VALIDATOR["boolean"] = function(v, mp, kp)
 	local partials = { "true", "false", "yes", "no" }
 
 	if v == "true" or v == "yes" or v == "1" then return OK, true end
@@ -51,7 +62,7 @@ TYPEOPTS["boolean"] = { "true", "false" }
 --
 -- 2-digits ... needed for priority etc
 --
-VALIDATOR["2-digit"] = function(v,kp)
+VALIDATOR["2-digit"] = function(v, mp, kp)
 	local err = "require two digits (nn)"
 	local a, b = v:match("^(%d)(%d?)$")
 	if not a then return FAIL, err end
@@ -63,7 +74,7 @@ end
 --
 -- Validator for an ipv4 address
 --
-VALIDATOR["ipv4"] = function(v, kp)
+VALIDATOR["ipv4"] = function(v, mp, kp)
 	local err = "ipv4 must be nnn.nnn.nnn.nnn"
 
 	if not v:match("^[%d%.]+$") then return FAIL, err end
@@ -85,13 +96,13 @@ end
 --
 -- Validator for ipv4 with a /netmask on the end
 --
-VALIDATOR["ipv4_nm"] = function(v, kp)
+VALIDATOR["ipv4_nm"] = function(v, mp, kp)
 	local err = "ipv4_nm must be nnn.nnn.nnn.nnn/nn"
 	local ipv4, slash, n = v:match("^([%d%.]+)(/?)(%d-)$")
 	local rc
 
 	if(not ipv4) then return FAIL, err end
-	rc = VALIDATOR["ipv4"](ipv4, kp)
+	rc = VALIDATOR["ipv4"](ipv4, mp, kp)
 	if rc == FAIL then return FAIL, err end
 	if rc == PARTIAL then if n=="" and slash=="" then return PARTIAL, err else return FAIL, err end end
 	if slash == "" or n == "" then return PARTIAL, err end
@@ -104,12 +115,12 @@ end
 --
 -- And ipv4_nm or "default"
 --
-VALIDATOR["ipv4_nm_default"] = function(v, kp)
+VALIDATOR["ipv4_nm_default"] = function(v, mp, kp)
 	err = "ipv4_nm_default must be ipv4_nm or default"
 	local default = "default"
 	if default == v then return OK end
 	if default:sub(1,#v) == v then return PARTIAL, err end
-	return VALIDATOR["ipv4_nm"](v, kp)
+	return VALIDATOR["ipv4_nm"](v, mp, kp)
 end
 
 
