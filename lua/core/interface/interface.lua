@@ -120,6 +120,11 @@ function interface_names(list)
 end
 
 --
+-- Master interface node...
+--
+master["/interface"] = {}
+
+--
 -- We will use a table to manage the resolvers that come in from various sources
 --
 TABLE["resolvers"] = {

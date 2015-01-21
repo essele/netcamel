@@ -234,7 +234,6 @@ end
 --
 -- Ethernet interfaces...
 --
-master["/interface"] = {}
 master["/interface/ethernet"] = { 
 	["commit"] = ethernet_commit,
 	["depends"] = { "iptables" }, 

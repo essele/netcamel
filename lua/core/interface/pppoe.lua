@@ -225,7 +225,6 @@ end
 --
 -- pppoe interfaces...
 --
-master["/interface"] = {}
 master["/interface/pppoe"] = {
 	["commit"] = pppoe_commit,
 	["precommit"] = pppoe_precommit,
