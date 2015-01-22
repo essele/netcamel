@@ -328,6 +328,17 @@ function unserialise(v)
 end
 
 --
+-- Read an entire file into a string (or nil)
+--
+function read_file(filename)
+	local file = io.open(filename)
+	if not file then return nil end
+	local rc = file:read("*a")
+	file:close()
+	return rc
+end
+
+--
 -- Create a configuration file
 --
 -- We work out what the leading space is on the first line

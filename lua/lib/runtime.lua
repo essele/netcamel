@@ -27,6 +27,10 @@
 local posix = {
 	fcntl = require("posix.fcntl"),
 	unistd = require("posix.unistd"),
+	stdlib = require("posix.stdlib"),
+	sys = { 
+		stat = require("posix.sys.stat") 
+	}
 }
 posix.fcntl.FD_CLOEXEC = 1
 
@@ -421,6 +425,20 @@ local function get_vars(name)
 	return nil
 end
 
+--
+-- Simple function to create a directory
+--
+local function create_temp_dir()
+	return posix.stdlib.mkdtemp("/tmp/ncmlXXXXXX")
+end
+local function remove_dir(path)
+	if path:sub(1,4) ~= "/tmp" then return false, "unable to remove dir outside of /tmp" end
+
+	execute("/bin/rm", { "-r", path })
+	return true
+end
+
+
 
 return {
 	interface_up = interface_up,
@@ -439,5 +457,8 @@ return {
 
 	block_on = block_on,
 	block_off = block_off,
+
+	create_temp_dir = create_temp_dir,
+	remove_dir = remove_dir,
 }
 

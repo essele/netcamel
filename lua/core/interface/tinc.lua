@@ -62,10 +62,18 @@ local function action_key_generate(v, mp, kp)
 		CF_new[kp_hostname] = hostname
 	end
 	if v == "rsa" or v == "both" then
+
+		local tmpdir = runtime.create_temp_dir()
+		runtime.execute("/usr/sbin/tinc", { "--config", tmpdir, "--batch", "generate-rsa-keys" })
+	
+		local rsa_public = read_file(tmpdir.."/rsa_key.pub") or "FAILED"
+		local rsa_private = read_file(tmpdir.."/rsa_key.priv") or "FAILED"
+		runtime.remove_dir(tmpdir)
+	
 		prep_undo(undo, CF_new, kp.."/key-rsa-private")
 		prep_undo(undo, CF_new, kp.."/host/*"..hostname.."/key-rsa-public")
-		CF_new[kp.."/key-rsa-private"] = "a private key rsa"
-		CF_new[kp.."/host/*"..hostname.."/key-rsa-public"] = "a public key rsa"
+		CF_new[kp.."/key-rsa-private"] = rsa_private
+		CF_new[kp.."/host/*"..hostname.."/key-rsa-public"] = rsa_public
 	end
 	if v == "ed25519" or v == "both" then
 		prep_undo(undo, CF_new, kp.."/key-ed25519-private")
@@ -100,8 +108,8 @@ master["/interface/tinc"] = {
 master["/interface/tinc/*"] =							{ ["style"] = "tinc_if" }
 master["/interface/tinc/*/hostname"] =					{ ["type"] = "OK",
 														  ["default"] = tinc_hostname, }
-master["/interface/tinc/*/key-rsa-private"] =			{ ["type"] = "OK" }
-master["/interface/tinc/*/key-ed25519-private"] =		{ ["type"] = "OK" }
+master["/interface/tinc/*/key-rsa-private"] =			{ ["type"] = "file/text" }
+master["/interface/tinc/*/key-ed25519-private"] =		{ ["type"] = "file/text" }
 master["/interface/tinc/*/connect-to"] =				{ ["type"] = "OK", ["list"] = true }
 master["/interface/tinc/*/key-generate"] =				{ ["type"] = "select", 
 														  ["options"] = { "rsa", "ed25519", "both" },
@@ -109,8 +117,8 @@ master["/interface/tinc/*/key-generate"] =				{ ["type"] = "select",
 master["/interface/tinc/*/host"] =						{}
 master["/interface/tinc/*/host/*"] =					{ ["style"] = "OK" }
 master["/interface/tinc/*/host/*/ip"] =					{ ["type"] = "ipv4" }
-master["/interface/tinc/*/host/*/key-rsa-public"] =		{ ["type"] = "OK" }
-master["/interface/tinc/*/host/*/key-ed25519-public"] =	{ ["type"] = "OK" }
+master["/interface/tinc/*/host/*/key-rsa-public"] =		{ ["type"] = "file/text" }
+master["/interface/tinc/*/host/*/key-ed25519-public"] =	{ ["type"] = "file/text" }
 
 --
 -- Deal with triggers and depdencies
