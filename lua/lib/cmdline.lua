@@ -81,6 +81,7 @@ local function node_selector(mp, kp, opts)
 	for k, m in pairs(master) do
 		local item = k:match(match)
 		if item then
+			if opts.must_be_wildcard and master[k]["style"] ~= nil then m_list[item] = 1 end
 			if opts.allow_container and master[k]["type"] == nil then m_list[item] = 1 end
 			if opts.allow_value and master[k]["type"] ~= nil then m_list[item] = 1 end
 		end
@@ -100,15 +101,23 @@ local function node_selector(mp, kp, opts)
 
 	--
 	-- Now add actuals where we have a match with the original master list
-	-- so that we only include containers/values as needed
+	-- so that we only include containers/values/wildcards as needed
 	--
 	if opts.use_new then
-		for item in each(node_list(kp, CF_new)) do
-			if m_list[item] then 
-				list[item] = { mp=item, kp=item }
-			elseif item:sub(1,1) == "*" and m_list["*"] then 
-				list[item:sub(2)] = { mp="*", kp=item }
+		local match = kp:gsub("/$", ""):gsub("([%-%+%.%*])", "%%%1").."/(%*?)([^/]+)(.*)"
+		for k,_ in pairs(CF_new) do
+			local wc, item, rest = k:match(match)
+			if not wc or list[item] then goto continue end
+			
+			if m_list[item] then
+				if opts.must_be_wildcard and item:find("*", 1, true) or rest:find("*", 1, true) then
+					list[item] = { mp=item, kp=item }
+				end
+				if opts.allow_value or opts.allow_container then list[item] = { mp=item, kp=item } end
+			elseif wc == "*" and m_list["*"] then
+				list[item] = { mp="*", kp="*"..item }
 			end
+::continue::
 		end
 	end
 
@@ -314,7 +323,7 @@ local function cfpath_validator(tokens, n, input)
 	end
 
 	local opts = tokens[n].opts
-	local container_only = opts.allow_container and not opts.allow_value
+	local container_only = opts.allow_container and not opts.allow_value 
 
 	for i,token in ipairs(ptoken.subtokens) do
 		local value = token.value
@@ -403,6 +412,13 @@ local function cfpath_validator(tokens, n, input)
 
 	if must_be_node and finalstatus ~= FAIL then
 		if #mp == 0 or (master[mp] and master[mp]["type"] == nil) then
+			readline.mark_all(ptoken.subtokens, 1, PARTIAL)
+		end
+	end
+
+	-- if we want to be a wildcard only then we are partial unless we have it
+	if opts.must_be_wildcard and finalstatus ~= FAIL then
+		if mp:sub(-1) ~= "*" then
 			readline.mark_all(ptoken.subtokens, 1, PARTIAL)
 		end
 	end
@@ -791,6 +807,24 @@ CMDS["revert"].func = function(cmd, cmdline, tags)
 	print(string.format("revert: considered %s configuration item%s.", rc, (rc > 1 and "s") or ""))
 	__undo = err
 	__undo.cmd = cmdline
+end
+
+-- ------------------------------------------------------------------------------
+-- RENAME COMMAND (for wildcards)
+-- ------------------------------------------------------------------------------
+CMDS["rename"] = {
+	help = "rename a (wildcard) node in the config",
+	usage = "rename <cfg_path>",
+	min_args = 1,
+	max_args = 1,
+	args = {
+		{ arg = "cfpath", opts = { use_new = true, must_be_wildcard = true }}
+	}
+}
+CMDS["rename"].func = function(cmd, cmdline, tags)
+	__path_kp = tags[2].kp
+	__path_mp = tags[2].mp
+	__prompt = setprompt(__path_kp)
 end
 
 -- ------------------------------------------------------------------------------
