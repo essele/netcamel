@@ -48,7 +48,7 @@ end
 --
 master["/system"] = 								{ ["commit"] = system_commit,
                                                 	  ["precommit"] = system_precommit }
-master["/system/hostname"] =						{ ["type"] = "hostname" }
+master["/system/hostname"] =						{ ["type"] = "hostname", ["default"] = "camel" }
 
 master["/system/afile"] =							{ ["type"] = "file/text" }
 

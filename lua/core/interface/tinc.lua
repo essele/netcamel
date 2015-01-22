@@ -41,28 +41,50 @@ end
 -- If we set the key-generate item then we will actually generate the private keys
 --
 local function action_key_generate(v, mp, kp)
-	print("v="..v)
-	print("mp="..mp)
-	print("kp="..kp)
+	local undo = { delete = {}, add = {} }
 
 	kp = kp:gsub("/[^/]+$", "")
+	kp_hostname = kp .. "/hostname"
 
-	local hostname = CF_new[kp.."/hostname"]
+	local cf = node_vars(kp, CF_new)
+	print("HOSTNAME: "..tostring(cf.hostname))
+
+	local hostname = cf.hostname
 	if not hostname then
-		print("hostname needs to be set before generating keys")
+		print("unable to determin hostname to use for local node")
 		return
 	end
 
-	print("nkp="..kp)
+	if CF_new[kp_hostname] ~= hostname then
+		-- Prepare undo for any hostname change
+		prep_undo(undo, CF_new, kp_hostname)
+
+		CF_new[kp_hostname] = hostname
+	end
 	if v == "rsa" or v == "both" then
+		prep_undo(undo, CF_new, kp.."/key-rsa-private")
+		prep_undo(undo, CF_new, kp.."/host/*"..hostname.."/key-rsa-public")
 		CF_new[kp.."/key-rsa-private"] = "a private key rsa"
-		CF_new[kp.."/host/"..hostname.."/key-rsa-public"] = "a public key rsa"
+		CF_new[kp.."/host/*"..hostname.."/key-rsa-public"] = "a public key rsa"
 	end
 	if v == "ed25519" or v == "both" then
+		prep_undo(undo, CF_new, kp.."/key-ed25519-private")
+		prep_undo(undo, CF_new, kp.."/host/*"..hostname.."/key-ed25519-public")
 		CF_new[kp.."/key-ed25519-private"] = "a private key ed25519"
-		CF_new[kp.."/host/"..hostname.."/key-ed25519-public"] = "a public key ed25519"
+		CF_new[kp.."/host/*"..hostname.."/key-ed25519-public"] = "a public key ed25519"
 	end
-	print("XX: "..kp.."/host/"..hostname.."/key-ed25519-public")
+	return true, undo
+end
+
+--
+-- Work out the default hostname for tinc ... this will be the
+-- hostname defined in system (or that default)
+--
+-- node_vars will fill in the default for them...
+--
+local function tinc_hostname(mp, kp, kv)
+	local syscf = node_vars("/system", kv)
+	return syscf.hostname
 end
 
 
@@ -76,7 +98,8 @@ master["/interface/tinc"] = {
 }
 
 master["/interface/tinc/*"] =							{ ["style"] = "tinc_if" }
-master["/interface/tinc/*/hostname"] =					{ ["type"] = "OK" }
+master["/interface/tinc/*/hostname"] =					{ ["type"] = "OK",
+														  ["default"] = tinc_hostname, }
 master["/interface/tinc/*/key-rsa-private"] =			{ ["type"] = "OK" }
 master["/interface/tinc/*/key-ed25519-private"] =		{ ["type"] = "OK" }
 master["/interface/tinc/*/connect-to"] =				{ ["type"] = "OK", ["list"] = true }

@@ -134,28 +134,41 @@ function node_exists_using_master(prefix, kv)
 end
 
 --
+-- If a var is a function then return the result of calling it
+-- otherwise return the var
+--
+function value_or_function(v, mp, kp, kv)
+	if type(v) == "function" then return v(mp, kp, kv) end
+	return v
+end
+
+
+--
 -- Take a prefix and build a hash of elements and values (using the
 -- defaults it provided in the master config).
 --
--- Note we only apply the defaults if we have something defined in
--- the config.
+-- If the ifexists flag is true then we only apply the defaults
+-- if we've got something in the config.
 --
-function node_vars(prefix, kv)
+function node_vars(prefix, kv, ifexists)
 	local rc = {}
 	local mprefix = find_master_key(prefix)
 
 	-- build config provded vars
 	for k in each(node_list(prefix, kv)) do rc[k] = kv[prefix .. "/" .. k] end
 
-	-- if no vars then return nil
-	if not next(rc) then return nil end
+	-- if we are a wildcard and no vars then return nil, since we are obviously not set
+	if not next(rc) and ifexists then return nil end
 
 	-- fill in any missing defaults
 	for k in each(node_list(mprefix, master)) do
 		local m = master[mprefix.."/"..k]
-		if not rc[k] and m["type"] then rc[k] = m.default end
+		if not rc[k] and m["type"] then rc[k] = value_or_function(m.default, mprefix, prefix, kv) end
 	end
 	return rc
+end
+function node_vars_if_exists(prefix, kv)
+	return node_vars(prefix, kv, true)
 end
 
 
@@ -636,6 +649,18 @@ function save(config)
 	return dump("etc/boot.conf", config)
 end
 
+--
+-- A helper for the undo function. Given the undo hash, the keypath
+-- and the key/value table we work out if we need to put in an add
+-- or a delete.
+--
+function prep_undo(undo, kv, kp)
+	if kv[kp] == nil then
+		undo.delete[kp] = 1
+	else
+		undo.add[kp] = copy(kv[kp])
+	end
+end
 
 --
 -- Convert and validate the provided path, then check the validator
@@ -656,11 +681,7 @@ function set(config, kp, value)
 	-- If we get here then we must be ok, add to list or set value
 	-- accordingly
 	--
-	if config[kp] == nil then
-		undo.delete[kp] = 1
-	else
-		undo.add[kp] = copy(config[kp])
-	end
+	prep_undo(undo, config, kp)
 	if master[mp]["list"] then
 		if not config[kp] then config[kp] = {} end
 		if not in_list(config[kp], value) then

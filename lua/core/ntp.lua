@@ -32,7 +32,7 @@ local NTPD_ARGS = { "-c", NTPD_CONFIG, "-g" }
 local function ntp_commit(changes)
 	print("Hello From NTP")
 
-	local cf = node_vars("/service/ntp", CF_new) or {}
+	local cf = node_vars_if_exists("/service/ntp", CF_new) or {}
 
 	--
 	-- Stop the daemon...
@@ -108,7 +108,7 @@ end
 -- interfaces.
 --
 local function ntp_precommit(changes)
-	local cf = node_vars("/service/ntp", CF_new) or {}
+	local cf = node_vars_if_exists("/service/ntp", CF_new) or {}
 
 	--
 	-- if we are not enabled then we don't really care about anything

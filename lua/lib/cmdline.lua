@@ -755,13 +755,13 @@ CMDS["set"].func = function(cmd, cmdline, tags)
 	local has_quotes = value:match("^\"(.*)\"$")
 	if has_quotes then value = has_quotes end
 
+	local rc, err
 	if master[mp].action then
 		print("CALLING ACTION INSTEAD")
-		master[mp].action(value, mp, kp)
-		return
+		rc, err = master[mp].action(value, mp, kp)
+	else
+		rc, err = set(CF_new, kp, value)
 	end
-
-	local rc, err = set(CF_new, kp, value)
 	if not rc then 
 		print("error: " .. tostring(err))
 		return
