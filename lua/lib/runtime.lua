@@ -426,18 +426,29 @@ local function get_vars(name)
 end
 
 --
--- Simple function to create a directory
+-- Simple functions to create and remove temproary files and directories
 --
 local function create_temp_dir()
 	return posix.stdlib.mkdtemp("/tmp/ncmlXXXXXX")
 end
+local function create_temp_file()
+	local fd, fn = posix.stdlib.mkstemp("/tmp/ncmlXXXXXX")
+	if(fd > -1) then
+		posix.unistd.close(fd)
+		return fn
+	end
+	return nil
+end
 local function remove_dir(path)
 	if path:sub(1,4) ~= "/tmp" then return false, "unable to remove dir outside of /tmp" end
-
 	execute("/bin/rm", { "-r", path })
 	return true
 end
-
+local function remove_file(path)
+	if path:sub(1,4) ~= "/tmp" then return false, "unable to remove files outside of /tmp" end
+	posix.unistd.unlink(path)
+	return true
+end
 
 
 return {
@@ -459,6 +470,8 @@ return {
 	block_off = block_off,
 
 	create_temp_dir = create_temp_dir,
+	create_temp_file = create_temp_file,
 	remove_dir = remove_dir,
+	remove_file = remove_file,
 }
 

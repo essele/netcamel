@@ -771,6 +771,33 @@ function delete(config, kp, value)
 end
 
 --
+-- Rename a particular wildcard entry to the new value provided
+--
+function rename(config, kp, new)
+	local undo = { delete = {}, add = {} }
+	local newkp = kp:gsub("/[^/]+$", "").."/*"..new
+
+	-- First make sure new doesn't exist
+	if node_exists(newkp, config) then return false, "node ["..new.."] already exists." end
+
+	-- Now process the config
+	kp = kp .. "/"
+	newkp = newkp .. "/"
+
+	for k,v in pairs(config) do
+		if k:sub(1,#kp) == kp then
+			local nkp = newkp..k:sub(#kp+1)
+
+			undo.add[k] = v
+			undo.delete[nkp] = 1
+			config[k] = nil
+			config[nkp] = v
+		end
+	end
+	return true, undo
+end
+
+--
 -- Process an undo structure (delete and then add), we assume the undo
 -- structure already contains copies, so we don't need to copy again.
 --

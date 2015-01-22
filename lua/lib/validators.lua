@@ -33,6 +33,16 @@ TYPEOPTS["__index"] = function(t, k)
 end
 
 --
+-- Dummy validator for the file types, we don't validate this as all
+--
+VALIDATOR["file/text"] = function(v, mp, kp)
+	return true
+end
+VALIDATOR["file/binary"] = function(v, mp, kp)
+	return true
+end
+
+--
 -- Validator for a select type
 --
 VALIDATOR["select"] = function(v, mp, kp)

@@ -281,7 +281,7 @@ local function cfvalue_completer(tokens, n, prefix)
 		add_to_list(options, master_opts)
 	elseif type(master_opts) == "string" then
 		add_to_list(options, OPTIONS[master_opts](kp, mp))
-	elseif TYPEOPTS[master[mp]["type"]] then
+	elseif master[mp]["type"] and TYPEOPTS[master[mp]["type"]] then
 		add_to_list(options, TYPEOPTS[master[mp]["type"]])
 	end
 
@@ -438,6 +438,14 @@ end
 --
 local function cffilevalue_validator(ptoken)
 	local value = ptoken.value
+
+	--
+	-- Handle our special cases of + and -
+	--
+	if value == "+" or value == "-" then
+		return OK
+	end
+
 	local dirname, basename = value:match("^(/?.-)/?([^/]*)$")
 
 	-- Set this before we put the "." in
@@ -496,7 +504,7 @@ local function cfvalue_validator(tokens, n, pathn)
 	-- Right hand side, need to run the validator
 	--
 	local m = master[mp]
-	local mtype = m["type"]
+	local mtype = m["type"] or m["style"]
 	local err
 
 	if mtype:sub(1,5) == "file/" then
@@ -541,7 +549,7 @@ local function syntax_action(cmd, tokens)
 
 			if a.only_if_list and not master[tokens[path_index].mp].list then break end
 
-			if value_type:sub(1,5) == "file/" then
+			if value_type and value_type:sub(1,5) == "file/" then
 				tokens[i].completer = cffilevalue_completer
 			else
 				tokens[i].completer = cfvalue_completer
@@ -767,6 +775,7 @@ CMDS["set"].func = function(cmd, cmdline, tags)
 	local kp = tags[2].kp
 	local mp = tags[2].mp
 	local value = tags[3].value
+	local is_file = master[mp]["type"]:sub(1,5) == "file/"
 
 	local has_quotes = value:match("^\"(.*)\"$")
 	if has_quotes then value = has_quotes end
@@ -776,6 +785,26 @@ CMDS["set"].func = function(cmd, cmdline, tags)
 		print("CALLING ACTION INSTEAD")
 		rc, err = master[mp].action(value, mp, kp)
 	else
+		--
+		-- Handle stdin or editor option
+		--
+		if is_file and (value == "+" or value == "-") then
+			if value == "-" then
+				value = "from stdin"
+			else
+				local tmp_file = runtime.create_temp_file()
+				local file = io.open(tmp_file, "w+")
+				if not file then print("unable to create file") return end
+				file:write(CF_new[kp] or "")
+				file:close()
+				print("tmpfile="..tmp_file)
+			-- TODO: save terminal settings, maybe restore originals
+				os.execute("vi "..tmp_file)
+			-- TODO: put back terminal settings
+				value = read_file(tmp_file)
+				runtime.remove_file(tmp_file)
+			end
+		end
 		rc, err = set(CF_new, kp, value)
 	end
 	if not rc then 
@@ -815,16 +844,22 @@ end
 CMDS["rename"] = {
 	help = "rename a (wildcard) node in the config",
 	usage = "rename <cfg_path>",
-	min_args = 1,
-	max_args = 1,
+	min_args = 2,
+	max_args = 2,
 	args = {
-		{ arg = "cfpath", opts = { use_new = true, must_be_wildcard = true }}
+		{ arg = "cfpath", opts = { use_new = true, must_be_wildcard = true }},
+		{ arg = "cfvalue" },
 	}
 }
 CMDS["rename"].func = function(cmd, cmdline, tags)
-	__path_kp = tags[2].kp
-	__path_mp = tags[2].mp
-	__prompt = setprompt(__path_kp)
+	local rc, err = rename(CF_new, tags[2].kp, tags[3].value)
+	if not rc then 
+		print("error: " .. tostring(err))
+		return
+	end
+	print("rename: done.")
+	__undo = err
+	__undo.cmd = cmdline
 end
 
 -- ------------------------------------------------------------------------------
