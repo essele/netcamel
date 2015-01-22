@@ -22,9 +22,11 @@ local runtime = require("runtime")
 local service = require("service")
 
 local function tinc_precommit(changes)
+	return true
 end
 
 local function tinc_commit(changes)
+	return true
 end
 
 --
@@ -61,14 +63,16 @@ local function action_key_generate(v, mp, kp)
 
 		CF_new[kp_hostname] = hostname
 	end
-	if v == "rsa" or v == "both" then
 
-		local tmpdir = runtime.create_temp_dir()
+	--
+	-- Create the keys in a temp dir and then clean up...
+	--
+	local tmpdir = runtime.create_temp_dir()
+	if v == "rsa" or v == "both" then
 		runtime.execute("/usr/sbin/tinc", { "--config", tmpdir, "--batch", "generate-rsa-keys" })
 	
 		local rsa_public = read_file(tmpdir.."/rsa_key.pub") or "FAILED"
 		local rsa_private = read_file(tmpdir.."/rsa_key.priv") or "FAILED"
-		runtime.remove_dir(tmpdir)
 	
 		prep_undo(undo, CF_new, kp.."/key-rsa-private")
 		prep_undo(undo, CF_new, kp.."/host/*"..hostname.."/key-rsa-public")
@@ -76,11 +80,17 @@ local function action_key_generate(v, mp, kp)
 		CF_new[kp.."/host/*"..hostname.."/key-rsa-public"] = rsa_public
 	end
 	if v == "ed25519" or v == "both" then
+		runtime.execute("/usr/sbin/tinc", { "--config", tmpdir, "--batch", "generate-ed25519-keys" })
+	
+		local ed_public = read_file(tmpdir.."/ed25519_key.pub") or "FAILED"
+		local ed_private = read_file(tmpdir.."/ed25519_key.priv") or "FAILED"
+
 		prep_undo(undo, CF_new, kp.."/key-ed25519-private")
 		prep_undo(undo, CF_new, kp.."/host/*"..hostname.."/key-ed25519-public")
-		CF_new[kp.."/key-ed25519-private"] = "a private key ed25519"
-		CF_new[kp.."/host/*"..hostname.."/key-ed25519-public"] = "a public key ed25519"
+		CF_new[kp.."/key-ed25519-private"] = ed_private
+		CF_new[kp.."/host/*"..hostname.."/key-ed25519-public"] = ed_public
 	end
+	runtime.remove_dir(tmpdir)
 	return true, undo
 end
 
