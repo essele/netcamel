@@ -258,7 +258,18 @@ end
 -- ------------------------------------------------------------------------------
 -- For supporting save and restore of termios
 -- ------------------------------------------------------------------------------
---
+
+local function set_normal_term()
+	posix.termio.tcsetattr(0, posix.termio.TCSANOW, __saved_tios)
+end
+local function set_readline_term()
+	local tios = posix.termio.tcgetattr(0)
+	tios.lflag = bit.band(tios.lflag, bit.bnot(posix.termio.ECHO))
+	tios.lflag = bit.band(tios.lflag, bit.bnot(posix.termio.ICANON))
+	posix.termio.tcsetattr(0, posix.termio.TCSANOW, tios)
+	ti.out(ti.keypad_xmit)
+end
+
 
 local function init()
 	--
@@ -823,6 +834,9 @@ return {
 	mark_all = mark_all,
 	which_token = which_token,
 	tokenise = tokenise,
+
+	set_normal_term = set_normal_term,	
+	set_readline_term = set_readline_term,
 	
 	init = init,
 	finish = finish,

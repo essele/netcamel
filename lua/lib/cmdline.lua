@@ -21,6 +21,7 @@ require("config")
 local readline = require("readline")
 local posix = { 
 	dirent = require("posix.dirent"),
+	unistd = require("posix.unistd"),
 	sys = { stat = require("posix.sys.stat") } 
 }
 
@@ -644,6 +645,41 @@ local function setprompt(kp)
 	return prompt
 end
 
+--
+-- Use our editor to edit a value, we try to do the best we can with
+-- terminal settings to it all works ok.
+--
+local function edit_value(value)
+	local tmp_file = runtime.create_temp_file()
+
+	local file = io.open(tmp_file, "w+")
+	if not file then return nil, "unable to create file" end
+	file:write(value or "")
+	file:close()
+
+	readline.set_normal_term()
+	os.execute("/bin/vi "..tmp_file)
+	readline.set_readline_term()
+
+	local value = read_file(tmp_file)
+	runtime.remove_file(tmp_file)
+
+	return value
+end
+
+--
+-- Read from stdin up to a CTRL-D so we can facilitate cut and paste
+--
+-- (Note: CTRL-D needs to be on a blank line, not sure it's a real problem)
+--
+local function stdin_value()
+	readline.set_normal_term()
+	local value = io.read("*a")
+	readline.set_readline_term()
+	return value
+end
+
+
 local function usage(cmd)
 	print("Usage: "..cmd.usage)
 end
@@ -790,19 +826,12 @@ CMDS["set"].func = function(cmd, cmdline, tags)
 		--
 		if is_file and (value == "+" or value == "-") then
 			if value == "-" then
-				value = "from stdin"
+				value, err = stdin_value()
+				if not value then print("error: " .. tostring(err)) return end
 			else
-				local tmp_file = runtime.create_temp_file()
-				local file = io.open(tmp_file, "w+")
-				if not file then print("unable to create file") return end
-				file:write(CF_new[kp] or "")
-				file:close()
-				print("tmpfile="..tmp_file)
-			-- TODO: save terminal settings, maybe restore originals
-				os.execute("vi "..tmp_file)
-			-- TODO: put back terminal settings
-				value = read_file(tmp_file)
-				runtime.remove_file(tmp_file)
+				value, err = edit_value(CF_new[kp])
+				if not value then print("error: " .. tostring(err)) return end
+				if CF_new[kp] == value then print("no changes made") return end
 			end
 		end
 		rc, err = set(CF_new, kp, value)
