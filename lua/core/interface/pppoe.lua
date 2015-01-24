@@ -215,12 +215,16 @@ end
 --
 --
 --
+VALIDATOR["pppoe_if"] = interface_validate_number_and_alpha
+
+--[[
 VALIDATOR["pppoe_if"] = function(v, mp, kp)
 	local err = "interface numbers should be [nnn] only"
 	if v:len() == 0 then return PARTIAL end
 	if v:match("^%d+$") then return OK end
 	return FAIL, err
 end
+]]--
 
 --
 -- pppoe interfaces...
@@ -251,7 +255,7 @@ function interface_pppoe_init()
 	--
 	-- Tell the interface module we are here
 	--
-	interface_register("pppoe", "pppoe")
+	interface_register("pppoe", "/interface/pppoe", "pppoe%", "%", { "all", "ppp" })
 	--
 	-- Trigger the pppoe work if the underlying ethernet changes
 	--

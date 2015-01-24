@@ -21,6 +21,27 @@ require("log")
 local runtime = require("runtime")
 local service = require("service")
 
+
+--
+-- Start a tinc instance... build all the config files and then
+-- start the service.
+--
+local function start_tinc()
+end
+
+--
+-- Stop a tinc instance... stop the daemon and then delete all the
+-- config files.
+--
+local function stop_tinc()
+end
+
+--
+-- Validate the configuration for a given instance to make sure
+-- that it will be fine when we eventually start the service
+--
+
+
 local function tinc_precommit(changes)
 	return true
 end
@@ -32,12 +53,7 @@ end
 --
 --
 --
-VALIDATOR["tinc_if"] = function(v, kp)
-	local err = "interface numbers should be [nnn] only"
-	if v:len() == 0 then return PARTIAL end
-	if v:match("^%d+$") then return OK end
-	return FAIL, err
-end
+VALIDATOR["tinc_if"] = interface_validate_number_and_alpha
 
 --
 -- If we set the key-generate item then we will actually generate the private keys
@@ -137,6 +153,6 @@ function interface_tinc_init()
 	--
 	-- Tell the interface module we are here
 	--
-	interface_register("tinc", "tinc")
+	interface_register("tinc", "/interface/tinc", "tinc%", "%", { "all", "vpn" })
 end
 

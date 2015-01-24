@@ -208,18 +208,7 @@ end
 -- For ethernet interfaces we expect a simple number, but it needs
 -- to map to a real interface (or be a virtual)
 --
-VALIDATOR["ethernet_unit"] = function(v, mp, kp)
-	--
-	-- TODO: once we know the numbers are ok, we need to test for a real
-	--	   interface.
-	--
-	local err = "interface numbers should be [nnn] or [nnn:nnn] only"
-	if v:len() == 0 then return PARTIAL end
-	if v:match("^%d+$") then return OK end
-	if v:match("^%d+:$") then return PARTIAL end
-	if v:match("^%d+:%d+$") then return OK end
-	return FAIL, err
-end
+VALIDATOR["ethernet_if"] = interface_validate_number
 
 --
 -- Where we expect an ethernet interface name...
@@ -240,7 +229,7 @@ master["/interface/ethernet"] = {
 	["with_children"] = 1
 }
 
-master["/interface/ethernet/*"] = 						{ ["style"] = "ethernet_unit",
+master["/interface/ethernet/*"] = 						{ ["style"] = "ethernet_if",
 											  			  ["options"] = { "0", "1", "2" } }
 master["/interface/ethernet/*/ip"] = 					{ ["type"] = "ipv4_nm" }
 master["/interface/ethernet/*/resolver"] =				{ ["type"] = "ipv4", ["list"] = true }
@@ -264,7 +253,8 @@ master["/interface/ethernet/*/dhcp-defaultroute-table"] = 	{ ["type"] = "OK", ["
 
 function interface_ethernet_init()
 	--
-	-- Tell the interface module we are here
+	-- Tell the interface module we are here, we don't support alpha names, so only
+	-- numeric (matching the validator)
 	--
-	interface_register("eth", "ethernet")
+	interface_register("ethernet", "/interface/ethernet", "eth%", nil, { "all", "ethernet" } )
 end

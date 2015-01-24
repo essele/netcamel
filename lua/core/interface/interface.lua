@@ -21,15 +21,21 @@ require("utils")
 --
 -- A master list of interface types, used for validation and name mapping
 --
--- This is a hash, keyed on physical name (if) with the node name as the
--- value
---
-local INTERFACES = {}
-local INTERFACE_NODE_LIST = {}
+local INTERFACE_TYPE_LIST = {}
 
-function interface_register(intf, node)
-	INTERFACES[intf] = node
-	table.insert(INTERFACE_NODE_LIST, node)
+--
+-- Register a module that is capable of creating interfaces, we need to
+-- know the path to the interface (the next element would be the name)
+-- and how that maps to the physical name  (% is replaced by the wildcard
+-- name)
+--
+function interface_register(path, fullpath, phys_num, phys_alpha, types)
+	INTERFACE_TYPE_LIST[path] = {
+		fullpath = fullpath,
+		phys_num = phys_num,
+		phys_alpha = phys_alpha,
+		types = values_to_keys(types or {}),
+	}
 end
 
 
@@ -53,65 +59,106 @@ end
 -- Validate an interface name given a set of acceptable types, this is a global
 -- so that it can be used by other interface modules.
 --
--- TODO: could make this part of the register (see VALIDATOR["xxx_interface"])
+-- For clarity, this is used when we want an interface name as a value.
 --
-function interface_validator(v, types)
-	for _,item in ipairs(types) do
-		if (item.."/"):sub(1, v:len()) == v then return PARTIAL end
+function interface_validator(v, mp, kp, class)
+	for path,entry in pairs(INTERFACE_TYPE_LIST) do
+		--
+		-- See if this entry matches our class
+		--
+		if entry.types[class] then
+			--
+			-- Now check if we have a full path match
+			--
+			if v:sub(1,path:len()+1) == path.."/" then
+				local wc = v:sub(path:len()+2)
+				local mp = entry.fullpath .. "/*"
+				local iftype = master[mp]["style"]
+				return VALIDATOR[iftype](wc, mp, kp)
+			end
+		
+			-- Are we a partial
+			if (path.."/"):sub(1, v:len()) == v then return PARTIAL end
+		end
 	end
-	for _,item in ipairs(types) do
-		if v:match("^"..item.."/".."%d+$") then return OK end
-	end
-	return FAIL, "interfaces need to be ["..table.concat(types, "|").."]/nn"
+	return FAIL, "interface not valid (need class "..class..")"
 end
 
 --
 -- Used to provide a list of configured ethernet interfaces for cmdline
 -- completion.
 --
-local function options_from_interfaces(types)
+local function options_from_interfaces(class)
 	local rc = {}
-	for _,t in ipairs(types) do
-		for node in each(node_list("/interface/"..t, CF_new)) do
-			push(rc, t .."/"..node:gsub("^%*", ""))
+	for path,entry in pairs(INTERFACE_TYPE_LIST) do
+		if entry.types[class] then
+			for node in each(node_list(entry.fullpath, CF_new)) do
+				push(rc, path.."/"..node:gsub("^%*", ""))
+			end
 		end
 	end
 	return rc
 end
-		
 
+--
+-- Predefined validators for a numeric interface and an alpha
+-- interface
+--
+function interface_validate_number(v, mp, kp)
+	local err = "this interface name should be a number only"
+	if v:len() == 0 then return PARTIAL end
+	if v:match("^%d+$") then return OK end
+	return FAIL, err
+end
+function interface_validate_alpha(v, mp, kp)
+	local err = "this interface name should be alphanumeric strings only"
+	if v:len() == 0 then return PARTIAL end
+	if v:match("^%a%w*$") then return OK end
+	return FAIL, err
+end
+function interface_validate_number_and_alpha(v, mp, kp)
+	local err = "this interface name should be number of alphanumeric"
+	if v:len() == 0 then return PARTIAL end
+	if v:match("^%d+$") then return OK end
+	if v:match("^%a%w*$") then return OK end
+	return FAIL, err
+end
 
 --
 -- Where we expect an interface name...
 --
 VALIDATOR["any_interface"] = function(v, mp, kp)
-	return interface_validator(v, INTERFACE_NODE_LIST)
+	return interface_validator(v, mp, kp, "all")
 end
 OPTIONS["all_interfaces"] = function(kp, mp)
-	return options_from_interfaces(INTERFACE_NODE_LIST)
+	return options_from_interfaces("all")
 end
 
 --
--- Convert any format into a full keypath, this is used by any function that
--- takes any interface as an argument. It allows complete flexibility in what
--- can be used.
+-- Convert a short format into a full keypath. We split the string into
+-- a shortpath and a detail bit and then look it all up in the TYPE table.
 --
 function interface_path(interface)
-	local t, i = interface:match("^([^/]+)/%*?(%d+)$")
-	if t then return string.format("/interface/%s/*%s", t, i) end
-	return nil
+	local sp, wc = interface:match("^(.*)/%*?([^/]+)$")
+	local entry = INTERFACE_TYPE_LIST[sp]
+	-- TODO: what if entry doesn't exist?
+	return entry.fullpath.."/*"..wc
 end
 
 --
--- Given a name in node or physical format, work out what the physical interface
--- should be...
+-- Given a name in short format, work out what the physical interface
+-- should be... 
 --
 function interface_name(path)
-	for intf, node in pairs(INTERFACES) do
-		local i = path:match(node.."/%*?(%d+)$") or path:match(intf.."(%d+)$")
-		if i then return string.format(intf.."%s", i) end
+	local sp, wc = path:match("^(.*)/%*?([^/]+)$")
+	local entry = INTERFACE_TYPE_LIST[sp]
+	-- TODO: what if entry doesn't exist?
+
+	if wc:match("^%d+$") and entry.phys_num then
+		return entry.phys_num:gsub("%%", wc)
+	else
+		return entry.phys_alpha:gsub("%%", wc)
 	end
-	return nil
 end
 function interface_names(list)
 	local rc = {}
