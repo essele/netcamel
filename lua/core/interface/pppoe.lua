@@ -31,6 +31,15 @@ local PPPD="/usr/sbin/pppd"
 --
 --------------------------------------------------------------------------------
 local function pppoe_precommit(changes)
+	--
+	-- Do the interface level precommit
+	--
+	local rc, err = interface_precommit(changes)
+	if not rc then return false, err end
+
+	--
+	-- Now handle our specific changes
+	--
 	for ifnum in each(node_list("/interface/pppoe", CF_new)) do
 		local cf = node_vars("/interface/pppoe/"..ifnum, CF_new) or {}
 		print("PPPOE Precommit -- node: " .. ifnum)
@@ -44,14 +53,10 @@ local function pppoe_precommit(changes)
 		-- Check the interface we are attaching to meets our requirements
 		--
 		if not cf.disabled then
-			if not cf.attach then
-				return false, "required interface in attach field"
+			if not cf.attach or not is_valid_interface(cf.attach) then
+				return false, "require valid interface in attach field"
 			end
 			local ifpath = interface_path(cf.attach)
-			if not ifpath then 
-				return false, string.format("attach interface incorrect for pppoe/%s: %s", ifnum, cf.attach)
-			end
-
 			local ethcf = node_vars(ifpath, CF_new)
 			if not ethcf then 
 				return false, string.format("attach interface unknown for pppoe/%s: %s", ifnum, ifpath)
@@ -255,7 +260,9 @@ function interface_pppoe_init()
 	--
 	-- Tell the interface module we are here
 	--
-	interface_register("pppoe", "/interface/pppoe", "pppoe%", "%", { "all", "ppp" })
+	interface_register({ module = "pppoe", path = "/interface/pppoe", 
+						if_numeric = "pppoe%", if_alpha = "%", 
+						classes = { "all", "ppp" }})
 	--
 	-- Trigger the pppoe work if the underlying ethernet changes
 	--

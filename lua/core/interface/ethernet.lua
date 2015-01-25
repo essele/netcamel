@@ -90,7 +90,6 @@ local function stop_dhcp(intf)
 	service.remove("dhcp."..intf)
 end
 
-
 local function ethernet_commit(changes)
 	logroot("intf")
 	local state = process_changes(changes, "/interface/ethernet")
@@ -225,6 +224,7 @@ end
 --
 master["/interface/ethernet"] = { 
 	["commit"] = ethernet_commit,
+	["precommit"] = interface_precommit,
 	["depends"] = { "iptables" }, 
 	["with_children"] = 1
 }
@@ -256,5 +256,11 @@ function interface_ethernet_init()
 	-- Tell the interface module we are here, we don't support alpha names, so only
 	-- numeric (matching the validator)
 	--
-	interface_register("ethernet", "/interface/ethernet", "eth%", nil, { "all", "ethernet" } )
+--	interface_register("ethernet", "/interface/ethernet", "eth%", nil, { "all", "ethernet" } )
+
+	interface_register({ module = "ethernet", path = "/interface/ethernet",
+						if_numeric = "eth%", if_alpha = nil,
+						classes = { "all", "ethernet" } })
+
+
 end
