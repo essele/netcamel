@@ -328,17 +328,6 @@ function unserialise(v)
 end
 
 --
--- Read an entire file into a string (or nil)
---
-function read_file(filename)
-	local file = io.open(filename)
-	if not file then return nil end
-	local rc = file:read("*a")
-	file:close()
-	return rc
-end
-
---
 -- Create a configuration file
 --
 -- We work out what the leading space is on the first line
@@ -360,15 +349,16 @@ function create_config_file(name, template, dict)
 	while input[i] do
 		local out = input[i]
 		local var = out:match("{{([^}]+)}}")
+		local vmatch = var and var:gsub("[%-%+]", "%%%1")
 
 		if var and dict[var] then
 			if type(dict[var]) == "table" then
 				for v = 1, #dict[var] do
-					table.insert(input, i+v, (out:gsub("{{"..var.."}}", dict[var][v])))
+					table.insert(input, i+v, (out:gsub("{{"..vmatch.."}}", dict[var][v])))
 				end
 				table.remove(input, i) 
 			else
-				input[i] = out:gsub("{{"..var.."}}", dict[var])
+				input[i] = out:gsub("{{"..vmatch.."}}", dict[var])
 			end
 		else
 			input[i] = out
