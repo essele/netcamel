@@ -18,6 +18,7 @@
 -----------------------------------------------------------------------------
 
 require("config")
+require("file")
 local readline = require("readline")
 local posix = { 
 	dirent = require("posix.dirent"),
@@ -650,20 +651,13 @@ end
 -- terminal settings to it all works ok.
 --
 local function edit_value(value)
-	local tmp_file = runtime.create_temp_file()
-
-	local file = io.open(tmp_file, "w+")
-	if not file then return nil, "unable to create file" end
-	file:write(value or "")
-	file:close()
-
+	local file = create_file_with_data(nil, value)
 	readline.set_normal_term()
-	os.execute("/bin/vi "..tmp_file)
+	os.execute("/bin/vi "..file.filename)
 	readline.set_readline_term()
 
-	local value = read_file(tmp_file)
-	runtime.remove_file(tmp_file)
-
+	local value = file:read()
+	file:delete()
 	return value
 end
 

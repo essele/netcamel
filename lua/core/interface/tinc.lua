@@ -18,6 +18,7 @@
 ------------------------------------------------------------------------------
 
 require("log")
+require("file")
 local runtime = require("runtime")
 local service = require("service")
 
@@ -36,17 +37,67 @@ end
 local function stop_tinc()
 end
 
+
 --
--- Validate the configuration for a given instance to make sure
--- that it will be fine when we eventually start the service
+-- We need to build the config for a given tinc instance,so we make
+-- sure the main tinc directory is present and then create a subdir
+-- for our instance.
 --
+local function configure_instance(net)
+	local idir = "/tmp/tinc/"..net
+
+	create_directory("/tmp/tinc")
+	create_directory(idir)
+
+	local cf = node_vars("/interface/tinc/*"..net, CF_new)
+	local tinccf = [[
+		#
+		# <automatically generated tinc.conf - do not edit>
+		#
+		Name = {{hostname}}
+
+		blah
+	]]
+
+	create_config_file(idir.."/tinc.conf", tinccf, cf)
+
+	--
+	-- Now process each of the hosts
+	--
+	create_directory(idir.."/hosts")
+	for hnode in each(node_list("/interface/tinc/*"..net.."/host", CF_new, true)) do
+		local host = hnode:sub(2)
+		print("host="..host.." hnode="..hnode)
+		local hcf = node_vars("/interface/tinc/*"..net.."/host/"..hnode, CF_new)
+		local tinchcf = [[
+			#
+			# <automatically generated tinc host file - do not edit>
+			#
+			{{key-rsa-public}}
+
+			{{key-ed25519-public}}
+		]]
+		create_config_file(idir.."/hosts/"..host, tinchcf, hcf)
+	end
+end
+
 
 
 local function tinc_precommit(changes)
+	--
+	--    -- Do the interface level precommit
+	--
+	local rc, err = interface_precommit(changes)
+	if not rc then return false, err end
+
 	return true
 end
 
 local function tinc_commit(changes)
+	configure_instance("obnet")
+	
+
+
 	return true
 end
 
@@ -83,12 +134,12 @@ local function action_key_generate(v, mp, kp)
 	--
 	-- Create the keys in a temp dir and then clean up...
 	--
-	local tmpdir = runtime.create_temp_dir()
+	local tmpdir = create_directory()
 	if v == "rsa" or v == "both" then
-		runtime.execute("/usr/sbin/tinc", { "--config", tmpdir, "--batch", "generate-rsa-keys" })
+		runtime.execute("/usr/sbin/tinc", { "--config", tmpdir.dirname, "--batch", "generate-rsa-keys" })
 	
-		local rsa_public = read_file(tmpdir.."/rsa_key.pub") or "FAILED"
-		local rsa_private = read_file(tmpdir.."/rsa_key.priv") or "FAILED"
+		local rsa_public = read_file(tmpdir.dirname.."/rsa_key.pub") or "FAILED"
+		local rsa_private = read_file(tmpdir.dirname.."/rsa_key.priv") or "FAILED"
 	
 		prep_undo(undo, CF_new, kp.."/key-rsa-private")
 		prep_undo(undo, CF_new, kp.."/host/*"..hostname.."/key-rsa-public")
@@ -96,17 +147,17 @@ local function action_key_generate(v, mp, kp)
 		CF_new[kp.."/host/*"..hostname.."/key-rsa-public"] = rsa_public
 	end
 	if v == "ed25519" or v == "both" then
-		runtime.execute("/usr/sbin/tinc", { "--config", tmpdir, "--batch", "generate-ed25519-keys" })
+		runtime.execute("/usr/sbin/tinc", { "--config", tmpdir.dirname, "--batch", "generate-ed25519-keys" })
 	
-		local ed_public = read_file(tmpdir.."/ed25519_key.pub") or "FAILED"
-		local ed_private = read_file(tmpdir.."/ed25519_key.priv") or "FAILED"
+		local ed_public = read_file(tmpdir.dirname.."/ed25519_key.pub") or "FAILED"
+		local ed_private = read_file(tmpdir.dirname.."/ed25519_key.priv") or "FAILED"
 
 		prep_undo(undo, CF_new, kp.."/key-ed25519-private")
 		prep_undo(undo, CF_new, kp.."/host/*"..hostname.."/key-ed25519-public")
 		CF_new[kp.."/key-ed25519-private"] = ed_private
 		CF_new[kp.."/host/*"..hostname.."/key-ed25519-public"] = ed_public
 	end
-	runtime.remove_dir(tmpdir)
+	tmpdir:cleanup()
 	return true, undo
 end
 
@@ -153,6 +204,8 @@ function interface_tinc_init()
 	--
 	-- Tell the interface module we are here
 	--
-	interface_register("tinc", "/interface/tinc", "tinc%", "%", { "all", "vpn" })
+	interface_register({ module = "tinc", path = "/interface/tinc", 
+						if_numeric = "tinc%", if_alpha = "%", 
+						classes = { "all", "vpn" } })
 end
 

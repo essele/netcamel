@@ -131,7 +131,8 @@ local function ntp_precommit(changes)
 		return false, "/service/ntp/listen-on must list at least one interface for provide-service"
 	end
 	for interface in each(cf["listen-on"]) do
-		if not node_exists(interface_path(interface), CF_new) then
+--		if not node_exists(interface_path(interface), CF_new) then
+		if not is_valid_interface(interface) then
 			return false, string.format("/service/ntp/listen-on interface not valid: %s", interface)
 		end
 	end
