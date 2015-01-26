@@ -56,10 +56,15 @@ local function configure_instance(net)
 		#
 		Name = {{hostname}}
 
-		blah
+		ConnectTo = {{connect-to}}
 	]]
 
 	create_config_file(idir.."/tinc.conf", tinccf, cf)
+
+	--
+	-- Write out the private keys
+	--
+	create_file_with_data(idir.."/rsa_key.priv", cf["key-rsa-private"])
 
 	--
 	-- Now process each of the hosts
@@ -73,12 +78,17 @@ local function configure_instance(net)
 			#
 			# <automatically generated tinc host file - do not edit>
 			#
+			Address = {{ip}}
+			Port = {{port}}
+			Subnet = {{subnet}}
+
 			{{key-rsa-public}}
 
 			{{key-ed25519-public}}
 		]]
 		create_config_file(idir.."/hosts/"..host, tinchcf, hcf)
 	end
+
 end
 
 
@@ -94,7 +104,7 @@ local function tinc_precommit(changes)
 end
 
 local function tinc_commit(changes)
-	configure_instance("obnet")
+	configure_instance("tnet")
 	
 
 
@@ -194,6 +204,8 @@ master["/interface/tinc/*/key-generate"] =				{ ["type"] = "select",
 master["/interface/tinc/*/host"] =						{}
 master["/interface/tinc/*/host/*"] =					{ ["style"] = "OK" }
 master["/interface/tinc/*/host/*/ip"] =					{ ["type"] = "ipv4" }
+master["/interface/tinc/*/host/*/port"] =				{ ["type"] = "OK" }
+master["/interface/tinc/*/host/*/subnet"] =				{ ["type"] = "ipv4_nm", ["list"] = true }
 master["/interface/tinc/*/host/*/key-rsa-public"] =		{ ["type"] = "file/text" }
 master["/interface/tinc/*/host/*/key-ed25519-public"] =	{ ["type"] = "file/text" }
 

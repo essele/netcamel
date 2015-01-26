@@ -351,14 +351,19 @@ function create_config_file(name, template, dict)
 		local var = out:match("{{([^}]+)}}")
 		local vmatch = var and var:gsub("[%-%+]", "%%%1")
 
-		if var and dict[var] then
-			if type(dict[var]) == "table" then
-				for v = 1, #dict[var] do
-					table.insert(input, i+v, (out:gsub("{{"..vmatch.."}}", dict[var][v])))
+		if var then
+			if dict[var] then
+				if type(dict[var]) == "table" then
+					for v = 1, #dict[var] do
+						table.insert(input, i+v, (out:gsub("{{"..vmatch.."}}", dict[var][v])))
+					end
+					table.remove(input, i) 
+				else
+					input[i] = out:gsub("{{"..vmatch.."}}", dict[var])
 				end
-				table.remove(input, i) 
 			else
-				input[i] = out:gsub("{{"..vmatch.."}}", dict[var])
+				-- drop the line if we don't have the var
+				table.remove(input, i) 
 			end
 		else
 			input[i] = out
