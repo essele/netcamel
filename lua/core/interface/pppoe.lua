@@ -199,6 +199,7 @@ local function pppoe_commit(changes)
 				ifname {{interface}}
 				persist
 				usepeerdns
+				noresolv
 				nodefaultroute
 				debug
 				user "{{username}}"
