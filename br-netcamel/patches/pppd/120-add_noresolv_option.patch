@@ -1,0 +1,36 @@
+pppd: Add option to disable resolv.conf creation
+
+This patch implements a new boolean option "noresolv" which stops the creation
+of the resolv.conf file. The environment vars are still available in the
+scripts.
+
+Signed-off-by: Lee Essen <lee.essen@nowonline.co.uk>
+
+diff -Naur pppd-orig/pppd/ipcp.c pppd-2.4.7/pppd/ipcp.c
+--- pppd-orig/pppd/ipcp.c	2014-08-09 13:31:39.000000000 +0100
++++ pppd-2.4.7/pppd/ipcp.c	2015-01-26 07:27:04.758264172 +0000
+@@ -91,6 +91,7 @@
+ static int default_route_set[NUM_PPP];	/* Have set up a default route */
+ static int proxy_arp_set[NUM_PPP];	/* Have created proxy arp entry */
+ static bool usepeerdns;			/* Ask peer for DNS addrs */
++static bool noresolv;			/* Don't write resolv.conf */
+ static int ipcp_is_up;			/* have called np_up() */
+ static int ipcp_is_open;		/* haven't called np_finished() */
+ static bool ask_for_local;		/* request our address from peer */
+@@ -209,6 +210,8 @@
+ 
+     { "usepeerdns", o_bool, &usepeerdns,
+       "Ask peer for DNS address(es)", 1 },
++    { "noresolv", o_bool, &noresolv,
++      "disable creation of the resolv.conf file", 1 },
+ 
+     { "netmask", o_special, (void *)setnetmask,
+       "set netmask", OPT_PRIO | OPT_A2STRVAL | OPT_STATIC, netmask_str },
+@@ -1827,6 +1830,7 @@
+ 	script_setenv("DNS2", ip_ntoa(go->dnsaddr[1]), 0);
+     if (usepeerdns && (go->dnsaddr[0] || go->dnsaddr[1])) {
+ 	script_setenv("USEPEERDNS", "1", 0);
++	if (!noresolv)
+ 	create_resolv(go->dnsaddr[0], go->dnsaddr[1]);
+     }
+ 
