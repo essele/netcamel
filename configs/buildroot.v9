@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Buildroot 2015.02-git-g863280d-dirty Configuration
+# Buildroot 2015.02-git-gedced3c-dirty Configuration
 #
 BR2_HAVE_DOT_CONFIG=y
 BR2_HOSTARCH_NEEDS_IA32_COMPILER=y
@@ -1765,7 +1765,7 @@ BR2_PACKAGE_FILE=y
 # BR2_PACKAGE_IPRUTILS is not set
 # BR2_PACKAGE_IRQBALANCE is not set
 # BR2_PACKAGE_KEYUTILS is not set
-BR2_PACKAGE_KMOD=y
+# BR2_PACKAGE_KMOD is not set
 # BR2_PACKAGE_LXC is not set
 # BR2_PACKAGE_MONIT is not set
 # BR2_PACKAGE_NCDU is not set
