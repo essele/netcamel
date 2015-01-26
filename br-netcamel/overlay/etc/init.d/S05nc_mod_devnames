@@ -1,0 +1,37 @@
+#!/bin/sh
+#
+# Run through /lib/modules/*/modules.devname and create any devices listed there
+# so that the modules will be autoloaded as needed.
+#
+# Specifically this means we don't need to worry about modprobing for ppp_generic
+# or tun.
+#
+DEVNAMES="/lib/modules/`uname -r`/modules.devname"
+
+
+case "$1" in
+	start)
+		echo -n "Creating module devices: "
+		grep -v -e "^#" -e "^$" ${DEVNAMES} | while read MOD DEV NODE; do
+			DIR=`dirname ${DEV}`
+			NTYPE=`echo $NODE | cut -c1`
+			MAJ=`echo $NODE | cut -c2- | cut -f 1 -d ":"`
+			MIN=`echo $NODE | cut -f 2 -d ":"`
+
+			[ \! -d "/dev/${DIR}" ] && mkdir /dev/${DIR}
+			mknod /dev/${DEV} ${NTYPE} ${MAJ} ${MIN}
+			chmod 660 /dev/${DEV}
+			echo -n "${MOD} "
+		done
+		echo "OK"
+	;;
+	stop)
+			;;
+
+	*)
+		echo "Usage: $0 {start}"
+		exit 1
+esac
+
+exit $?
+
