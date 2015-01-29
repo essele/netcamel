@@ -23,6 +23,36 @@ local service = require("service")
 
 local PPPD="/usr/sbin/pppd"
 
+
+--
+-- Route syntax processing. We generate a route structure, filling in the
+-- interface if it's not present.
+--
+-- We assume that the value has been validated before so we don't need
+-- to check for syntax.
+--
+-- TODO: move to runtime.route
+--
+local function parse_route(value, interface)
+	local args = split(value, "%s")
+	local route = {}
+
+	route.dest = table.remove(args, 1)
+	while args[1] do
+		local c = table.remove(args, 1)
+		route[c] = table.remove(args, 1)
+	end
+	route.dev = route.dev or interface
+	return route
+end
+local function build_routes_var(list, interface)
+	local rc = {}
+	for _,r in ipairs(list) do
+		table.insert(rc, parse_route(r, interface))
+	end
+	return rc
+end
+
 --------------------------------------------------------------------------------
 --
 -- pppoe -- we create or remove the pppoe config files as needed, we need to
@@ -40,9 +70,9 @@ local function pppoe_precommit(changes)
 	--
 	-- Now handle our specific changes
 	--
-	for ifnum in each(node_list("/interface/pppoe", CF_new)) do
-		local cf = node_vars("/interface/pppoe/"..ifnum, CF_new) or {}
-		print("PPPOE Precommit -- node: " .. ifnum)
+	for nodename in each(node_list("/interface/pppoe", CF_new)) do
+		local cf = node_vars("/interface/pppoe/"..nodename, CF_new) or {}
+		print("PPPOE Precommit -- node: " .. nodename)
 
 		--
 		-- TODO: check all the required fields are present for each
@@ -59,16 +89,16 @@ local function pppoe_precommit(changes)
 			local ifpath = interface_path(cf.attach)
 			local ethcf = node_vars(ifpath, CF_new)
 			if not ethcf then 
-				return false, string.format("attach interface unknown for pppoe/%s: %s", ifnum, ifpath)
+				return false, string.format("attach interface unknown for pppoe/%s: %s", nodename, ifpath)
 			end
 			if ethcf.ip then
-				return false, string.format("attach interface must have no IP address for pppoe/%s: %s", ifnum, ifpath)
+				return false, string.format("attach interface must have no IP address for pppoe/%s: %s", nodename, ifpath)
 			end
 			if ethcf["dhcp-enable"] then
-				return false, string.format("attach interface must not have DHCP for pppoe/%s: %s", ifnum, ifpath)
+				return false, string.format("attach interface must not have DHCP for pppoe/%s: %s", nodename, ifpath)
 			end
 			if ethcf.disabled and not cf.disabled then
-				return false, string.format("attach interface must be enabled for pppoe/%s: %s", ifnum, ifpath)
+				return false, string.format("attach interface must be enabled for pppoe/%s: %s", nodename, ifpath)
 			end
 		end
 	end
@@ -79,17 +109,18 @@ end
 -- Actually start the pppoe process, this means creating the config file and
 -- then adding the service and starting it.
 --
-local function start_pppoe(intf, cf)
+local function start_pppoe(ifname, cf)
 	--
 	-- Build a set of information to pass into the ppp script so that
 	-- it can be a bit more clever
 	--
 	local vars = {
-		["logfile"] 			= "/tmp/log."..intf,
+		["logfile"] 			= "/tmp/pppoe/pppoe."..ifname..".log",
 		["no-defaultroute"] 	= cf["no-defaultroute"],
 		["no-resolv"]			= cf["no-resolv"],
 		["resolv-pri"] 			= cf["resolv-pri"],
-		["defaultroute-pri"] 	= cf["defaultroute-pri"]
+		["defaultroute-pri"] 	= cf["defaultroute-pri"],
+		["routes"]				= cf["route"] and build_routes_var(cf["route"], ifname),
 	}
 
 	--
@@ -97,19 +128,19 @@ local function start_pppoe(intf, cf)
 	-- so that we can get the output of the daemon.
 	--
 	local args = { 	"nodetach",
-					"logfile", "/tmp/log."..intf,
-					"call", intf, 
+					"logfile", "/tmp/pppoe/pppoe."..ifname..".log",
+					"call", ifname, 
 	}
 
 	--
 	-- Use the service framework to start the service so we can track it properly
 	-- later
 	--
-	service.define(intf, {
+	service.define("pppoe."..ifname, {
 		["binary"] = PPPD,
 		["args"] = args,
 		["vars"] = vars,
-		["pidfile"] = "/var/run/"..intf..".pidX",
+		["pidfile"] = "/tmp/pppoe/pppoe."..ifname..".pid",
 		["create_pidfile"] = true,
 		["maxkilltime"] = 2500,
 
@@ -119,22 +150,22 @@ local function start_pppoe(intf, cf)
 
 	log("info", "starting pppoe")
 
-	local rc, err = service.start(intf)
+	local rc, err = service.start("pppoe."..ifname)
 	print("rc="..tostring(rc).." err="..tostring(err))
 
 	--if not rc then return false, "DHCP start failed: "..err end
 	return true
 end
-local function stop_pppoe(intf)
+local function stop_pppoe(ifname)
 	log("info", "stopping pppoe")
 
-	local rc, err = service.stop(intf)
+	local rc, err = service.stop("pppoe."..ifname)
 	print("rc="..tostring(rc).." err="..tostring(err))
 
 	--
 	-- Remove the definition
 	--
-	service.remove("pppoe."..intf)
+	service.remove("pppoe."..ifname)
 end
 
 --
@@ -145,6 +176,15 @@ end
 --
 local function pppoe_commit(changes)
 	print("PPPOE")
+
+	--
+	-- Make sure we have the main directory in /tmp
+	--
+	create_directory("/tmp/pppoe")
+
+	--
+	-- Now work out what we need to do
+	--
 	local state = process_changes(changes, "/interface/pppoe")
 
 	--
@@ -158,13 +198,13 @@ local function pppoe_commit(changes)
 	for num in each(state.changed) do push(todo, num) end
 	table.sort(todo)
 
-	for ifnum in each(todo) do
-		print("WOULD PROCESS: pppoe"..ifnum)
-		local cf = node_vars("/interface/pppoe/"..ifnum, CF_new) or {}
-		local oldcf = node_vars("/interface/pppoe/"..ifnum, CF_current) or {}
-		local physical = interface_name("pppoe/"..ifnum)
+	for nodename in each(todo) do
+		print("WOULD PROCESS: pppoe/"..nodename)
+		local cf = node_vars("/interface/pppoe/"..nodename, CF_new) or {}
+		local oldcf = node_vars("/interface/pppoe/"..nodename, CF_current) or {}
+		local ifname = interface_name("pppoe/"..nodename)
 
-		logroot("intf", physical)
+		logroot("intf", ifname)
 		log("info", "processing interface")
 
 		--
@@ -172,20 +212,20 @@ local function pppoe_commit(changes)
 		--
 		-- TODO: disable??
 		if oldcf.attach and not oldcf.disabled then
-			print("WOULD STOP: "..physical)
-			stop_pppoe(physical)
+			print("WOULD STOP: "..ifname)
+			stop_pppoe(ifname)
 		end
 
 		--
 		-- Now start the new service if we need to...
 		--
 		if not cf.disabled then
-			print("WOULD START: "..physical)
+			print("WOULD START: "..ifname)
 	
 			print("REOSLVC_PRI="..cf["resolv-pri"])
 
 			local cfdict = {
-				["interface"] = physical,
+				["interface"] = ifname,
 				["attach"] = interface_name(cf.attach),
 				["username"] = cf.username or {},
 				["password"] = cf.password or {},
@@ -200,13 +240,14 @@ local function pppoe_commit(changes)
 				persist
 				usepeerdns
 				noresolv
+				nopidfiles
 				nodefaultroute
 				debug
 				user "{{username}}"
 				password "{{password}}"
 			]]
-			create_config_file("/etc/ppp/peers/"..physical, cfdata, cfdict)
-			start_pppoe(physical, cf)
+			create_config_file("/etc/ppp/peers/"..ifname, cfdata, cfdict)
+			start_pppoe(ifname, cf)
 		end	
 	end
 
@@ -253,6 +294,7 @@ master["/interface/pppoe/*/defaultroute-table"] = 	{ ["type"] = "OK", ["default"
 master["/interface/pppoe/*/username"] =				{ ["type"] = "OK" }
 master["/interface/pppoe/*/password"] =				{ ["type"] = "OK" }
 master["/interface/pppoe/*/disabled"] = 			{ ["type"] = "boolean" }
+master["/interface/pppoe/*/route"] =				{ ["type"] = "OK", ["list"] = 1 }
 
 --
 -- Deal with triggers and depdencies

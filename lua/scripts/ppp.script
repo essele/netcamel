@@ -48,7 +48,7 @@ local dns2		= os.getenv("DNS2")
 --
 -- Load the extra variables
 --
-local vars = runtime.get_vars(interface)
+local vars = runtime.get_vars("pppoe."..interface)
 
 --
 -- Prepare the log

@@ -106,7 +106,7 @@ end
 -- Check if a given interface is valid (i.e. exists in the config) 
 --
 function is_valid_interface(short)
-    return node_exists(interface_path(short), CF_new)
+	return node_exists(interface_path(short), CF_new)
 end
 
 --
@@ -223,6 +223,20 @@ TABLE["resolvers"] = {
 }
 
 --
+-- Store all of our routes, resolvers and rules in here so we can do some processing
+-- when interfaces go up and down
+--
+TABLE["runtime"] = {
+	schema = {  class = "string key",
+				source = "string key",
+				item = "string" },
+	routes = "select * from runtime where class = 'route'",
+	rules = "select * from runtime where class = 'rule'",
+	resolvers = "select * from runtime where class = 'resolver'",
+	rm_routes = "delete from runtime where class = 'route' and source = :source",
+}
+
+--
 -- We'll also use a table to track status information so we know whether to apply
 -- routes etc.
 --
@@ -230,5 +244,6 @@ TABLE["status"] = {
 	schema = { node="string primary key", status="string" },
 	set_status = "insert or replace into status (node, status) values (:node, :status)",
 	get_status = "select status from status where node = :node",
+	all_up = "select * from status where status = 'up'",
 }
 

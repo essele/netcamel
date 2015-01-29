@@ -36,6 +36,7 @@ local posix = {
 }
 require("bit")
 require("utils")
+require("execute")
 
 --
 -- Install a service defnition into the transient database
@@ -46,7 +47,7 @@ function define(name, svc)
 	if svc.args then svc.args = serialise(svc.args) end
 	if svc.env then svc.env = serialise(svc.env) end
 	if svc.vars then svc.vars = serialise(svc.vars) end
-	if svc.stop_args then svc.vars = serialise(svc.stop_args) end
+	if svc.stop_args then svc.stop_args = serialise(svc.stop_args) end
 	rc, err = db.query("services", "remove_service", name)
 	print("remove rc="..tostring(rc).." err="..tostring(err))
 	rc, err = db.insert("services", svc)

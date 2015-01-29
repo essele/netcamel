@@ -52,18 +52,20 @@ local function create_table(name)
 	--
 	-- Drop the old one if it exists
 	--
-	rc = db:exec("drop table if exists "..name)
+	rc = db:exec("drop table if exists '"..name.."'")
 	if rc ~= 0 then return false, "unable to drop table" end
 
 	--
 	-- Create the new table
 	--
-	rc = db:exec(string.format("create table %s (%s)", name, table.concat(fields, ", ")))
+	rc = db:exec(string.format("create table '%s' (%s)", name, table.concat(fields, ", ")))
 	if rc ~= 0 then return false, "unable to create table "..name..": "..db:errmsg() end
 
 	--
 	-- Populate the queries
 	--
+	rc = db:exec("delete from __queries where name = '"..name.."'")
+	if rc ~= 0 then return false, "unable to delete old queries for table "..name..": "..db:errmsg() end
 	local stmt = db:prepare("insert into __queries values (?, ?, ?)")
 	if not stmt then return false, "queryadd: "..db:errmsg() end
 	for k, v in pairs(TABLE[name]) do
@@ -96,7 +98,7 @@ local function insert_into_table(name, item)
 	--
 	-- Preapre the sql and bind
 	--
-	stmt = db:prepare("insert into "..name.." ("..vals..") VALUES ("..args..")")
+	stmt = db:prepare("insert into '"..name.."' ("..vals..") VALUES ("..args..")")
 	if not stmt then return false, "insert prepare failed: "..db:errmsg() end
 	rc = stmt:bind_names(item)
 	if rc ~= sqlite3.OK then 

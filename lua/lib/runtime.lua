@@ -54,7 +54,7 @@ local __block_fd = nil
 local __block_filename = "/tmp/.nc_block"
 local __block_i = 0
 
-function block_on()
+local function block_on()
 	--
 	-- Only actually lock the first time, otherwise just keep count
 	--
@@ -76,7 +76,7 @@ function block_on()
 		print("result = "..result)
 	end
 end
-function block_off(name)
+local function block_off(name)
 	__block_i = __block_i - 1
 	if __block_i > 0 then return end
 
@@ -91,7 +91,7 @@ end
 -- Simple execute function that wraps pipe_execute, but also logs
 -- the commands and output.
 --
-function execute(binary, args)
+local function execute(binary, args)
 	local rc, res = pipe_execute(binary, args, nil, nil)
 	log("cmd", "# %s%s (exit: %d)", binary,	args and " "..table.concat(args, " "), rc)
 	for _, out in pairs(res) do
@@ -147,7 +147,7 @@ end
 -- Read the routing table into a hash. First key is the table name, then we have
 -- interface and gateway.
 --
-function get_routes()
+local function get_routes()
 	tbl = tbl or "main"
 	local status, routes = pipe_execute("/sbin/ip", { "-4", "route", "list", "type", "unicast", "table", "all" })
 	if status ~= 0 then 
@@ -188,7 +188,7 @@ local function ip_route_args(cmd, route, tbl)
 		table.insert(rc, route.gateway)
 	end
 	table.insert(rc, "dev")
-	table.insert(rc, route.interface)
+	table.insert(rc, route.interface or route.dev)
 	table.insert(rc, "table")
 	table.insert(rc, tbl)
 	return rc

@@ -80,7 +80,7 @@ end
 --
 -- If no filename is provided then it will use a random filename (in /tmp)
 --
-function create_file_with_data(filename, data)
+function create_file_with_data(filename, data, perm)
 	if not filename then filename = tmp_name() end
 	
 	local file = io.open(filename, "w+")	
@@ -88,6 +88,9 @@ function create_file_with_data(filename, data)
 
 	if data then file:write(data) end
 	file:close()
+
+	if perm then posix.sys.stat.chmod(filename, tonumber(perm, 8)) end
+
 	return { filename = filename, delete = delete_file, read = read_file }
 end
 
@@ -95,10 +98,14 @@ end
 -- Recursively remove a directory, for safety we are only allowed to do this
 -- within /tmp. We also support the table object returned by create_directory.
 --
+-- If it doesn't exist, then we don't do anything
+--
 function remove_directory(dirname)
 	if type(dirname) == "table" then dirname = dirname.dirname end
 	if not dirname then return nil, "no dirname provided" end
 	if dirname:sub(1, 5) ~= "/tmp/" then return nil, "only able to remove within /tmp" end
+
+	if not posix.sys.stat.stat(dirname) then return true end
 
 	os.execute("rm -r "..dirname)
 	return true
@@ -121,5 +128,12 @@ function create_directory(dirname)
 	if not rc then return false, "unable to create directory: "..err end
 
 	return { dirname = dirname, cleanup = remove_directory }
+end
+
+--
+-- Create a symbolic link
+--
+function create_symlink(link, target)
+	return posix.unistd.link(target, link, true)
 end
 

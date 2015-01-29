@@ -22,12 +22,75 @@ require("file")
 local runtime = require("runtime")
 local service = require("service")
 
+local TINCD = "/usr/sbin/tincd"
+local TINC = "/usr/sbin/tinc"
 
 --
 -- Start a tinc instance... build all the config files and then
 -- start the service.
 --
-local function start_tinc()
+local function start_tinc(ifname, cf)
+	--
+	-- Build a set of information to pass into the ppp script so that
+	-- it can be a bit more clever
+	--
+	local vars = {
+		["ip"]					= cf["ip"],
+		["logfile"] 			= "/tmp/tinc/"..ifname.."/script.log",
+		["no-defaultroute"] 	= cf["no-defaultroute"],
+		["no-resolv"]			= cf["no-resolv"],
+		["resolv-pri"] 			= cf["resolv-pri"],
+		["defaultroute-pri"] 	= cf["defaultroute-pri"]
+	}
+
+	--
+	-- Build the command line args. For ppp it's just simply a call with a logfile
+	-- so that we can get the output of the daemon.
+	--
+	local args = { 	"--config=/tmp/tinc/"..ifname,
+					"--net="..ifname,
+					"--pidfile=/tmp/tinc/"..ifname.."/tinc.pid",
+					"--logfile=/tmp/tinc/"..ifname.."/tinc.log" }
+
+	local stop_args = {  "--config=/tmp/tinc/..ifname",	
+						 "--net="..ifname,
+						 "--pidfile=/tmp/tinc/"..ifname.."/tinc.pid",
+						 "stop" }
+
+	--
+	-- Use the service framework to start the service so we can track it properly
+	-- later
+	--
+	service.define("tinc."..ifname, {
+		["binary"] = TINCD,
+		["args"] = args,
+		["vars"] = vars,
+		["maxkilltime"] = 2500,
+
+		["start"] = "ASDAEMON",
+		["stop"] = "BYCOMMAND",
+		["stop_binary"] = TINC,
+		["stop_args"] = stop_args,
+	})
+
+	log("info", "starting tinc for net "..ifname)
+
+	local rc, err = service.start("tinc."..ifname)
+	print("rc="..tostring(rc).." err="..tostring(err))
+
+	--if not rc then return false, "DHCP start failed: "..err end
+	return true
+end
+local function stop_pppoe(ifname)
+	log("info", "stopping tinc for net "..ifname)
+
+	local rc, err = service.stop("tinc."..ifname)
+	print("rc="..tostring(rc).." err="..tostring(err))
+
+	--
+	-- Remove the definition
+	--
+	service.remove("tinc."..ifname)
 end
 
 --
@@ -47,6 +110,11 @@ local function configure_instance(net)
 	local idir = "/tmp/tinc/"..net
 
 	create_directory("/tmp/tinc")
+	
+	--
+	-- Clean out any old directory...
+	--
+	remove_directory(idir)
 	create_directory(idir)
 
 	local cf = node_vars("/interface/tinc/*"..net, CF_new)
@@ -60,11 +128,22 @@ local function configure_instance(net)
 	]]
 
 	create_config_file(idir.."/tinc.conf", tinccf, cf)
+	create_symlink(idir.."/tinc-up", "/netcamel/scripts/tinc.script")
+	create_symlink(idir.."/tinc-down", "/netcamel/scripts/tinc.script")
+	create_symlink(idir.."/host-up", "/netcamel/scripts/tinc.script")
+	create_symlink(idir.."/host-down", "/netcamel/scripts/tinc.script")
+	create_symlink(idir.."/subnet-up", "/netcamel/scripts/tinc.script")
+	create_symlink(idir.."/subnet-down", "/netcamel/scripts/tinc.script")
 
 	--
 	-- Write out the private keys
 	--
-	create_file_with_data(idir.."/rsa_key.priv", cf["key-rsa-private"])
+	if cf["key-rsa-private"] then 
+		create_file_with_data(idir.."/rsa_key.priv", cf["key-rsa-private"], 400) 
+	end
+	if cf["key-ed25519-private"] then 
+		create_file_with_data(idir.."/ed25519_key.priv", cf["key-ed25519-private"], 400) 
+	end
 
 	--
 	-- Now process each of the hosts
@@ -105,8 +184,9 @@ end
 
 local function tinc_commit(changes)
 	configure_instance("tnet")
-	
+	local cf = node_vars("/interface/tinc/*tnet", CF_new)
 
+	start_tinc("tnet", cf)	
 
 	return true
 end
@@ -193,6 +273,7 @@ master["/interface/tinc"] = {
 }
 
 master["/interface/tinc/*"] =							{ ["style"] = "tinc_if" }
+master["/interface/tinc/*/ip"] =						{ ["type"] = "ipv4_nm" }
 master["/interface/tinc/*/hostname"] =					{ ["type"] = "OK",
 														  ["default"] = tinc_hostname, }
 master["/interface/tinc/*/key-rsa-private"] =			{ ["type"] = "file/text" }
