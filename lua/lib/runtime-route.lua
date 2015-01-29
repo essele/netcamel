@@ -20,6 +20,7 @@
 
 require("utils")
 require("execute")
+require("log")
 local db = require("db")
 
 --
@@ -50,9 +51,24 @@ local function add_route_from_source(route, source)
 	db.insert("runtime", { class="route", source=source, item=serialise(route) })
 end
 local function remove_routes_from_source(source)
-	local rc, err = db.query("runetime", "rm_routes", source)
+	local rc, err = db.query("runtime", "rm_routes", source)
 	print("rmroutes: rc="..tostring(rc).." err="..tostring(err))
 end
+
+--
+-- Simple execute function that wraps pipe_execute, but also logs
+-- the commands and output.
+--
+local function execute(binary, args)
+	local rc, res = pipe_execute(binary, args, nil, nil)
+	log("cmd", "# %s%s (exit: %d)", binary, args and " "..table.concat(args, " "), rc)
+	for _, out in pairs(res) do
+		log("cmd", "> %s", out)
+	end
+end
+
+
+
 
 --
 -- Given a route structure work out the arguments to the ip
@@ -60,9 +76,9 @@ end
 --
 local function ip_route_args(cmd, route)
 	local rc = { "route", cmd, route.dest }
-	if route.gateway then
+	if route.gw then
 		table.insert(rc, "via")
-		table.insert(rc, route.gateway)
+		table.insert(rc, route.gw)
 	end
 	table.insert(rc, "dev")
 	table.insert(rc, route.interface or route.dev)
@@ -221,7 +237,7 @@ local function update_routes()
 		--
 		if not new or different then
 			print("Deleteing route: "..d)
-			print("/sbin/ip "..table.concat(ip_route_args("del", cur), " "))
+			execute("/sbin/ip", ip_route_args("del", cur))
 		end
 
 		--
@@ -229,7 +245,7 @@ local function update_routes()
 		--
 		if different then
 			print("Adding route: "..d.." gw="..tostring(new.gw).." dev="..tostring(new.dev))
-			print("/sbin/ip "..table.concat(ip_route_args("add", new), " "))
+			execute("/sbin/ip", ip_route_args("add", new))
 		end
 		rt[d] = nil
 	end
@@ -238,7 +254,7 @@ local function update_routes()
 	--
 	for d, new in pairs(rt) do
 		print("Adding new route: "..d.." gw="..tostring(new.gw).." dev="..tostring(new.dev))
-		print("/sbin/ip "..table.concat(ip_route_args("add", new), " "))
+		execute("/sbin/ip", ip_route_args("add", new))
 	end
 end
 

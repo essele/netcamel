@@ -19,8 +19,10 @@
 
 require("log")
 require("file")
-local runtime = require("runtime")
-local service = require("service")
+local lib = {
+	runtime = require("runtime"),
+	service = require("service"),
+}
 
 local TINCD = "/usr/sbin/tincd"
 local TINC = "/usr/sbin/tinc"
@@ -61,7 +63,7 @@ local function start_tinc(ifname, cf)
 	-- Use the service framework to start the service so we can track it properly
 	-- later
 	--
-	service.define("tinc."..ifname, {
+	lib.service.define("tinc."..ifname, {
 		["binary"] = TINCD,
 		["args"] = args,
 		["vars"] = vars,
@@ -75,7 +77,7 @@ local function start_tinc(ifname, cf)
 
 	log("info", "starting tinc for net "..ifname)
 
-	local rc, err = service.start("tinc."..ifname)
+	local rc, err = lib.service.start("tinc."..ifname)
 	print("rc="..tostring(rc).." err="..tostring(err))
 
 	--if not rc then return false, "DHCP start failed: "..err end
@@ -84,13 +86,13 @@ end
 local function stop_pppoe(ifname)
 	log("info", "stopping tinc for net "..ifname)
 
-	local rc, err = service.stop("tinc."..ifname)
+	local rc, err = lib.service.stop("tinc."..ifname)
 	print("rc="..tostring(rc).." err="..tostring(err))
 
 	--
 	-- Remove the definition
 	--
-	service.remove("tinc."..ifname)
+	lib.service.remove("tinc."..ifname)
 end
 
 --
@@ -226,7 +228,7 @@ local function action_key_generate(v, mp, kp)
 	--
 	local tmpdir = create_directory()
 	if v == "rsa" or v == "both" then
-		runtime.execute("/usr/sbin/tinc", { "--config", tmpdir.dirname, "--batch", "generate-rsa-keys" })
+		lib.runtime.execute("/usr/sbin/tinc", { "--config", tmpdir.dirname, "--batch", "generate-rsa-keys" })
 	
 		local rsa_public = read_file(tmpdir.dirname.."/rsa_key.pub") or "FAILED"
 		local rsa_private = read_file(tmpdir.dirname.."/rsa_key.priv") or "FAILED"
@@ -237,7 +239,7 @@ local function action_key_generate(v, mp, kp)
 		CF_new[kp.."/host/*"..hostname.."/key-rsa-public"] = rsa_public
 	end
 	if v == "ed25519" or v == "both" then
-		runtime.execute("/usr/sbin/tinc", { "--config", tmpdir.dirname, "--batch", "generate-ed25519-keys" })
+		lib.runtime.execute("/usr/sbin/tinc", { "--config", tmpdir.dirname, "--batch", "generate-ed25519-keys" })
 	
 		local ed_public = read_file(tmpdir.dirname.."/ed25519_key.pub") or "FAILED"
 		local ed_private = read_file(tmpdir.dirname.."/ed25519_key.priv") or "FAILED"

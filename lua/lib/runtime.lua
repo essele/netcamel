@@ -38,6 +38,7 @@ posix.fcntl.FD_CLOEXEC = 1
 -- We need to access the database
 --
 local db = require("db")
+local rr = require("runtime-route")
 
 --
 -- We will need lots of logging
@@ -357,12 +358,7 @@ end
 --
 -- Finally, we recreate the resolv.conf and do the right thing with defaultroute.
 --
-local function interface_up(interface, dns, routers, vars)
-	--
-	-- Install any routes associated with this interface
-	--
-	set_routes_for_interface(interface)
-
+local function interface_up(interface, dns, router, vars)
 	--
 	-- Add the resolvers to the resolver table if we need to
 	--
@@ -375,6 +371,7 @@ local function interface_up(interface, dns, routers, vars)
 	--
 	-- Add the defaultroutes to the routes table
 	--
+--[[
 	delete_route({ source = interface, dest = "default", table = vars["defaultroute-table"] })
 	if not vars["no-defaultroute"] then
 		for router in each(routers) do
@@ -382,21 +379,49 @@ local function interface_up(interface, dns, routers, vars)
 				interface = interface, priority = vars["defaultroute-pri"], table = vars["defaultroute-table"] })
 		end
 	end
+]]--
 
 	--
 	-- Now update the resolvers and default routes
 	--
 	update_resolvers()
-	update_defaultroute(vars["defaultroute-table"])
+--	update_defaultroute(vars["defaultroute-table"])
 	set_status(interface, "up")
+
+	--
+	--  Add all of our routes, switch AUTO for the provided router if
+	--  given, otherwise drop the route.
+	--
+	for _,route in ipairs(vars.route or {}) do
+		if route.gw == "AUTO" and router then route.gw = router end
+		if route.gw ~= "AUTO" then rr.add_route_from_source(route, interface) end
+	end
+
+	--
+	-- Add a defaultroute unless we have provided routes, or no-defaultroute
+	--
+	local pri = vars["defaultroute-pri"] or 50
+	if not vars.route and not vars["no-defaultroute"] and router then
+		rr.add_route_from_source({ dest="default", gw=router, dev=interface, pri=pri }, interface)
+	end
+	rr.update_routes()
+
+	--
+	-- Install any routes associated with this interface
+	--
+--	set_routes_for_interface(interface)
+
 end
 local function interface_down(interface, vars)
 	remove_resolvers(interface)
-	delete_route({ source = interface, dest = "default", table = vars["defaultroute-table"] })
-	clear_routes_for_interface(interface)
+--	delete_route({ source = interface, dest = "default", table = vars["defaultroute-table"] })
+--	clear_routes_for_interface(interface)
 	update_resolvers()
-	update_defaultroute(vars["defaultroute-table"])
+--	update_defaultroute(vars["defaultroute-table"])
 	set_status(interface, "down")
+
+	rr.remove_routes_from_source(interface)
+	rr.update_routes()
 end
 
 

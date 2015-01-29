@@ -18,8 +18,13 @@
 ------------------------------------------------------------------------------
 
 require("log")
-local runtime = require("runtime")
-local service = require("service")
+local lib = {
+	runtime = require("runtime"),
+	route = require("route"),
+	service = require("service"),
+}
+--local runtime = require("runtime")
+--local service = require("service")
 
 local DHCPC="/sbin/udhcpc"
 local DHCP_SCRIPT="/netcamel/scripts/dhcp.script"
@@ -34,7 +39,8 @@ local function start_dhcp(intf, cf)
 		["no-resolv"]			= cf["dhcp-no-resolv"],
 		["no-defaultroute"]		= cf["dhcp-no-defaultroute"],
 		["resolv-pri"]			= cf["dhcp-resolv-pri"],
-		["defaultroute-pri"]	= cf["dhcp-defaultroute-pri"],
+		["defaultroute-pri"]	= 60,
+		["route"]				= cf["route"] and lib.route.var(cf["route"], intf)
 	}
 
 	--
@@ -55,7 +61,7 @@ local function start_dhcp(intf, cf)
 	-- Use the service framework to start the service so we can track it properly
 	-- later
 	--
-	service.define("dhcp."..intf, {
+	lib.service.define("dhcp."..intf, {
 		["binary"] = DHCPC,
 		["args"] = args,
 		["vars"] = vars,
@@ -70,7 +76,7 @@ local function start_dhcp(intf, cf)
 
 	log("info", "starting dhcp")
 
-	local rc, err = service.start("dhcp."..intf)
+	local rc, err = lib.service.start("dhcp."..intf)
 	print("service.start dhcp rc="..tostring(rc).." err="..tostring(err))
 
 	--if not rc then return false, "DHCP start failed: "..err end
@@ -81,13 +87,13 @@ local function stop_dhcp(intf)
 	-- Setup enough so we can kill the process
 	--
 	log("info", "stopping dhcp")
-	local rc, err = service.stop("dhcp."..intf)
+	local rc, err = lib.service.stop("dhcp."..intf)
 	print("rc="..tostring(rc).." err="..tostring(err))
 
 	--
 	-- Remove the definition
 	--
-	service.remove("dhcp."..intf)
+	lib.service.remove("dhcp."..intf)
 end
 
 local function ethernet_commit(changes)
@@ -106,9 +112,9 @@ local function ethernet_commit(changes)
 		if oldcf["dhcp-enable"] then
 			stop_dhcp(physical)
 		else
-			runtime.execute("/sbin/ip", {"addr", "flush", "dev", physical })
-			runtime.execute("/sbin/ip", {"link", "set", "dev", physical, "down"})
-			runtime.interface_down(physical, {table = cf["defaultroute-table"]})
+			lib.runtime.execute("/sbin/ip", {"addr", "flush", "dev", physical })
+			lib.runtime.execute("/sbin/ip", {"link", "set", "dev", physical, "down"})
+			lib.runtime.interface_down(physical)
 		end
 	end
 
@@ -143,7 +149,7 @@ local function ethernet_commit(changes)
 				start_dhcp(physical, cf)
 			else
 				if cf.ip then
-					runtime.execute("/sbin/ip", { "addr", "add", cf.ip, "dev", physical })
+					lib.runtime.execute("/sbin/ip", { "addr", "add", cf.ip, "dev", physical })
 				end
 			end
 		else
@@ -151,16 +157,16 @@ local function ethernet_commit(changes)
 			-- Handle standard IP address changes here
 			--
 			if changed.ip and not cf["dhcp-enable"] then
-				if oldcf.ip then runtime.execute("/sbin/ip", { "addr", "del", oldcf.ip, "dev", physical }) end
-				runtime.execute("/sbin/ip", { "addr", "add", cf.ip, "dev", physical })
+				if oldcf.ip then lib.runtime.execute("/sbin/ip", { "addr", "del", oldcf.ip, "dev", physical }) end
+				lib.runtime.execute("/sbin/ip", { "addr", "add", cf.ip, "dev", physical })
 			end
 		end
 	
 		if changed.mtu then
-			runtime.execute("/sbin/ip", { "link", "set", "dev", physical, "mtu", cf.mtu })
+			lib.runtime.execute("/sbin/ip", { "link", "set", "dev", physical, "mtu", cf.mtu })
 		end
 		if changed.disabled then
-			runtime.execute("/sbin/ip", { "link", "set", "dev", physical, 
+			lib.runtime.execute("/sbin/ip", { "link", "set", "dev", physical, 
 													(cf.disabled and "down") or "up" })
 		end
 		
@@ -183,17 +189,25 @@ local function ethernet_commit(changes)
 		--
 		-- Remove any addresses, and set the link up or down
 		--
-		runtime.execute("/sbin/ip", { "addr", "flush", "dev", physical})
-		runtime.execute("/sbin/ip", { "link", "set", "dev", physical, (cf.disabled and "down") or "up" })
-		if(cf.mtu) then runtime.execute("/sbin/ip", { "link", "set", "dev", physical, "mtu", cf.mtu}) end
+		lib.runtime.execute("/sbin/ip", { "addr", "flush", "dev", physical})
+		lib.runtime.execute("/sbin/ip", { "link", "set", "dev", physical, (cf.disabled and "down") or "up" })
+		if(cf.mtu) then lib.runtime.execute("/sbin/ip", { "link", "set", "dev", physical, "mtu", cf.mtu}) end
 
 		--
 		-- The IP address only goes on the interface if we don't have dhcp enabled
 		--
 		if(not cf["dhcp-enable"]) then
 			if cf.ip then
-				runtime.execute("/sbin/ip", {"addr", "add", cf.ip, "brd", "+", "dev", physical})
-				runtime.interface_up(physical, cf.resolver or {}, {cf.defaultroute}, cf)
+				lib.runtime.execute("/sbin/ip", {"addr", "add", cf.ip, "brd", "+", "dev", physical})
+
+				local vars = {
+					["no-defaultroute"]     = cf["no-defaultroute"],
+					["no-resolv"]           = cf["no-resolv"],
+					["resolv-pri"]          = cf["resolv-pri"],
+					["defaultroute-pri"]    = 80,
+					["route"]               = cf.route and lib.route.var(cf.route, physical),
+				}
+				lib.runtime.interface_up(physical, cf.resolver or {}, nil, vars)
 			end
 		else
 			start_dhcp(physical, cf)
@@ -207,7 +221,9 @@ end
 -- For ethernet interfaces we expect a simple number, but it needs
 -- to map to a real interface (or be a virtual)
 --
-VALIDATOR["ethernet_if"] = interface_validate_number
+VALIDATOR["ethernet_if"] = function(v, mp, kp)
+	return interface_validate_number(v, mp, kp)
+end
 
 --
 -- Where we expect an ethernet interface name...
@@ -233,12 +249,10 @@ master["/interface/ethernet/*"] = 						{ ["style"] = "ethernet_if",
 											  			  ["options"] = { "0", "1", "2" } }
 master["/interface/ethernet/*/ip"] = 					{ ["type"] = "ipv4_nm" }
 master["/interface/ethernet/*/resolver"] =				{ ["type"] = "ipv4", ["list"] = true }
-master["/interface/ethernet/*/defaultroute"] =			{ ["type"] = "ipv4" }
 master["/interface/ethernet/*/resolv-pri"] =			{ ["type"] = "2-digit", ["default"] = "80" }
-master["/interface/ethernet/*/defaultroute-pri"] =		{ ["type"] = "2-digit", ["default"] = "80" }
-master["/interface/ethernet/*/defaultroute-table"] =	{ ["type"] = "OK", ["default"] = "main" }
 master["/interface/ethernet/*/mtu"] = 					{ ["type"] = "mtu" }
 master["/interface/ethernet/*/disabled"] = 				{ ["type"] = "boolean" }
+master["/interface/ethernet/*/route"] = 				{ ["type"] = "OK", ["list"] = 1 }
 
 --
 -- Support DHCP on the interface (off by default)
@@ -247,8 +261,6 @@ master["/interface/ethernet/*/dhcp-enable"] = 				{ ["type"] = "boolean", ["defa
 master["/interface/ethernet/*/dhcp-no-resolv"] = 			{ ["type"] = "boolean", ["default"] = false }
 master["/interface/ethernet/*/dhcp-no-defaultroute"] = 		{ ["type"] = "boolean", ["default"] = false }
 master["/interface/ethernet/*/dhcp-resolv-pri"] = 			{ ["type"] = "2-digit", ["default"] = "60" }
-master["/interface/ethernet/*/dhcp-defaultroute-pri"] = 	{ ["type"] = "2-digit", ["default"] = "60" }
-master["/interface/ethernet/*/dhcp-defaultroute-table"] = 	{ ["type"] = "OK", ["default"] = "main" }
 
 
 function interface_ethernet_init()

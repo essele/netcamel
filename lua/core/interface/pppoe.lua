@@ -18,40 +18,18 @@
 ------------------------------------------------------------------------------
 
 require("log")
-local runtime = require("runtime")
-local service = require("service")
+
+local lib = {
+	route = require("route"),
+	service = require("service"),
+}
+
+--require("route")
+--local runtime = require("runtime")
+--local service = require("service")
 
 local PPPD="/usr/sbin/pppd"
 
-
---
--- Route syntax processing. We generate a route structure, filling in the
--- interface if it's not present.
---
--- We assume that the value has been validated before so we don't need
--- to check for syntax.
---
--- TODO: move to runtime.route
---
-local function parse_route(value, interface)
-	local args = split(value, "%s")
-	local route = {}
-
-	route.dest = table.remove(args, 1)
-	while args[1] do
-		local c = table.remove(args, 1)
-		route[c] = table.remove(args, 1)
-	end
-	route.dev = route.dev or interface
-	return route
-end
-local function build_routes_var(list, interface)
-	local rc = {}
-	for _,r in ipairs(list) do
-		table.insert(rc, parse_route(r, interface))
-	end
-	return rc
-end
 
 --------------------------------------------------------------------------------
 --
@@ -119,8 +97,8 @@ local function start_pppoe(ifname, cf)
 		["no-defaultroute"] 	= cf["no-defaultroute"],
 		["no-resolv"]			= cf["no-resolv"],
 		["resolv-pri"] 			= cf["resolv-pri"],
-		["defaultroute-pri"] 	= cf["defaultroute-pri"],
-		["routes"]				= cf["route"] and build_routes_var(cf["route"], ifname),
+		["defaultroute-pri"] 	= 40,
+		["route"]				= cf["route"] and lib.route.var(cf["route"], ifname),
 	}
 
 	--
@@ -136,7 +114,7 @@ local function start_pppoe(ifname, cf)
 	-- Use the service framework to start the service so we can track it properly
 	-- later
 	--
-	service.define("pppoe."..ifname, {
+	lib.service.define("pppoe."..ifname, {
 		["binary"] = PPPD,
 		["args"] = args,
 		["vars"] = vars,
@@ -150,7 +128,7 @@ local function start_pppoe(ifname, cf)
 
 	log("info", "starting pppoe")
 
-	local rc, err = service.start("pppoe."..ifname)
+	local rc, err = lib.service.start("pppoe."..ifname)
 	print("rc="..tostring(rc).." err="..tostring(err))
 
 	--if not rc then return false, "DHCP start failed: "..err end
@@ -159,13 +137,13 @@ end
 local function stop_pppoe(ifname)
 	log("info", "stopping pppoe")
 
-	local rc, err = service.stop("pppoe."..ifname)
+	local rc, err = lib.service.stop("pppoe."..ifname)
 	print("rc="..tostring(rc).." err="..tostring(err))
 
 	--
 	-- Remove the definition
 	--
-	service.remove("pppoe."..ifname)
+	lib.service.remove("pppoe."..ifname)
 end
 
 --
@@ -289,8 +267,6 @@ master["/interface/pppoe/*/no-defaultroute"] =		{ ["type"] = "boolean", ["defaul
 master["/interface/pppoe/*/no-resolv"] =			{ ["type"] = "boolean", ["default"] = false }
 master["/interface/pppoe/*/mtu"] =					{ ["type"] = "mtu" }
 master["/interface/pppoe/*/resolv-pri"] = 			{ ["type"] = "2-digit", ["default"] = "40" }
-master["/interface/pppoe/*/defaultroute-pri"] = 	{ ["type"] = "2-digit", ["default"] = "40" }
-master["/interface/pppoe/*/defaultroute-table"] = 	{ ["type"] = "OK", ["default"] = "main" }
 master["/interface/pppoe/*/username"] =				{ ["type"] = "OK" }
 master["/interface/pppoe/*/password"] =				{ ["type"] = "OK" }
 master["/interface/pppoe/*/disabled"] = 			{ ["type"] = "boolean" }

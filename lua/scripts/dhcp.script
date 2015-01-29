@@ -99,7 +99,7 @@ if action == "renew" or action == "bound" then
 	-- Add routes and resolvers and work out what the
 	-- end state should look like
 	--
-	runtime.interface_up(interface, dns, routers, vars)
+	runtime.interface_up(interface, dns, routers[1], vars)
 end
 
 --
