@@ -41,7 +41,7 @@ local function start_tinc(ifname, cf)
 		["logfile"] 			= "/tmp/tinc/"..ifname.."/script.log",
 		["no-defaultroute"] 	= cf["no-defaultroute"],
 		["no-resolv"]			= cf["no-resolv"],
-		["resolv-pri"] 			= cf["resolv-pri"],
+		["resolver-pri"] 		= cf["resolver-pri"],
 		["defaultroute-pri"] 	= cf["defaultroute-pri"]
 	}
 

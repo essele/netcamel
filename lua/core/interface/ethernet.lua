@@ -36,9 +36,9 @@ local function start_dhcp(intf, cf)
 	--
 	local vars = {
 		["logfile"]				= "/tmp/dhcp."..intf..".log",
-		["no-resolv"]			= cf["dhcp-no-resolv"],
-		["no-defaultroute"]		= cf["dhcp-no-defaultroute"],
-		["resolv-pri"]			= cf["dhcp-resolv-pri"],
+		["no-resolv"]			= cf["no-resolv"],
+		["no-defaultroute"]		= cf["no-defaultroute"],
+		["resolver-pri"]		= 60,
 		["defaultroute-pri"]	= 60,
 		["route"]				= cf["route"] and lib.route.var(cf["route"], intf)
 	}
@@ -203,7 +203,7 @@ local function ethernet_commit(changes)
 				local vars = {
 					["no-defaultroute"]     = cf["no-defaultroute"],
 					["no-resolv"]           = cf["no-resolv"],
-					["resolv-pri"]          = cf["resolv-pri"],
+					["resolver-pri"]        = 80,
 					["defaultroute-pri"]    = 80,
 					["route"]               = cf.route and lib.route.var(cf.route, physical),
 				}
@@ -249,7 +249,7 @@ master["/interface/ethernet/*"] = 						{ ["style"] = "ethernet_if",
 											  			  ["options"] = { "0", "1", "2" } }
 master["/interface/ethernet/*/ip"] = 					{ ["type"] = "ipv4_nm" }
 master["/interface/ethernet/*/resolver"] =				{ ["type"] = "ipv4", ["list"] = true }
-master["/interface/ethernet/*/resolv-pri"] =			{ ["type"] = "2-digit", ["default"] = "80" }
+master["/interface/ethernet/*/resolver-pri"] =			{ ["type"] = "2-digit", ["default"] = "80" }
 master["/interface/ethernet/*/mtu"] = 					{ ["type"] = "mtu" }
 master["/interface/ethernet/*/disabled"] = 				{ ["type"] = "boolean" }
 master["/interface/ethernet/*/route"] = 				{ ["type"] = "OK", ["list"] = 1 }
@@ -258,9 +258,8 @@ master["/interface/ethernet/*/route"] = 				{ ["type"] = "OK", ["list"] = 1 }
 -- Support DHCP on the interface (off by default)
 --
 master["/interface/ethernet/*/dhcp-enable"] = 				{ ["type"] = "boolean", ["default"] = false }
-master["/interface/ethernet/*/dhcp-no-resolv"] = 			{ ["type"] = "boolean", ["default"] = false }
-master["/interface/ethernet/*/dhcp-no-defaultroute"] = 		{ ["type"] = "boolean", ["default"] = false }
-master["/interface/ethernet/*/dhcp-resolv-pri"] = 			{ ["type"] = "2-digit", ["default"] = "60" }
+master["/interface/ethernet/*/no-defaultroute"] = 		{ ["type"] = "boolean", ["default"] = false }
+master["/interface/ethernet/*/no-resolv"] = 			{ ["type"] = "boolean", ["default"] = false }
 
 
 function interface_ethernet_init()

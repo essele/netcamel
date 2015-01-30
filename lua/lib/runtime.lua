@@ -365,7 +365,7 @@ local function interface_up(interface, dns, router, vars)
 	remove_resolvers(interface)
 	if not vars["no-resolv"] then
 		for resolver in each(dns) do
-			add_resolver(interface, resolver, vars["resolv-pri"])
+			add_resolver(interface, resolver, vars["resolver-pri"])
 		end
 	end
 	--
@@ -389,9 +389,37 @@ local function interface_up(interface, dns, router, vars)
 	set_status(interface, "up")
 
 	--
+	-- Add any listed resolvers, translate AUTO into each of the
+	-- provided resolver addresses
+	--
+	rr.remove_resolvers_from_source(interface)
+	for _,resolver in ipairs(vars.resolver or {}) do
+		if resolver.ip == "AUTO" and dns then
+			for _,r in ipairs(dns) do
+				resolver.ip = r
+				rr.add_resolver_from_source(resolver, interface)
+			end
+		else
+			rr.add_resolver_from_source(resolver, interface)
+		end
+	end
+
+	--
+	-- Add the auto resolvers if we haven't provided any (or no-resolv)
+	--
+	if not vars.resolver and not vars["no-resolv"] and dns then
+		local pri = vars["resolver-pri"] or 50
+		for _,r in ipairs(dns) do
+			rr.add_resolver_from_source({ip=r, pri=pri}, interface)
+		end
+	end
+--	rr.update_resolvers()
+
+	--
 	--  Add all of our routes, switch AUTO for the provided router if
 	--  given, otherwise drop the route.
 	--
+	rr.remove_routes_from_source(interface)
 	for _,route in ipairs(vars.route or {}) do
 		if route.gw == "AUTO" and router then route.gw = router end
 		if route.gw ~= "AUTO" then rr.add_route_from_source(route, interface) end
@@ -400,8 +428,8 @@ local function interface_up(interface, dns, router, vars)
 	--
 	-- Add a defaultroute unless we have provided routes, or no-defaultroute
 	--
-	local pri = vars["defaultroute-pri"] or 50
 	if not vars.route and not vars["no-defaultroute"] and router then
+		local pri = vars["defaultroute-pri"] or 50
 		rr.add_route_from_source({ dest="default", gw=router, dev=interface, pri=pri }, interface)
 	end
 	rr.update_routes()
@@ -419,6 +447,9 @@ local function interface_down(interface, vars)
 	update_resolvers()
 --	update_defaultroute(vars["defaultroute-table"])
 	set_status(interface, "down")
+
+	rr.remove_resolvers_from_source(interface)
+--	rr.update_resolvers()
 
 	rr.remove_routes_from_source(interface)
 	rr.update_routes()

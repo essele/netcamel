@@ -96,7 +96,7 @@ local function start_pppoe(ifname, cf)
 		["logfile"] 			= "/tmp/pppoe/pppoe."..ifname..".log",
 		["no-defaultroute"] 	= cf["no-defaultroute"],
 		["no-resolv"]			= cf["no-resolv"],
-		["resolv-pri"] 			= cf["resolv-pri"],
+		["resolver-pri"] 		= 40,
 		["defaultroute-pri"] 	= 40,
 		["route"]				= cf["route"] and lib.route.var(cf["route"], ifname),
 	}
@@ -200,8 +200,6 @@ local function pppoe_commit(changes)
 		if not cf.disabled then
 			print("WOULD START: "..ifname)
 	
-			print("REOSLVC_PRI="..cf["resolv-pri"])
-
 			local cfdict = {
 				["interface"] = ifname,
 				["attach"] = interface_name(cf.attach),
@@ -266,7 +264,6 @@ master["/interface/pppoe/*/attach"] =				{ ["type"] = "eth_interface",
 master["/interface/pppoe/*/no-defaultroute"] =		{ ["type"] = "boolean", ["default"] = false }
 master["/interface/pppoe/*/no-resolv"] =			{ ["type"] = "boolean", ["default"] = false }
 master["/interface/pppoe/*/mtu"] =					{ ["type"] = "mtu" }
-master["/interface/pppoe/*/resolv-pri"] = 			{ ["type"] = "2-digit", ["default"] = "40" }
 master["/interface/pppoe/*/username"] =				{ ["type"] = "OK" }
 master["/interface/pppoe/*/password"] =				{ ["type"] = "OK" }
 master["/interface/pppoe/*/disabled"] = 			{ ["type"] = "boolean" }

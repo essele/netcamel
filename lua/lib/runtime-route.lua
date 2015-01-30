@@ -38,12 +38,6 @@ local db = require("db")
 -- field
 --
 
---[[
-db.insert("runtime", { class="route", source="eth0", 
-	item=serialise({dest="30.20.10.0/24", gw=nil, dev="eth0", pri=10, table="joe"})
-})
-]]--
-
 --
 -- Add a route into our runtime table
 --
@@ -52,7 +46,16 @@ local function add_route_from_source(route, source)
 end
 local function remove_routes_from_source(source)
 	local rc, err = db.query("runtime", "rm_routes", source)
-	print("rmroutes: rc="..tostring(rc).." err="..tostring(err))
+end
+
+--
+-- Add resolvers into our runtime table
+--
+local function add_resolver_from_source(resolver, source)
+	db.insert("runtime", { class="resolver", source=source, item=serialise(resolver) })
+end
+local function remove_resolvers_from_source(source)
+	local rc, err = db.query("runtime", "rm_resolvers", source)
 end
 
 --
@@ -261,6 +264,8 @@ end
 return {
 	add_route_from_source = add_route_from_source,
 	remove_routes_from_source = remove_routes_from_source,
+	add_resolver_from_source = add_resolver_from_source,
+	remove_resolvers_from_source = remove_resolvers_from_source,
 	update_routes = update_routes,
 }
 

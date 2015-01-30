@@ -231,9 +231,10 @@ TABLE["runtime"] = {
 				source = "string key",
 				item = "string" },
 	routes = "select * from runtime where class = 'route'",
+	rm_routes = "delete from runtime where class = 'route' and source = :source",
 	rules = "select * from runtime where class = 'rule'",
 	resolvers = "select * from runtime where class = 'resolver'",
-	rm_routes = "delete from runtime where class = 'route' and source = :source",
+	rm_resolvers = "delete from runtime where class = 'resolver' and source = :source",
 }
 
 --
