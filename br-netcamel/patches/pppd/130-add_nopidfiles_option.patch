@@ -1,0 +1,55 @@
+diff -Naur pppd-orig/pppd/main.c pppd-2.4.7/pppd/main.c
+--- pppd-orig/pppd/main.c	2015-01-27 04:50:32.177246266 +0000
++++ pppd-2.4.7/pppd/main.c	2015-01-27 05:15:53.636245931 +0000
+@@ -813,6 +813,9 @@
+ {
+     FILE *pidfile;
+ 
++	if (nopidfiles)
++	return;
++
+     slprintf(pidfilename, sizeof(pidfilename), "%s%s.pid",
+ 	     _PATH_VARRUN, ifname);
+     if ((pidfile = fopen(pidfilename, "w")) != NULL) {
+@@ -830,6 +833,9 @@
+ {
+     FILE *pidfile;
+ 
++	if (nopidfiles)
++	return;
++
+     if (linkname[0] == 0)
+ 	return;
+     script_setenv("LINKNAME", linkname, 1);
+diff -Naur pppd-orig/pppd/options.c pppd-2.4.7/pppd/options.c
+--- pppd-orig/pppd/options.c	2015-01-27 04:50:32.200246289 +0000
++++ pppd-2.4.7/pppd/options.c	2015-01-27 13:20:06.496239212 +0000
+@@ -107,6 +107,7 @@
+ int	idle_time_limit = 0;	/* Disconnect if idle for this many seconds */
+ int	holdoff = 30;		/* # seconds to pause before reconnecting */
+ bool	holdoff_specified;	/* true if a holdoff value has been given */
++bool	nopidfiles;	/* don't create any pidfiles */
+ int	log_to_fd = 1;		/* send log messages to this fd too */
+ bool	log_default = 1;	/* log_to_fd is default (stdout) */
+ int	maxfail = 10;		/* max # of unsuccessful connection attempts */
+@@ -250,6 +251,9 @@
+     { "-h", o_special_noarg, (void *)showhelp,
+       "Show brief listing of options", OPT_ALIAS },
+ 
++	{ "nopidfiles", o_bool, &nopidfiles,
++	  "Do not create any pidfiles", OPT_PRIO | 1 },
++
+     { "logfile", o_special, (void *)setlogfile,
+       "Append log messages to this file",
+       OPT_PRIO | OPT_A2STRVAL | OPT_STATIC, &logfile_name },
+diff -Naur pppd-orig/pppd/pppd.h pppd-2.4.7/pppd/pppd.h
+--- pppd-orig/pppd/pppd.h	2015-01-27 04:50:32.200246289 +0000
++++ pppd-2.4.7/pppd/pppd.h	2015-01-27 05:15:20.882245907 +0000
+@@ -317,6 +317,7 @@
+ extern char	*record_file;	/* File to record chars sent/received */
+ extern bool	sync_serial;	/* Device is synchronous serial device */
+ extern int	maxfail;	/* Max # of unsuccessful connection attempts */
++extern bool nopidfiles;  /* do not create any pidfiles */
+ extern char	linkname[MAXPATHLEN]; /* logical name for link */
+ extern char	use_ifname[IFNAMSIZ]; /* physical name for PPP interface */
+ extern bool	tune_kernel;	/* May alter kernel settings as necessary */
