@@ -119,7 +119,8 @@ local function ethernet_commit(changes)
 	end
 
 	--
-	-- Modify an interface ... we'll work through the actual changes
+	-- Modify an interface ... if we aren't dhcp then we want to be careful not to take
+	-- the interface down for small changes.
 	--
 	for ifnum in each(state.changed) do 
 		local cf = node_vars("/interface/ethernet/"..ifnum, CF_new) or {}
@@ -131,49 +132,56 @@ local function ethernet_commit(changes)
 		log("info", "changing interface")
 
 		--
-		-- If we have changed any of our dhcp settings then we definitely need to
-		-- stop dhcp (and maybe restart)
+		-- Something has changed, if we were dhcp then stop it (it may restart later)
 		--
-		-- Also, if we change our IP address when dhcp is enabled (used to request
-		-- specific IP address) then we also need to restart
+		local dhcp_was_running = not oldcf.disabled and oldcf["dhcp-enable"]
+
+		if dhcp_was_running then stop_dhcp(physical) end
+
 		--
-		local dhcp_ip_restart = changed.ip and oldcf["dhcp-enable"]
-
-		if dhcp_ip_restart or next(prefixmatches(changed, "dhcp-")) then
-			if oldcf["dhcp-enable"] then
-				stop_dhcp(physical)
-			end
-
-			if cf["dhcp-enable"] then
-				print("dhcp-enable type="..type(cf["dhcp-enable"]))
-				start_dhcp(physical, cf)
-			else
-				if cf.ip then
-					lib.runtime.execute("/sbin/ip", { "addr", "add", cf.ip, "dev", physical })
-				end
-			end
-		else
-			--
-			-- Handle standard IP address changes here
-			--
-			if changed.ip and not cf["dhcp-enable"] then
-				if oldcf.ip then lib.runtime.execute("/sbin/ip", { "addr", "del", oldcf.ip, "dev", physical }) end
-				lib.runtime.execute("/sbin/ip", { "addr", "add", cf.ip, "dev", physical })
-			end
-		end
-	
-		if changed.mtu then
-			lib.runtime.execute("/sbin/ip", { "link", "set", "dev", physical, "mtu", cf.mtu })
-		end
+		-- If we have changed disabled state then reflect that, and take the interface
+		-- down if it was up before
+		--
 		if changed.disabled then
 			lib.runtime.execute("/sbin/ip", { "link", "set", "dev", physical, 
 													(cf.disabled and "down") or "up" })
+			if cf.disabled then lib.runtime.interface_down(physical) end
 		end
-		
-		for p in each(changed) do
-			print("CAHNANANAN: " .. p)
+	
+		--
+		-- MTU change is a simple update
+		--
+		if changed.mtu then
+			lib.runtime.execute("/sbin/ip", { "link", "set", "dev", physical, "mtu", cf.mtu })
 		end
-		-- TODO
+
+		--
+		-- IP address or routing/resolver changes require a re-up of the interface
+		-- if it's not disabled
+		--
+		if not cf["dhcp-enable"] then
+			if changed.ip then
+				lib.runtime.execute("/sbin/ip", { "addr", "flush", "dev", physical})
+				if cf.ip then
+					lib.runtime.execute("/sbin/ip", {"addr", "add", cf.ip, "brd", "+", "dev", physical})
+				end
+			end
+			if not cf.disabled then
+				local vars = {
+					["no-defaultroute"]     = cf["no-defaultroute"],
+					["no-resolv"]           = cf["no-resolv"],
+					["resolver-pri"]        = 80,
+					["defaultroute-pri"]    = 80,
+					["route"]               = cf.route and lib.route.var(cf.route, physical),
+				}
+				lib.runtime.interface_up(physical, cf.resolver or {}, nil, vars)
+			end
+		end
+
+		--
+		-- If we are dhcp-enabled then just start it
+		--
+		if cf["dhcp-enable"] and not cf.disabled then start_dhcp(physical) end
 	end
 
 	--
@@ -196,9 +204,13 @@ local function ethernet_commit(changes)
 		--
 		-- The IP address only goes on the interface if we don't have dhcp enabled
 		--
-		if(not cf["dhcp-enable"]) then
-			if cf.ip then
-				lib.runtime.execute("/sbin/ip", {"addr", "add", cf.ip, "brd", "+", "dev", physical})
+		if not cf.disabled then
+			if cf["dhcp-enable"] then
+				start_dhcp(physical, cf)
+			else
+				if cf.ip then
+					lib.runtime.execute("/sbin/ip", {"addr", "add", cf.ip, "brd", "+", "dev", physical})
+				end
 
 				local vars = {
 					["no-defaultroute"]     = cf["no-defaultroute"],
@@ -209,8 +221,6 @@ local function ethernet_commit(changes)
 				}
 				lib.runtime.interface_up(physical, cf.resolver or {}, nil, vars)
 			end
-		else
-			start_dhcp(physical, cf)
 		end
 	end	
 
@@ -272,6 +282,5 @@ function interface_ethernet_init()
 	interface_register({ module = "ethernet", path = "/interface/ethernet",
 						if_numeric = "eth%", if_alpha = nil,
 						classes = { "all", "ethernet" } })
-
 
 end

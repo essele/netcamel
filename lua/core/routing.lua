@@ -37,7 +37,7 @@ local function routing_commit(changes)
 		cf.interface = interface_name(cf.interface)
 		cf.source = "routes"
 		print("dest="..tostring(cf.dest).." interface="..tostring(cf.interface).." table="..tostring(cf.table))
-		runtime.insert_route(cf)		
+--		runtime.insert_route(cf)		
 	end
 
 	for name in each(state.removed) do
@@ -45,7 +45,7 @@ local function routing_commit(changes)
 		local cf = node_vars("/routing/route/"..name, CF_current)
 		cf.interface = interface_name(cf.interface)
 		cf.source = "routes"
-		runtime.delete_route(cf)		
+--		runtime.delete_route(cf)		
 	end
 
 	for name in each(state.changed) do
@@ -57,8 +57,8 @@ local function routing_commit(changes)
 		oldcf.interface = interface_name(oldcf.interface)
 		oldcf.source = "routes"
 
-		runtime.delete_route(oldcf)		
-		runtime.insert_route(cf)		
+--		runtime.delete_route(oldcf)		
+--		runtime.insert_route(cf)		
 	end
 	runtime.block_off()
 	return true

@@ -100,7 +100,6 @@ local function execute(binary, args)
 	end
 end
 
-
 --
 -- Allow set and get status 
 --
@@ -116,241 +115,9 @@ local function set_status(node, status)
 end
 local function is_up(node) return ((get_status(node)) == "up") end
 
-local function remove_resolvers(source)
-	db.query("resolvers", "remove_source", source)
-end
-local function add_resolver(source, value, priority)
-	db.insert("resolvers", { source = source, priority = priority, value = value })
-	log("info", "adding dns resolver option: %s (pri=%s)", value, priority)
-end
-
---
--- Now work out what the correct route and resolvers are
---
-local function update_resolvers()
-	log("info", "selecting resolvers based on priority")
-
-	local resolvers = db.query("resolvers", "priority_resolvers")
-	local file = io.open("/tmp/resolv.conf.auto", "w+")
-	for resolver in each(resolvers) do
-		file:write(string.format("nameserver %s # %s\n", resolver.value, resolver.source))
-		log("info", "- selected resolver %s (%s)", resolver.value, resolver.source)
-	end
-	file:close()
-	if #resolvers == 0 then log("info", "- no resolvers available") end
-end
-
 -- ------------------------------------------------------------------------------
 -- ROUTE MANIPULATION CODE
 -- ------------------------------------------------------------------------------
-
---
--- Read the routing table into a hash. First key is the table name, then we have
--- interface and gateway.
---
-local function get_routes()
-	tbl = tbl or "main"
-	local status, routes = pipe_execute("/sbin/ip", { "-4", "route", "list", "type", "unicast", "table", "all" })
-	if status ~= 0 then 
-		print("AARRGH")
-		for _,v in ipairs(routes or {}) do print(">> "..v) end
-		return nil 
-	end
-
-	local rc = {}
-	for _, route in ipairs(routes) do
-		local dev, gateway, dest, tbl
-		local f = split(route, "%s")
-
-		dest = table.remove(f, 1)
-		while f[1] do
-			local cmd = table.remove(f, 1)
-			if cmd == "dev" then dev = table.remove(f, 1)
-			elseif cmd == "via" then gateway = table.remove(f, 1)
-			elseif cmd == "table" then tbl = table.remove(f, 1)
-			else table.remove(f, 1) table.remove(f, 1) end
-		end
-		tbl = tbl or "main"
-		if not rc[tbl] then rc[tbl] = {} end
-		rc[tbl][dest] = { dest = dest, interface = dev, gateway = gateway }
-	end
-	return rc
-end
-
---
--- Prepare a list of arguments for the ip route commands
---
-local function ip_route_args(cmd, route, tbl)
-	tbl = tbl or "main"
-
-	local rc = { "route", cmd, route.dest }
-	if route.gateway then 
-		table.insert(rc, "via") 
-		table.insert(rc, route.gateway)
-	end
-	table.insert(rc, "dev")
-	table.insert(rc, route.interface or route.dev)
-	table.insert(rc, "table")
-	table.insert(rc, tbl)
-	return rc
-end
-
-
-
---
--- Insert and remove routes from the transient routing database, if they are from
--- the 'routes' system then we check if we need to really apply the route.
---
-local function insert_route(e)
-	local entry = copy(e)
-	entry.table = entry.table or "main"
-
-	local rc, err = db.insert("routes", entry)
-	print("route insert rc="..tostring(rc).." err="..tostring(err))
-
-	print("Source is: "..tostring(entry.source))
-	print("ISUP: "..entry.interface.." " ..tostring(is_up(entry.interface)))
-
-	if entry.source == "routes"	and is_up(entry.interface) then
-		--
-		-- TODO: only add if its not there
-		--
-		log("info", "interface is up - adding route")
-		execute("/sbin/ip", ip_route_args("add", entry, entry.table))
-	end
-end
-local function delete_route(f)
-	local entry = copy(f)
-	entry.dest = entry.dest or "default"
-	entry.table = entry.table or "main"
-
-	local rc, err = db.query("routes", "delete_route_for_source", entry)
-	print("route delete rc="..tostring(rc).." err="..tostring(err))
-
-	if entry.source == "routes"	and is_up(entry.interface) then
-		--
-		-- TODO: only delete if its in the list
-		--
-		log("info", "interface is up - deleting route")
-		execute("/sbin/ip", ip_route_args("del", entry, entry.table))
-	end
-end
-
---
--- Remove any routes for the given interface, this will generally happen
--- automatically when the interface goes down, but we do this just in case
--- we have other things going on.
---
-local function clear_routes_for_interface(interface)
-	log("info", "clearing routes for interface")
-
-	--
-	-- Get our current routing table
-	--
-	local routes = get_routes()
-
-	--
-	-- Now delete anything relevant, from all tables
-	--
-	for tbl, rl in pairs(routes) do
-		for dest, route in pairs(rl) do
-			if route.interface == interface then execute("/sbin/ip", ip_route_args("del", route, tbl)) end
-		end
-	end
-end
-
---
--- Make sure we have all the definied routes configured. Note that we won't delete extra
--- routes, but we will change routes if the destination is the same.
---
-local function set_routes_for_interface(interface)
-	log("info", "installing routes for interface")
-
-	--
-	-- Get our current routing table
-	--
-	local routes = get_routes()
-
-	--
-	-- Work out what routes we should have
-	--
-	local rc, err = db.query("routes", "routes_for_interface", interface)
-	if not rc then return rc, err end
-
-	for _, new in ipairs(rc) do
-		local current = routes[new.table] and routes[new.table][new.dest]
-
-		if current then
-			if current.interface == new.interface or current.gateway == new.gateway then
-				log("info", "- route for %s/%s via %s already installed", current.dest, current.table, current.interface)
-				goto continue
-			end
-			execute("/sbin/ip", ip_route_args("del", current, new.table))
-		end
-		execute("/sbin/ip", ip_route_args("add", new, new.table))
-
-::continue::
-	end
-end
-
---
--- Remove the default route, and then add from the prioritised records
---
--- We can only support one router at this stage, so just pick the first one
--- we get back.
---
-local function update_defaultroute(table)
-	table = table or "main"
-
-	block_on()
-	log("info", "selecting defaultroute/%s", table)
-
-	--
-	-- Work out what we have currently
-	--
-	local routes = get_routes()
-	local current = routes[table] and routes[table]["default"]
-
-	--
-	-- Work out what the route should be...
-	--
-	local default = nil
-	local routers, err = db.query("routes", "priority_defaultroutes_for_table", table)
-	if not routers then
-		log("error", "unable to get priority_defaultroutes_for_table %s: %s", table, tostring(err))
-		goto done
-	end
-	if routers and routers[1] then default = routers[1] end
-
-	--
-	-- See if we need to change
-	--
-	if current == nil and default == nil then 
-		log("info", "- no defaultroute available, already correct")
-		goto done 
-	end
-	if current and default then
-		if (current.interface == default.interface and current.gateway == default.gateway) then
-			log("info", "- gateway via %s, already correct", current.interface)
-			goto done
-		end
-	end
-
-	--
-	-- By now we know there is a difference, so remove and add as needed
-	--
-	if current then
-		log("info", "- removing %s via %s", current.gateway or "*", current.interface)
-		execute("/sbin/ip", ip_route_args("del", current))
-	end
-	if default then
-		log("info", "- adding %s via %s", default.gateway or "*", default.interface)
-		execute("/sbin/ip", ip_route_args("add", default))
-	end
-
-::done::
-	block_off()
-end
 
 --
 -- When an interface comes up, we need to mark it up, install all the relevant routes
@@ -359,33 +126,10 @@ end
 -- Finally, we recreate the resolv.conf and do the right thing with defaultroute.
 --
 local function interface_up(interface, dns, router, vars)
+	block_on()
 	--
-	-- Add the resolvers to the resolver table if we need to
+	-- Mark the interface up (needed for the routes to work properly)
 	--
-	remove_resolvers(interface)
-	if not vars["no-resolv"] then
-		for resolver in each(dns) do
-			add_resolver(interface, resolver, vars["resolver-pri"])
-		end
-	end
-	--
-	-- Add the defaultroutes to the routes table
-	--
---[[
-	delete_route({ source = interface, dest = "default", table = vars["defaultroute-table"] })
-	if not vars["no-defaultroute"] then
-		for router in each(routers) do
-			insert_route({ source = interface, dest = "default", gateway = router,
-				interface = interface, priority = vars["defaultroute-pri"], table = vars["defaultroute-table"] })
-		end
-	end
-]]--
-
-	--
-	-- Now update the resolvers and default routes
-	--
-	update_resolvers()
---	update_defaultroute(vars["defaultroute-table"])
 	set_status(interface, "up")
 
 	--
@@ -413,7 +157,7 @@ local function interface_up(interface, dns, router, vars)
 			rr.add_resolver_from_source({ip=r, pri=pri}, interface)
 		end
 	end
---	rr.update_resolvers()
+	rr.update_resolvers()
 
 	--
 	--  Add all of our routes, switch AUTO for the provided router if
@@ -433,26 +177,18 @@ local function interface_up(interface, dns, router, vars)
 		rr.add_route_from_source({ dest="default", gw=router, dev=interface, pri=pri }, interface)
 	end
 	rr.update_routes()
-
-	--
-	-- Install any routes associated with this interface
-	--
---	set_routes_for_interface(interface)
-
+	block_off()
 end
 local function interface_down(interface, vars)
-	remove_resolvers(interface)
---	delete_route({ source = interface, dest = "default", table = vars["defaultroute-table"] })
---	clear_routes_for_interface(interface)
-	update_resolvers()
---	update_defaultroute(vars["defaultroute-table"])
+	block_on()
 	set_status(interface, "down")
 
 	rr.remove_resolvers_from_source(interface)
---	rr.update_resolvers()
+	rr.update_resolvers()
 
 	rr.remove_routes_from_source(interface)
 	rr.update_routes()
+	block_off()
 end
 
 
@@ -484,9 +220,6 @@ end
 return {
 	interface_up = interface_up,
 	interface_down = interface_down,
-
-	insert_route = insert_route,
-	delete_route = delete_route,
 
 	redirect = redirect,
 	get_vars = get_vars,

@@ -261,11 +261,52 @@ local function update_routes()
 	end
 end
 
+--
+-- Create a resolv.conf file based on the correct set of resolvers
+-- (we pick the ones with the lowest priority, but bearing in mind we
+-- might have many at the same pri)
+--
+--
+local function update_resolvers()
+    log("info", "selecting resolvers based on priority")
+
+	local resolvers = db.query("runtime", "resolvers")
+
+	--
+	-- First we find the items with the lowest priority...
+	--
+	local min = math.huge
+	local resolvers = {}
+	for _, r in ipairs(db.query("runtime", "resolvers")) do
+		local resolver = unserialise(r.item)
+		if resolver.pri < min then 
+			resolvers = {} 
+			min = resolver.pri 
+		end
+		if resolver.pri == min then 
+			resolver.source = r.source			-- carry over source for later use
+			table.insert(resolvers, resolver) 
+		end
+	end
+
+	--
+	-- Now create the file containing those matching min
+	--
+    local file = io.open("/tmp/resolv.conf.auto", "w+")
+	for _, resolver in ipairs(resolvers) do
+        file:write(string.format("nameserver %s # %s\n", resolver.ip, resolver.source))
+        log("info", "- selected resolver %s (%s)", resolver.ip, resolver.source)
+	end
+    file:close()
+    if #resolvers == 0 then log("info", "- no resolvers available") end
+end
+
 return {
 	add_route_from_source = add_route_from_source,
 	remove_routes_from_source = remove_routes_from_source,
 	add_resolver_from_source = add_resolver_from_source,
 	remove_resolvers_from_source = remove_resolvers_from_source,
 	update_routes = update_routes,
+	update_resolvers = update_resolvers,
 }
 
