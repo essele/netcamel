@@ -1,0 +1,147 @@
+#!/usr/bin/luajit
+--------------------------------------------------------------------------------
+--  This file is part of NetCamel
+--  Copyright (C) 2014,2015 Lee Essen <lee.essen@nowonline.co.uk>
+--
+--  This program is free software: you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free Software Foundation, either version 3 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+------------------------------------------------------------------------------
+--[[
+# 
+# 
+# HISTFILESIZE=1000
+# INPUTRC=/etc/inputrc
+# USER=root
+# HOSTNAME=buildroot
+# SHLVL=3
+# OLDPWD=/tmp/tinc
+# HOME=/root
+# PAGER=/bin/more
+# PS1=#
+# NETNAME=
+# LOGNAME=root
+# NAME=camel
+# TERM=vt100
+# PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin
+# DMALLOC_OPTIONS=debug=0x34f47d83,inter=100,log=logfile
+# HISTSIZE=1000
+# SHELL=/bin/sh
+# INTERFACE=tun0
+# PWD=/tmp/tinc/tnet
+# EDITOR=/bin/vi
+# DEVICE=/dev/net/tun
+# 
+]]--
+
+
+--
+-- This script is called by tincd when various things happen during the
+-- tinc connection establishment
+--
+-- We should be linked by multiple sources, therefore we need to look
+-- at arg[0] to work out what function we need to perform
+--
+package.path = "/netcamel/lib/?.lua;"..package.path
+
+--
+-- We need to access the database for resolvers and routes
+--
+runtime = require("runtime")
+
+--
+-- Needed for split
+--
+require("utils")
+
+--
+-- Pull out the relevent bits from the environment
+--
+local interface	= os.getenv("INTERFACE")
+local netname	= os.getenv("NETNAME")
+--local server	= os.getenv("IPREMOTE")
+--local dns1		= os.getenv("DNS1")
+--local dns2		= os.getenv("DNS2")
+
+--
+-- Load the extra variables
+--
+local vars = runtime.get_vars("tinc."..interface)
+
+local ip = vars.ip
+local broadcast = vars.broadcast or "+"
+
+--
+-- Prepare the log
+--
+logroot("intf", interface)
+
+--
+-- Redirect our output
+--
+if vars.logfile then runtime.redirect(vars.logfile) end
+
+--
+-- Work out which action we are performing
+--
+local action = arg[0]:match("/?([^/]-)$")
+
+--
+-- Block all other interface related activity so that we have a clear tun
+-- and our logs are easier to read.
+--
+runtime.block_on()
+
+--
+-- Work out what the action is
+--
+print("Action is: " .. action)
+log("info", "TINC event action=%s", action)
+os.execute("env")
+
+
+if action == "tinc-up" then
+	--
+	-- We just need to make sure the interface is configured, since
+	-- we won't have any connected hosts/subnets at this point.
+	--
+	runtime.execute("/sbin/ip", { "addr", "flush", "dev", interface })
+	runtime.execute("/sbin/ip", { "addr", "add", ip, "broadcast", broadcast, "dev", interface })
+	runtime.execute("/sbin/ip", { "link", "set", interface, "up" })
+end
+
+if action == "tinc-down" then
+	--
+	-- This is called just before we exit, the interface will be removed along
+	-- with any associated routes, so nothing to do here.
+	--
+end
+
+--[[
+if action == "ip-up" then
+	local dns = {}
+	if dns1 then push(dns, dns1) end
+	if dns2 then push(dns, dns2) end
+
+	runtime.interface_up(interface, dns, { server }, vars)
+end
+
+if action == "ip-down" then
+	runtime.interface_down(interface, vars)
+end
+]]--
+--
+-- Clear the block, will happen at exit anyway
+--
+runtime.block_off()
+
+os.exit(0)
