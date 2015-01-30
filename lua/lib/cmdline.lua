@@ -296,10 +296,12 @@ local function cfvalue_completer(tokens, n, prefix)
 	-- Now completer logic
 	--
 	local matches = iprefixmatches(options, prefix)
+	local rc
 	if #matches == 0 then return nil end
 	if #matches > 1 then
 		local cp = icommon_prefix(matches)
-		if cp ~= prefix then return cp:sub(#prefix+1) else return matches end
+		if cp == prefix then return matches end
+		return cp:sub(#prefix+1)
 	end
 	if matches[1] == prefix then return nil end
 	return matches[1]:sub(#prefix+1)
@@ -501,6 +503,11 @@ local function cfvalue_validator(tokens, n, pathn)
 	local value = ptoken.value
 	local mp = tokens[pathn].mp
 	local kp = tokens[pathn].kp
+
+	--
+	-- No more separators, this must be the last token
+	--
+	ptoken.nosep = true
 
 	--
 	-- Right hand side, need to run the validator
@@ -932,7 +939,9 @@ function interactive()
 		--
 		-- Add to the history
 		--
-		table.insert(history, cmdline)
+		if history[#history] ~= cmdline then
+			table.insert(history, cmdline)
+		end
 
 		--
 		-- Find our command and do some basic usage checking, are all

@@ -184,6 +184,7 @@ local function tokenise(tokens, input, sep, offset)
 	local inquote, backslash = false, false
 	local allow_inherit = true
 	local token_n = 0
+	local nosep
 
 	for i=1, input:len()+1 do
 		local ch = input:sub(i,i)
@@ -192,7 +193,7 @@ local function tokenise(tokens, input, sep, offset)
 		-- If we get a space outside of backslash or quote then
 		-- we have found a token
 		--
-		if ch == "" or (ch == sep and not backslash and not inquote) then
+		if ch == "" or (ch == sep and not backslash and not inquote and not nosep) then
 			if token and token.value ~= "" then
 			
 				-- do we need?
@@ -219,6 +220,7 @@ local function tokenise(tokens, input, sep, offset)
 				token.value = ""
 				token.start = i + offset
 				token_n = token_n + 1
+				nosep = tokens[token_n] and tokens[token_n].nosep
 			end
 			token.value = token.value .. ch
 			token.finish = i + offset
@@ -621,11 +623,20 @@ end
 -- Tab completion output, depending on what kind of list it is we will
 -- format it differently.
 --
--- If the text flag is set then we just output each line.
--- Otherwise we consider it a list of smallish items, so we work out the
--- longest, and see how many we can fit across a line.
---
 local function completer_output(comp)
+	--
+	-- If we have spaces in our list then it won't read well in columns so
+	-- we'll force the text flag
+	--
+	if not comp.text then
+		for _,m in ipairs(comp) do if m:match("%s") then comp.text = true break end end
+	end
+
+	--
+	-- If the text flag is set then we just output each line.
+	-- Otherwise we consider it a list of smallish items, so we work out the
+	-- longest, and see how many we can fit across a line.
+	-- 
 	if comp.text then
 		for _,m in ipairs(comp) do ti.out(m .. "\n") end
 		return
@@ -765,11 +776,6 @@ local function readline(prompt, history, syntax_func, completer_func)
 					ti.out(ti.carriage_return)
 					ti.out(ti.cursor_down)
 					__col, __row = 0, 0
---[[
-					for _,m in ipairs(rc) do
-						ti.out(m .. "\n")
-					end
-]]--
 					completer_output(rc)
 					needs_full_redraw = true
 				end
