@@ -17,7 +17,7 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
-require("log")
+--require("log")
 --local runtime = require("runtime")
 --local service = require("service")
 
@@ -69,7 +69,7 @@ local function start_dhcp(intf, cf)
 		["stop"] = "BYPIDFILE",
 	})
 
-	log("info", "starting dhcp")
+	lib.log.log("info", "starting dhcp")
 
 	local rc, err = lib.service.start("dhcp."..intf)
 	print("service.start dhcp rc="..tostring(rc).." err="..tostring(err))
@@ -81,7 +81,7 @@ local function stop_dhcp(intf)
 	--
 	-- Setup enough so we can kill the process
 	--
-	log("info", "stopping dhcp")
+	lib.log.log("info", "stopping dhcp")
 	local rc, err = lib.service.stop("dhcp."..intf)
 	print("rc="..tostring(rc).." err="..tostring(err))
 
@@ -92,7 +92,7 @@ local function stop_dhcp(intf)
 end
 
 local function ethernet_commit(changes)
-	logroot("intf")
+	lib.log.root("intf")
 	local state = process_changes(changes, "/interface/ethernet")
 
 	--
@@ -102,8 +102,8 @@ local function ethernet_commit(changes)
 		local oldcf = node_vars("/interface/ethernet/"..ifnum, CF_current) or {}
 		local physical = interface_name("ethernet/"..ifnum)
 
-		logroot("intf", physical)
-		log("info", "removing interface")
+		lib.log.root("intf", physical)
+		lib.log.log("info", "removing interface")
 		if oldcf["dhcp-enable"] then
 			stop_dhcp(physical)
 		else
@@ -123,8 +123,8 @@ local function ethernet_commit(changes)
 		local physical = interface_name("ethernet/"..ifnum)
 
 		local changed = values_to_keys(node_list("/interface/ethernet/"..ifnum, changes))
-		logroot("intf", physical)
-		log("info", "changing interface")
+		lib.log.root("intf", physical)
+		lib.log.log("info", "changing interface")
 
 		--
 		-- Something has changed, if we were dhcp then stop it (it may restart later)
@@ -186,8 +186,8 @@ local function ethernet_commit(changes)
 		local cf = node_vars("/interface/ethernet/"..ifnum, CF_new)
 		local physical = interface_name("ethernet/"..ifnum)
 
-		logroot("intf", physical)
-		log("info", "creating interface")
+		lib.log.root("intf", physical)
+		lib.log.log("info", "creating interface")
 
 		--
 		-- Remove any addresses, and set the link up or down

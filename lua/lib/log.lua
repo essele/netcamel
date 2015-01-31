@@ -66,4 +66,8 @@ __log["debug"] = true
 __log["warn"] = true
 __log["cmd"] = true
 
+return {
+	log = log,
+	root = logroot,
+}
 

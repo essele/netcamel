@@ -20,7 +20,6 @@
 --
 -- The main services array
 --
-local db = require("db")
 
 local posix = {
 	unistd = require("posix.unistd"),
@@ -36,28 +35,28 @@ local posix = {
 }
 require("bit")
 require("utils")
-require("execute")
+--require("execute")
 
 --
 -- Install a service defnition into the transient database
 -- (serialise data where needed)
 --
-function define(name, svc)
+local function define(name, svc)
 	svc.service = name
 	if svc.args then svc.args = serialise(svc.args) end
 	if svc.env then svc.env = serialise(svc.env) end
 	if svc.vars then svc.vars = serialise(svc.vars) end
 	if svc.stop_args then svc.stop_args = serialise(svc.stop_args) end
-	rc, err = db.query("services", "remove_service", name)
+	rc, err = lib.db.query("services", "remove_service", name)
 	print("remove rc="..tostring(rc).." err="..tostring(err))
-	rc, err = db.insert("services", svc)
+	rc, err = lib.db.insert("services", svc)
 	print("rc="..tostring(rc).." err="..tostring(err))
 end
 --
 -- Remove a service definition from the databaase
 --
-function remove(name)
-	rc, err = db.query("services", "remove_service", name)
+local function remove(name)
+	rc, err = lib.db.query("services", "remove_service", name)
 	print("remove rc="..tostring(rc).." err="..tostring(err))
 end
 
@@ -65,8 +64,8 @@ end
 -- Pull out a service definition
 -- (unserialise as needed)
 --
-function get(name)
-	local svc = db.query("services", "get_service", name)
+local function get(name)
+	local svc = lib.db.query("services", "get_service", name)
 	if not svc or #svc ~= 1 then return nil, "unknown service" end
 
 	svc = svc[1]
@@ -194,7 +193,7 @@ end
 local function kill_by_command(svc)
 	print("stop command: " .. tostring(svc.stop_binary))
 
-	local rc, err = pipe_execute(svc.stop_binary, svc.stop_args, nil, svc.env )
+	local rc, err = lib.execute.pipe(svc.stop_binary, svc.stop_args, nil, svc.env )
 	print("rc="..tostring(rc))
 	if not rc then return false, err end
 
@@ -238,7 +237,7 @@ end
 local function start_normally(svc)
 	print("would run (normally): " .. tostring(svc.binary))
 
-	local rc, err = pipe_execute(svc.binary, svc.args, nil, svc.env )
+	local rc, err = lib.execute.pipe(svc.binary, svc.args, nil, svc.env )
 	print("rc="..tostring(rc))
 	if not rc then return false, err end
 
@@ -392,26 +391,28 @@ end
 -- We will create a services table for tracking the state of
 -- active services
 --
-TABLE["services"] = {
-	schema = {  service="string primary key",
-				name="string",
-				binary="string",
-				pidfile="string",
-				create_pidfile="boolean",
-				logfile="string",
-				start="string",
-				stop="string",
-				status="string",
-				args="string",
-				env="string",
-				vars="string",
-				maxkilltime="integer",
-				stop_binary="string",
-				stop_args="string",
-	},
-	["get_service"] = "select * from services where service = :service",
-	["remove_service"] = "delete from services where service = :service",
-}
+local function init()
+	TABLE["services"] = {
+		schema = {  service="string primary key",
+					name="string",
+					binary="string",
+					pidfile="string",
+					create_pidfile="boolean",
+					logfile="string",
+					start="string",
+					stop="string",
+					status="string",
+					args="string",
+					env="string",
+					vars="string",
+					maxkilltime="integer",
+					stop_binary="string",
+					stop_args="string",
+		},
+		["get_service"] = "select * from services where service = :service",
+		["remove_service"] = "delete from services where service = :service",
+	}
+end
 
 --
 -- Return the functions...
@@ -420,6 +421,7 @@ return {
 	--
 	-- Main Functions
 	--
+	init = init,
 	define = define,
 	remove = remove,
 	get = get,

@@ -114,3 +114,7 @@ function pipe_execute(cmd, args, stdin, env)
     local pid, reason, status = posix.sys.wait.wait(pid)
 	return status, output
 end
+
+return {
+	pipe = pipe_execute
+}

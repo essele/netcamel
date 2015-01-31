@@ -17,7 +17,7 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
-local service = require("service")
+--local service = require("service")
 
 local NTPD = "/usr/sbin/ntpd"
 local NTPD_NAME = "ntpd"
@@ -37,7 +37,7 @@ local function ntp_commit(changes)
 	--
 	-- Stop the daemon...
 	--
-	service.stop("ntpd")
+	lib.service.stop("ntpd")
 
 	--
 	-- Check to see if we have a config at all!
@@ -94,7 +94,7 @@ local function ntp_commit(changes)
 	--
 	-- Start the daemon...
 	--
-	service.start("ntpd")
+	lib.service.start("ntpd")
 
 	return true
 end
@@ -188,7 +188,7 @@ function ntp_init()
 	-- Define the service so that we can stop, start and monitor the
 	-- daemon.
 	--
-	service.define("ntpd", {
+	lib.service.define("ntpd", {
 		["binary"] = NTPD,
 		["args"] = NTPD_ARGS,
 		["name"] = NTPD_NAME,

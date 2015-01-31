@@ -18,7 +18,7 @@
 -----------------------------------------------------------------------------
 
 require("config")
-local readline = require("readline")
+
 local posix = { 
 	dirent = require("posix.dirent"),
 	unistd = require("posix.unistd"),
@@ -146,7 +146,7 @@ local function cfpath_completer(tokens, n, prefix)
 	local is_absolute = tokens[n].value:sub(1,1) == "/"
 
 	tokens = tokens[n].subtokens
-	n, prefix = readline.which_token(tokens, pos)
+	n, prefix = lib.readline.which_token(tokens, pos)
 	local token = tokens[n]
 	local value = token.value
 
@@ -317,7 +317,7 @@ local function cfpath_validator(tokens, n, input)
 	local mp, kp
 
 	if not ptoken.subtokens then ptoken.subtokens = {} end
-	readline.tokenise(ptoken.subtokens, value, "/", ptoken.start-1)
+	lib.readline.tokenise(ptoken.subtokens, value, "/", ptoken.start-1)
 
 	if value:sub(1,1) == "/" then 
 		mp, kp = "/", "/"
@@ -415,14 +415,14 @@ local function cfpath_validator(tokens, n, input)
 
 	if must_be_node and finalstatus ~= FAIL then
 		if #mp == 0 or (master[mp] and master[mp]["type"] == nil) then
-			readline.mark_all(ptoken.subtokens, 1, PARTIAL)
+			lib.readline.mark_all(ptoken.subtokens, 1, PARTIAL)
 		end
 	end
 
 	-- if we want to be a wildcard only then we are partial unless we have it
 	if opts.must_be_wildcard and finalstatus ~= FAIL then
 		if mp:sub(-1) ~= "*" then
-			readline.mark_all(ptoken.subtokens, 1, PARTIAL)
+			lib.readline.mark_all(ptoken.subtokens, 1, PARTIAL)
 		end
 	end
 
@@ -567,7 +567,7 @@ local function syntax_action(cmd, tokens)
 		end
 		i = i + 1
 	end
-	readline.mark_all(tokens, i, FAIL)
+	lib.readline.mark_all(tokens, i, FAIL)
 	return
 end
 
@@ -593,7 +593,7 @@ local function syntax_checker(tokens, input)
 		local matches = match_list(CMDS, value)
 		token.status = (#matches > 0 and PARTIAL) or FAIL
 	end
-	if token.status == FAIL then readline.mark_all(tokens, 2, FAIL) end
+	if token.status == FAIL then lib.readline.mark_all(tokens, 2, FAIL) end
 	return
 end
 
@@ -630,7 +630,7 @@ end
 -- to provide completion information
 --
 local function initial_completer(tokens, input, pos)
-	local n, prefix = readline.which_token(tokens, pos)
+	local n, prefix = lib.readline.which_token(tokens, pos)
 
 	if n == 1 then
 		return system_completer(tokens, n, prefix)
@@ -658,9 +658,9 @@ end
 --
 local function edit_value(value)
 	local file = lib.file.create_with_data(nil, value)
-	readline.set_normal_term()
+	lib.readline.set_normal_term()
 	os.execute("/bin/vi "..file.filename)
-	readline.set_readline_term()
+	lib.readline.set_readline_term()
 
 	local value = file:read()
 	file:delete()
@@ -673,9 +673,9 @@ end
 -- (Note: CTRL-D needs to be on a blank line, not sure it's a real problem)
 --
 local function stdin_value()
-	readline.set_normal_term()
+	lib.readline.set_normal_term()
 	local value = io.read("*a")
-	readline.set_readline_term()
+	lib.readline.set_readline_term()
 	return value
 end
 
@@ -920,9 +920,9 @@ function interactive()
 
 	__prompt = setprompt(__path_kp)
 
-	readline.init()
+	lib.readline.init()
 	while true do
-		local cmdline, tags = readline.readline(__prompt, history, syntax_checker, initial_completer)
+		local cmdline, tags = lib.readline.readline(__prompt, history, syntax_checker, initial_completer)
 		if not cmdline then break end
 
 		--
@@ -965,7 +965,7 @@ function interactive()
 
 	::continue::
 	end
-	readline.finish()
+	lib.readline.finish()
 
 	-- Save history
 	local file = io.open("etc/__history", "w+")

@@ -17,19 +17,19 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
-require("log")
-runtime = require("runtime")
+--require("log")
+--runtime = require("runtime")
 
 local function system_precommit(changes)
 	return true
 end
 
 local function system_commit(changes)
-	logroot("system")
+	lib.log.root("system")
 
 	local cf = node_vars("/system", CF_new) or {}
 	local hostname = cf.hostname or "camel"
-	runtime.execute("/bin/hostname", { hostname })
+	lib.runtime.execute("/bin/hostname", { hostname })
 	
 	return true
 end

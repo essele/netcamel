@@ -347,7 +347,7 @@ local function ipt_rebuild(testonly)
 	local rules, err = ipt_generate()
 	if not rules then return false, err end
 	
-	local rc, stdout = pipe_execute(ipt_restore, ipt_restore_args, rules)
+	local rc, stdout = lib.execute.pipe(ipt_restore, ipt_restore_args, rules)
 	if rc == 0 then return true end
 
 	--

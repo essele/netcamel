@@ -17,9 +17,9 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
-require("log")
+--require("log")
 --local runtime = require("runtime")
-local service = require("service")
+--local service = require("service")
 
 local DNSMASQ = "/usr/sbin/dnsmasq"
 local DNSMASQ_CONF = "/tmp/dnsmasq.conf"
@@ -28,7 +28,7 @@ local DNSMASQ_CONF = "/tmp/dnsmasq.conf"
 -- Start DNSMASQ using the service framework
 --
 local function start_dnsmasq()
-	service.define("dnsmasq", {
+	lib.service.define("dnsmasq", {
 		["binary"] = DNSMASQ,
 		["args"] = { "--conf-file=" .. DNSMASQ_CONF },
 		["name"] = "dnsmasq",
@@ -37,17 +37,17 @@ local function start_dnsmasq()
 		["start"] = "NORMALLY",
 		["stop"] = "BYPIDFILE" })
 
-	log("info", "starting dnsmasq")
+	lib.log.log("info", "starting dnsmasq")
 	
-	local rc, err = service.start("dnsmasq")
+	local rc, err = lib.service.start("dnsmasq")
 	print("dnsmasq.start rc="..tostring(rc).." err="..tostring(err))
 	return true
 end
 local function stop_dnsmasq()
-	log("info", "stopping dnsmasq")
-	local rc, err = service.stop("dnsmasq")
+	lib.log.log("info", "stopping dnsmasq")
+	local rc, err = lib.service.stop("dnsmasq")
 	print("dnsmasq.start rc="..tostring(rc).." err="..tostring(err))
-	service.remove("dnsmasq")
+	lib.service.remove("dnsmasq")
 end
 
 --
@@ -133,7 +133,7 @@ end
 --
 local function dnsmasq_commit(changes)
 	print("Hello From DNSMASQ")
-	logroot("dnsmasq")
+	lib.log.root("dnsmasq")
 
 	--
 	-- If we were running then we need to stop
@@ -155,7 +155,7 @@ local function dnsmasq_commit(changes)
 	--
 	local fd = io.open(DNSMASQ_CONF, "w+")
 	if not fd then
-		log("error", "unable to create %s", DNSMASQ_CONF)
+		lib.log.log("error", "unable to create %s", DNSMASQ_CONF)
 		return false
 	end
 	local cf = build_config()
@@ -176,7 +176,7 @@ end
 -- ipsets
 --
 local function dnsmasq_precommit(changes)
-	logroot("dnsmasq")
+	lib.log.root("dnsmasq")
 	--
 	-- dns/forwarding has a 'listen-on' interface list
 	--
@@ -220,7 +220,7 @@ local function dnsmasq_precommit(changes)
 	local conf, err = build_config()
 	if not conf then return false, err end
 
-	local rc, out = pipe_execute(DNSMASQ, { "--test", "--conf-file=-" }, conf, nil )
+	local rc, out = lib.execute.pipe(DNSMASQ, { "--test", "--conf-file=-" }, conf, nil )
 	if rc ~= 0 then
 		local err = out[2] or "unknown error"
 		local e, line = err:match("^(.*) at line (%d+) of")

@@ -63,7 +63,7 @@ dofile("/netcamel/lib/lib.lua")
 --
 -- Needed for split
 --
-require("utils")
+--require("utils")
 
 --
 -- Pull out the relevent bits from the environment
@@ -85,7 +85,7 @@ local broadcast = vars.broadcast or "+"
 --
 -- Prepare the log
 --
-logroot("intf", interface)
+lib.log.root("intf", interface)
 
 --
 -- Redirect our output
@@ -107,7 +107,7 @@ lib.runtime.block_on()
 -- Work out what the action is
 --
 print("Action is: " .. action)
-log("info", "TINC event action=%s", action)
+lib.log.log("info", "TINC event action=%s", action)
 os.execute("env")
 
 

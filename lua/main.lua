@@ -32,7 +32,6 @@ dofile("lib/lib.lua")
 --require("lfs")
 require("utils")
 require("config")
-require("execute")
 require("validators")
 --require("api")
 
@@ -45,8 +44,16 @@ local posix		= {
 }
 local base64 	= require("base64")
 local ffi 		= require("ffi")
-local service 	= require("service")
-local db 		= require("db")
+--local service 	= require("service")
+--local db 		= require("db")
+
+--
+-- Cause load of db module so the TABLE list is initialised
+--
+local _ = lib.db
+
+
+lib.service.init()
 
 -- bring in our syntax checkers and completers
 -- this also brings in readline
@@ -125,7 +132,7 @@ end
 --
 if arg[1] == "init" then
 	print("Initialising transient data...")
-	db.init()
+	lib.db.init()
 end
 
 --

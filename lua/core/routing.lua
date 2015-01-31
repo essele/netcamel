@@ -17,8 +17,8 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
-local db = require("db")
-local runtime = require("runtime")
+--local db = require("db")
+--local runtime = require("runtime")
 
 --
 -- Commit will just remove all the routes and then re-add them
@@ -26,7 +26,7 @@ local runtime = require("runtime")
 -- TODO: what about live routes
 --
 local function routing_commit(changes)
-	runtime.block_on()
+	lib.runtime.block_on()
 	print("Hello From ROUTINGQ")
 
 	local state = process_changes(changes, "/routing/route")
@@ -60,7 +60,7 @@ local function routing_commit(changes)
 --		runtime.delete_route(oldcf)		
 --		runtime.insert_route(cf)		
 	end
-	runtime.block_off()
+	lib.runtime.block_off()
 	return true
 end
 

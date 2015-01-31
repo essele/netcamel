@@ -45,8 +45,8 @@ posix.fcntl.FD_CLOEXEC = 1
 --
 -- TODO: fix execute and log!!!
 require("bit")
-require("lib.execute")
-require("lib.log")
+--require("lib.execute")
+--require("lib.log")
 
 
 --
@@ -104,10 +104,10 @@ end
 -- the commands and output.
 --
 local function execute(binary, args)
-	local rc, res = pipe_execute(binary, args, nil, nil)
-	log("cmd", "# %s%s (exit: %d)", binary,	args and " "..table.concat(args, " "), rc)
+	local rc, res = lib.execute.pipe(binary, args, nil, nil)
+	lib.log.log("cmd", "# %s%s (exit: %d)", binary,	args and " "..table.concat(args, " "), rc)
 	for _, out in pairs(res) do
-		log("cmd", "> %s", out)
+		lib.log.log("cmd", "> %s", out)
 	end
 end
 
@@ -121,7 +121,7 @@ local function get_status(node)
 end
 local function set_status(node, status)
 	local rc, err = lib.db.query("status", "set_status", node, status)
-	log("info", "%s is %s", node, status)
+	lib.log.log("info", "%s is %s", node, status)
 	return rc, err
 end
 local function is_up(node) return ((get_status(node)) == "up") end
@@ -137,7 +137,7 @@ local function is_up(node) return ((get_status(node)) == "up") end
 -- Add a route into our runtime table
 --
 local function add_route_from_source(route, source)
-	lib.db.insert("runtime", { class="route", source=source, item=serialise(route) })
+	lib.db.insert("runtime", { class="route", source=source, item=lib.utils.serialise(route) })
 end
 local function remove_routes_from_source(source)
 	local rc, err = lib.db.query("runtime", "rm_routes", source)
@@ -147,7 +147,7 @@ end
 -- Add resolvers into our runtime table
 --
 local function add_resolver_from_source(resolver, source)
-	lib.db.insert("runtime", { class="resolver", source=source, item=serialise(resolver) })
+	lib.db.insert("runtime", { class="resolver", source=source, item=lib.utils.serialise(resolver) })
 end
 local function remove_resolvers_from_source(source)
 	local rc, err = lib.db.query("runtime", "rm_resolvers", source)
@@ -203,7 +203,7 @@ local function get_routing_interface(gw)
 	-- Pull out the response from ip route get, if there is a via then
 	-- we are not local
 	--
-	local rc, out = pipe_execute("/sbin/ip", { "route", "get", gw })
+	local rc, out = lib.execute.pipe("/sbin/ip", { "route", "get", gw })
 	if rc == 0 and out[1] then
 		local via = out[1]:match("via")
 		local dev = out[1]:match(" dev ([^%s]+)")
@@ -223,7 +223,7 @@ end
 -- is a hash containing the route information.
 --
 function get_routes()
-	local status, routes = pipe_execute("/sbin/ip", 
+	local status, routes = lib.execute.pipe("/sbin/ip", 
 				{ "-4", "route", "list", "type", "unicast", "table", "all" })
 	if status ~= 0 then 
 		print("AARRGH")
@@ -268,7 +268,7 @@ local function update_routes()
 	--
 	local rt = {}
 	for _, r in ipairs(lib.db.query("runtime", "routes")) do
-		local route = unserialise(r.item)
+		local route = lib.utils.unserialise(r.item)
 
 		--
 		-- Check that the gw is local and dev matches (if provided)
@@ -350,7 +350,7 @@ end
 --
 --
 local function update_resolvers()
-    log("info", "selecting resolvers based on priority")
+    lib.log.log("info", "selecting resolvers based on priority")
 
 	local resolvers = lib.db.query("runtime", "resolvers")
 
@@ -360,7 +360,7 @@ local function update_resolvers()
 	local min = math.huge
 	local resolvers = {}
 	for _, r in ipairs(lib.db.query("runtime", "resolvers")) do
-		local resolver = unserialise(r.item)
+		local resolver = lib.utils.unserialise(r.item)
 		if resolver.pri < min then 
 			resolvers = {} 
 			min = resolver.pri 
@@ -377,10 +377,10 @@ local function update_resolvers()
     local file = io.open("/tmp/resolv.conf.auto", "w+")
 	for _, resolver in ipairs(resolvers) do
         file:write(string.format("nameserver %s # %s\n", resolver.ip, resolver.source))
-        log("info", "- selected resolver %s (%s)", resolver.ip, resolver.source)
+        lib.log.log("info", "- selected resolver %s (%s)", resolver.ip, resolver.source)
 	end
     file:close()
-    if #resolvers == 0 then log("info", "- no resolvers available") end
+    if #resolvers == 0 then lib.log.log("info", "- no resolvers available") end
 end
 
 -- ------------------------------------------------------------------------------
@@ -481,7 +481,7 @@ local function get_vars(name)
 	if not svc or #svc ~= 1 then return nil, "unknown service" end
 
 	svc = svc[1]
-	if svc.vars then return unserialise(svc.vars) end
+	if svc.vars then return lib.utils.unserialise(svc.vars) end
 	return nil
 end
 

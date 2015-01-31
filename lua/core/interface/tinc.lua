@@ -17,7 +17,7 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
-require("lib.log")
+--require("lib.log")
 
 local TINCD = "/usr/sbin/tincd"
 local TINC = "/usr/sbin/tinc"
@@ -70,7 +70,7 @@ local function start_tinc(ifname, cf)
 		["stop_args"] = stop_args,
 	})
 
-	log("info", "starting tinc for net "..ifname)
+	lib.log.log("info", "starting tinc for net "..ifname)
 
 	local rc, err = lib.service.start("tinc."..ifname)
 	print("rc="..tostring(rc).." err="..tostring(err))
@@ -79,7 +79,7 @@ local function start_tinc(ifname, cf)
 	return true
 end
 local function stop_pppoe(ifname)
-	log("info", "stopping tinc for net "..ifname)
+	lib.log.log("info", "stopping tinc for net "..ifname)
 
 	local rc, err = lib.service.stop("tinc."..ifname)
 	print("rc="..tostring(rc).." err="..tostring(err))

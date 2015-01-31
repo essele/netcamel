@@ -17,7 +17,7 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
-require("log")
+--require("log")
 
 --require("route")
 --local runtime = require("runtime")
@@ -121,7 +121,7 @@ local function start_pppoe(ifname, cf)
 		["stop"] = "BYPIDFILE",
 	})
 
-	log("info", "starting pppoe")
+	lib.log.log("info", "starting pppoe")
 
 	local rc, err = lib.service.start("pppoe."..ifname)
 	print("rc="..tostring(rc).." err="..tostring(err))
@@ -130,7 +130,7 @@ local function start_pppoe(ifname, cf)
 	return true
 end
 local function stop_pppoe(ifname)
-	log("info", "stopping pppoe")
+	lib.log.log("info", "stopping pppoe")
 
 	local rc, err = lib.service.stop("pppoe."..ifname)
 	print("rc="..tostring(rc).." err="..tostring(err))
@@ -177,8 +177,8 @@ local function pppoe_commit(changes)
 		local oldcf = node_vars("/interface/pppoe/"..nodename, CF_current) or {}
 		local ifname = interface_name("pppoe/"..nodename)
 
-		logroot("intf", ifname)
-		log("info", "processing interface")
+		lib.log.root("intf", ifname)
+		lib.log.log("info", "processing interface")
 
 		--
 		-- If we were running pppoe then we need to kill it

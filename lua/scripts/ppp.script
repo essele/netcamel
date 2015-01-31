@@ -36,7 +36,7 @@ dofile("/netcamel/lib/lib.lua")
 --
 -- Needed for split
 --
-require("utils")
+--require("utils")
 
 --
 -- Pull out the relevent bits from the environment
@@ -55,7 +55,7 @@ local vars = lib.runtime.get_vars("pppoe."..interface)
 --
 -- Prepare the log
 --
-logroot("intf", interface)
+lib.log.root("intf", interface)
 
 --
 -- Redirect our output
@@ -77,12 +77,12 @@ lib.runtime.block_on()
 -- Work out what the action is
 --
 print("Action is: " .. action)
-log("info", "PPPOE event action=%s", action)
+lib.log.log("info", "PPPOE event action=%s", action)
 
 if action == "ip-up" then
 	local dns = {}
-	if dns1 then push(dns, dns1) end
-	if dns2 then push(dns, dns2) end
+	if dns1 then table.insert(dns, dns1) end
+	if dns2 then table.insert(dns, dns2) end
 
 	lib.runtime.interface_up(interface, dns, server, vars)
 end

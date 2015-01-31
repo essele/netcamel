@@ -386,3 +386,9 @@ function create_config_file(name, template, dict)
 	return true
 end
 
+return {
+	split = split,
+	unserialise = unserialise,
+	serialise = serialise,
+}
+

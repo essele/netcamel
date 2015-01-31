@@ -35,8 +35,8 @@ dofile("/netcamel/lib/lib.lua")
 --
 -- For string split and each
 --
-require("utils")
-require("log")
+--require("utils")
+--require("log")
 
 --
 -- Pull out all of the environment variables
@@ -45,8 +45,8 @@ local interface 		= os.getenv("interface")
 local ip				= os.getenv("ip")
 local mask				= os.getenv("mask")
 local broadcast 		= os.getenv("broadcast") or "+"
-local routers 			= split(os.getenv("router") or "", "%s")
-local dns 				= split(os.getenv("dns") or "", "%s")
+local routers 			= lib.utils.split(os.getenv("router") or "", "%s")
+local dns 				= lib.utils.split(os.getenv("dns") or "", "%s")
 
 --
 -- Load the extra variables and work out the action
@@ -69,8 +69,8 @@ lib.runtime.block_on()
 --
 -- Remove anything stored from this interface so we are starting clean
 --
-logroot("intf", interface, "dhcp")
-log("info", "DHCP event action=%s", action)
+lib.log.root("intf", interface, "dhcp")
+lib.log.log("info", "DHCP event action=%s", action)
 
 if action == "deconfig" then
 	--
