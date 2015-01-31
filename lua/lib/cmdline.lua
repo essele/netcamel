@@ -18,7 +18,7 @@
 -----------------------------------------------------------------------------
 
 require("config")
-require("file")
+local lib = { file = require("file") }
 local readline = require("readline")
 local posix = { 
 	dirent = require("posix.dirent"),
@@ -658,7 +658,7 @@ end
 -- terminal settings to it all works ok.
 --
 local function edit_value(value)
-	local file = create_file_with_data(nil, value)
+	local file = lib.file.create_with_data(nil, value)
 	readline.set_normal_term()
 	os.execute("/bin/vi "..file.filename)
 	readline.set_readline_term()

@@ -21,9 +21,7 @@
 -- Utility functions for file and directory manipulation
 -- ------------------------------------------------------------------------------
 local posix = {
-	fcntl = require("posix.fcntl"),
 	unistd = require("posix.unistd"),
-	stdlib = require("posix.stdlib"),
 	sys = {
 		stat = require("posix.sys.stat"),
 		time = require("posix.sys.time"),
@@ -35,7 +33,7 @@ local posix = {
 -- stuff to try to stop race condition conflicts.
 --
 local rndchar="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-function tmp_name()
+local function tmp_name()
 	local pid = posix.unistd.getpid()
 	local seed = posix.sys.time.gettimeofday().tv_usec * pid
 
@@ -58,13 +56,13 @@ end
 -- Simple delete file routine, but it also will take a table as an arg
 -- so it can work as a method to create_file_with_data
 --
-function delete_file(filename)
+local function delete_file(filename)
 	if type(filename) == "table" then filename = filename.filename end
 
 	if not filename then return nil, "no filename provded" end
 	return os.remove(filename)
 end
-function read_file(filename)
+local function read_file(filename)
 	if type(filename) == "table" then filename = filename.filename end
 
     local file = io.open(filename)
@@ -80,7 +78,7 @@ end
 --
 -- If no filename is provided then it will use a random filename (in /tmp)
 --
-function create_file_with_data(filename, data, perm)
+local function create_file_with_data(filename, data, perm)
 	if not filename then filename = tmp_name() end
 	
 	local file = io.open(filename, "w+")	
@@ -100,7 +98,7 @@ end
 --
 -- If it doesn't exist, then we don't do anything
 --
-function remove_directory(dirname)
+local function remove_directory(dirname)
 	if type(dirname) == "table" then dirname = dirname.dirname end
 	if not dirname then return nil, "no dirname provided" end
 	if dirname:sub(1, 5) ~= "/tmp/" then return nil, "only able to remove within /tmp" end
@@ -117,7 +115,7 @@ end
 --
 -- It returns an object that you can use to cleanup()
 --
-function create_directory(dirname)
+local function create_directory(dirname)
 	if not dirname then dirname = tmp_name() end
 	
 	local stat = posix.sys.stat.stat(dirname)
@@ -133,7 +131,14 @@ end
 --
 -- Create a symbolic link
 --
-function create_symlink(link, target)
+local function create_symlink(link, target)
 	return posix.unistd.link(target, link, true)
 end
 
+return {
+	create_with_data = create_file_with_data,
+	read = read_file,
+	delete = delete_file,
+	remove_directory = remove_directory,
+	create_directory = create_directory,
+}

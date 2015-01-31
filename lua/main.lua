@@ -19,6 +19,12 @@
 
 package.path = "./lib/?.lua;" .. package.path
 
+--
+-- Use our library autoloading mechanism
+--
+dofile("lib/lib.lua")
+
+
 --package.path = "/usr/share/lua/5.1/?.lua;./lib/?.lua;./?.lua"
 --package.cpath = "/usr/lib/lua/5.1/?.so;./lib/?.so"
 
