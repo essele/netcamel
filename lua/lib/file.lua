@@ -141,4 +141,5 @@ return {
 	delete = delete_file,
 	remove_directory = remove_directory,
 	create_directory = create_directory,
+	create_symlink = create_symlink,
 }

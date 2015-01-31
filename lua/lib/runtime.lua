@@ -43,6 +43,7 @@ posix.fcntl.FD_CLOEXEC = 1
 --
 -- We will need lots of logging
 --
+-- TODO: fix execute and log!!!
 require("bit")
 require("lib.execute")
 require("lib.log")
@@ -136,20 +137,20 @@ local function is_up(node) return ((get_status(node)) == "up") end
 -- Add a route into our runtime table
 --
 local function add_route_from_source(route, source)
-	db.insert("runtime", { class="route", source=source, item=serialise(route) })
+	lib.db.insert("runtime", { class="route", source=source, item=serialise(route) })
 end
 local function remove_routes_from_source(source)
-	local rc, err = db.query("runtime", "rm_routes", source)
+	local rc, err = lib.db.query("runtime", "rm_routes", source)
 end
 
 --
 -- Add resolvers into our runtime table
 --
 local function add_resolver_from_source(resolver, source)
-	db.insert("runtime", { class="resolver", source=source, item=serialise(resolver) })
+	lib.db.insert("runtime", { class="resolver", source=source, item=serialise(resolver) })
 end
 local function remove_resolvers_from_source(source)
-	local rc, err = db.query("runtime", "rm_resolvers", source)
+	local rc, err = lib.db.query("runtime", "rm_resolvers", source)
 end
 
 --
@@ -175,7 +176,7 @@ end
 --
 local function get_all_up_interfaces()
 	local rc = {}
-	for _,i in ipairs(db.query("status", "all_up")) do
+	for _,i in ipairs(lib.db.query("status", "all_up")) do
 		print("Interface: "..i.node.." is up")
 		rc[i.node] = 1
 	end
@@ -266,7 +267,7 @@ local function update_routes()
 	-- Pull out all the routes
 	--
 	local rt = {}
-	for _, r in ipairs(db.query("runtime", "routes")) do
+	for _, r in ipairs(lib.db.query("runtime", "routes")) do
 		local route = unserialise(r.item)
 
 		--
@@ -351,14 +352,14 @@ end
 local function update_resolvers()
     log("info", "selecting resolvers based on priority")
 
-	local resolvers = db.query("runtime", "resolvers")
+	local resolvers = lib.db.query("runtime", "resolvers")
 
 	--
 	-- First we find the items with the lowest priority...
 	--
 	local min = math.huge
 	local resolvers = {}
-	for _, r in ipairs(db.query("runtime", "resolvers")) do
+	for _, r in ipairs(lib.db.query("runtime", "resolvers")) do
 		local resolver = unserialise(r.item)
 		if resolver.pri < min then 
 			resolvers = {} 

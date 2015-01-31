@@ -53,10 +53,12 @@
 --
 package.path = "/netcamel/lib/?.lua;"..package.path
 
+dofile("/netcamel/lib/lib.lua")
+
 --
 -- We need to access the database for resolvers and routes
 --
-runtime = require("runtime")
+--runtime = require("runtime")
 
 --
 -- Needed for split
@@ -75,7 +77,7 @@ local netname	= os.getenv("NETNAME")
 --
 -- Load the extra variables
 --
-local vars = runtime.get_vars("tinc."..interface)
+local vars = lib.runtime.get_vars("tinc."..interface)
 
 local ip = vars.ip
 local broadcast = vars.broadcast or "+"
@@ -88,7 +90,7 @@ logroot("intf", interface)
 --
 -- Redirect our output
 --
-if vars.logfile then runtime.redirect(vars.logfile) end
+if vars.logfile then lib.runtime.redirect(vars.logfile) end
 
 --
 -- Work out which action we are performing
@@ -99,7 +101,7 @@ local action = arg[0]:match("/?([^/]-)$")
 -- Block all other interface related activity so that we have a clear tun
 -- and our logs are easier to read.
 --
-runtime.block_on()
+lib.runtime.block_on()
 
 --
 -- Work out what the action is
@@ -114,9 +116,9 @@ if action == "tinc-up" then
 	-- We just need to make sure the interface is configured, since
 	-- we won't have any connected hosts/subnets at this point.
 	--
-	runtime.execute("/sbin/ip", { "addr", "flush", "dev", interface })
-	runtime.execute("/sbin/ip", { "addr", "add", ip, "broadcast", broadcast, "dev", interface })
-	runtime.execute("/sbin/ip", { "link", "set", interface, "up" })
+	lib.runtime.execute("/sbin/ip", { "addr", "flush", "dev", interface })
+	lib.runtime.execute("/sbin/ip", { "addr", "add", ip, "broadcast", broadcast, "dev", interface })
+	lib.runtime.execute("/sbin/ip", { "link", "set", interface, "up" })
 end
 
 if action == "tinc-down" then
@@ -142,6 +144,6 @@ end
 --
 -- Clear the block, will happen at exit anyway
 --
-runtime.block_off()
+lib.runtime.block_off()
 
 os.exit(0)

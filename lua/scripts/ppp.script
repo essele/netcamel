@@ -26,10 +26,12 @@
 --
 package.path = "/netcamel/lib/?.lua;"..package.path
 
+dofile("/netcamel/lib/lib.lua")
+
 --
 -- We need to access the database for resolvers and routes
 --
-runtime = require("runtime")
+--runtime = require("runtime")
 
 --
 -- Needed for split
@@ -48,7 +50,7 @@ local dns2		= os.getenv("DNS2")
 --
 -- Load the extra variables
 --
-local vars = runtime.get_vars("pppoe."..interface)
+local vars = lib.runtime.get_vars("pppoe."..interface)
 
 --
 -- Prepare the log
@@ -58,7 +60,7 @@ logroot("intf", interface)
 --
 -- Redirect our output
 --
-if vars.logfile then runtime.redirect(vars.logfile) end
+if vars.logfile then lib.runtime.redirect(vars.logfile) end
 
 --
 -- Work out which action we are performing
@@ -69,7 +71,7 @@ local action = arg[0]:match("/?([^/]-)$")
 -- Block all other interface related activity so that we have a clear tun
 -- and our logs are easier to read.
 --
-runtime.block_on()
+lib.runtime.block_on()
 
 --
 -- Work out what the action is
@@ -82,16 +84,16 @@ if action == "ip-up" then
 	if dns1 then push(dns, dns1) end
 	if dns2 then push(dns, dns2) end
 
-	runtime.interface_up(interface, dns, server, vars)
+	lib.runtime.interface_up(interface, dns, server, vars)
 end
 
 if action == "ip-down" then
-	runtime.interface_down(interface, vars)
+	lib.runtime.interface_down(interface, vars)
 end
 
 --
 -- Clear the block, will happen at exit anyway
 --
-runtime.block_off()
+lib.runtime.block_off()
 
 os.exit(0)

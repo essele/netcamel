@@ -18,7 +18,6 @@
 -----------------------------------------------------------------------------
 
 require("config")
-local lib = { file = require("file") }
 local readline = require("readline")
 local posix = { 
 	dirent = require("posix.dirent"),

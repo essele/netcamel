@@ -19,11 +19,6 @@
 
 require("log")
 
-local lib = {
-	route = require("route"),
-	service = require("service"),
-}
-
 --require("route")
 --local runtime = require("runtime")
 --local service = require("service")
@@ -158,7 +153,7 @@ local function pppoe_commit(changes)
 	--
 	-- Make sure we have the main directory in /tmp
 	--
-	create_directory("/tmp/pppoe")
+	lib.file.create_directory("/tmp/pppoe")
 
 	--
 	-- Now work out what we need to do

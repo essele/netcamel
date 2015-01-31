@@ -17,12 +17,7 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
-require("log")
-require("file")
-local lib = {
-	runtime = require("runtime"),
-	service = require("service"),
-}
+require("lib.log")
 
 local TINCD = "/usr/sbin/tincd"
 local TINC = "/usr/sbin/tinc"
@@ -111,13 +106,13 @@ end
 local function configure_instance(net)
 	local idir = "/tmp/tinc/"..net
 
-	create_directory("/tmp/tinc")
+	lib.file.create_directory("/tmp/tinc")
 	
 	--
 	-- Clean out any old directory...
 	--
-	remove_directory(idir)
-	create_directory(idir)
+	lib.file.remove_directory(idir)
+	lib.file.create_directory(idir)
 
 	local cf = node_vars("/interface/tinc/*"..net, CF_new)
 	local tinccf = [[
@@ -130,27 +125,27 @@ local function configure_instance(net)
 	]]
 
 	create_config_file(idir.."/tinc.conf", tinccf, cf)
-	create_symlink(idir.."/tinc-up", "/netcamel/scripts/tinc.script")
-	create_symlink(idir.."/tinc-down", "/netcamel/scripts/tinc.script")
-	create_symlink(idir.."/host-up", "/netcamel/scripts/tinc.script")
-	create_symlink(idir.."/host-down", "/netcamel/scripts/tinc.script")
-	create_symlink(idir.."/subnet-up", "/netcamel/scripts/tinc.script")
-	create_symlink(idir.."/subnet-down", "/netcamel/scripts/tinc.script")
+	lib.file.create_symlink(idir.."/tinc-up", "/netcamel/scripts/tinc.script")
+	lib.file.create_symlink(idir.."/tinc-down", "/netcamel/scripts/tinc.script")
+	lib.file.create_symlink(idir.."/host-up", "/netcamel/scripts/tinc.script")
+	lib.file.create_symlink(idir.."/host-down", "/netcamel/scripts/tinc.script")
+	lib.file.create_symlink(idir.."/subnet-up", "/netcamel/scripts/tinc.script")
+	lib.file.create_symlink(idir.."/subnet-down", "/netcamel/scripts/tinc.script")
 
 	--
 	-- Write out the private keys
 	--
 	if cf["key-rsa-private"] then 
-		create_file_with_data(idir.."/rsa_key.priv", cf["key-rsa-private"], 400) 
+		lib.file.create_with_data(idir.."/rsa_key.priv", cf["key-rsa-private"], 400) 
 	end
 	if cf["key-ed25519-private"] then 
-		create_file_with_data(idir.."/ed25519_key.priv", cf["key-ed25519-private"], 400) 
+		lib.file.create_with_data(idir.."/ed25519_key.priv", cf["key-ed25519-private"], 400) 
 	end
 
 	--
 	-- Now process each of the hosts
 	--
-	create_directory(idir.."/hosts")
+	lib.file.create_directory(idir.."/hosts")
 	for hnode in each(node_list("/interface/tinc/*"..net.."/host", CF_new, true)) do
 		local host = hnode:sub(2)
 		print("host="..host.." hnode="..hnode)
@@ -226,12 +221,12 @@ local function action_key_generate(v, mp, kp)
 	--
 	-- Create the keys in a temp dir and then clean up...
 	--
-	local tmpdir = create_directory()
+	local tmpdir = lib.file.create_directory()
 	if v == "rsa" or v == "both" then
 		lib.runtime.execute("/usr/sbin/tinc", { "--config", tmpdir.dirname, "--batch", "generate-rsa-keys" })
 	
-		local rsa_public = read_file(tmpdir.dirname.."/rsa_key.pub") or "FAILED"
-		local rsa_private = read_file(tmpdir.dirname.."/rsa_key.priv") or "FAILED"
+		local rsa_public = lib.file.read(tmpdir.dirname.."/rsa_key.pub") or "FAILED"
+		local rsa_private = lib.file.read(tmpdir.dirname.."/rsa_key.priv") or "FAILED"
 	
 		prep_undo(undo, CF_new, kp.."/key-rsa-private")
 		prep_undo(undo, CF_new, kp.."/host/*"..hostname.."/key-rsa-public")
@@ -241,8 +236,8 @@ local function action_key_generate(v, mp, kp)
 	if v == "ed25519" or v == "both" then
 		lib.runtime.execute("/usr/sbin/tinc", { "--config", tmpdir.dirname, "--batch", "generate-ed25519-keys" })
 	
-		local ed_public = read_file(tmpdir.dirname.."/ed25519_key.pub") or "FAILED"
-		local ed_private = read_file(tmpdir.dirname.."/ed25519_key.priv") or "FAILED"
+		local ed_public = lib.file.read(tmpdir.dirname.."/ed25519_key.pub") or "FAILED"
+		local ed_private = lib.file.read(tmpdir.dirname.."/ed25519_key.priv") or "FAILED"
 
 		prep_undo(undo, CF_new, kp.."/key-ed25519-private")
 		prep_undo(undo, CF_new, kp.."/host/*"..hostname.."/key-ed25519-public")

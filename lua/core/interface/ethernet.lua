@@ -18,11 +18,6 @@
 ------------------------------------------------------------------------------
 
 require("log")
-local lib = {
-	runtime = require("runtime"),
-	route = require("route"),
-	service = require("service"),
-}
 --local runtime = require("runtime")
 --local service = require("service")
 

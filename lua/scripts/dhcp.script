@@ -25,10 +25,12 @@
 --
 package.path = "/netcamel/lib/?.lua;"..package.path
 
+dofile("/netcamel/lib/lib.lua")
+
 --
 -- We need to access the database
 --
-runtime = require("runtime")
+--runtime = require("runtime")
 
 --
 -- For string split and each
@@ -49,20 +51,20 @@ local dns 				= split(os.getenv("dns") or "", "%s")
 --
 -- Load the extra variables and work out the action
 --
-local vars = runtime.get_vars("dhcp."..interface)
+local vars = lib.runtime.get_vars("dhcp."..interface)
 local action 			= arg[1]
 
 --
 -- Redirect our output to make sure we capture even the
 -- cleanup
 --
-if vars.logfile then runtime.redirect(vars.logfile) end
+if vars.logfile then lib.runtime.redirect(vars.logfile) end
 
 --
 -- Block any other route/interface activity so we have a clear run and
 -- our logs are easier to read
 --
-runtime.block_on()
+lib.runtime.block_on()
 
 --
 -- Remove anything stored from this interface so we are starting clean
@@ -75,14 +77,14 @@ if action == "deconfig" then
 	-- Deconfig means clear out the interface ready to start
 	-- or when finishing.
 	--
-	runtime.execute("/sbin/ip", { "link", "set", interface, "up" })
-	runtime.execute("/sbin/ip", { "addr", "flush", "dev", interface })
+	lib.runtime.execute("/sbin/ip", { "link", "set", interface, "up" })
+	lib.runtime.execute("/sbin/ip", { "addr", "flush", "dev", interface })
 
 	--
 	-- Remove any routes and resolvers and work out what the
 	-- end state should look like
 	--
-	runtime.interface_down(interface, vars)
+	lib.runtime.interface_down(interface, vars)
 end
 
 if action == "leasefail" or action == "nak" then
@@ -92,19 +94,19 @@ if action == "renew" or action == "bound" then
 	--
 	-- Configure the interface
 	--
-	runtime.execute("/sbin/ip", { "addr", "flush", "dev", interface })
-	runtime.execute("/sbin/ip", { "addr", "add", ip.."/"..mask, "broadcast", broadcast, "dev", interface })
+	lib.runtime.execute("/sbin/ip", { "addr", "flush", "dev", interface })
+	lib.runtime.execute("/sbin/ip", { "addr", "add", ip.."/"..mask, "broadcast", broadcast, "dev", interface })
 
 	--
 	-- Add routes and resolvers and work out what the
 	-- end state should look like
 	--
-	runtime.interface_up(interface, dns, routers[1], vars)
+	lib.runtime.interface_up(interface, dns, routers[1], vars)
 end
 
 --
 -- Clear the block (will happen at exit anyway)
 --
-runtime.block_off()
+lib.runtime.block_off()
 
 os.exit(0)
