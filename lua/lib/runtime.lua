@@ -51,16 +51,24 @@ require("log")
 --
 -- Support blocking so we can have only one process doing something at a time
 --
-local __block_fd = nil
+local __block_fd = {}
 local __block_filename = "/tmp/.nc_block"
-local __block_i = 0
+local __block_i = {}
 
-local function block_on()
+local function block_on(b)
+	--
+	-- Setup 
+	--
+	b = b or "default"
+	if not __block_i[b] then 
+		__block_i[b] = 0 
+	end
+
 	--
 	-- Only actually lock the first time, otherwise just keep count
 	--
-	__block_i = __block_i + 1
-	if __block_i > 1 then return end
+	__block_i[b] = __block_i[b] + 1
+	if __block_i[b] > 1 then return end
 
 	local lock = {
 		l_type = posix.fcntl.F_WRLCK,
@@ -68,23 +76,25 @@ local function block_on()
 		l_start = 0,
 		l_len = 0,
 	}
-	__block_fd = posix.fcntl.open(__block_filename, bit.bor(posix.fcntl.O_CREAT, posix.fcntl.O_WRONLY), tonumber(644, 8))
-	local rc = posix.fcntl.fcntl(__block_fd, posix.fcntl.F_SETFD, posix.fcntl.FD_CLOEXEC)
+	__block_fd[b] = posix.fcntl.open(__block_filename.."_"..b, 
+						bit.bor(posix.fcntl.O_CREAT, posix.fcntl.O_WRONLY), tonumber(644, 8))
+	local rc = posix.fcntl.fcntl(__block_fd[b], posix.fcntl.F_SETFD, posix.fcntl.FD_CLOEXEC)
 	print("setfd="..rc)
 
-	local result = posix.fcntl.fcntl(__block_fd, posix.fcntl.F_SETLKW, lock)
+	local result = posix.fcntl.fcntl(__block_fd[b], posix.fcntl.F_SETLKW, lock)
 	if result == -1 then
 		print("result = "..result)
 	end
 end
-local function block_off(name)
-	__block_i = __block_i - 1
-	if __block_i > 0 then return end
+local function block_off(b)
+	b = b or "default"
+	__block_i[b] = __block_i[b] - 1
+	if __block_i[b] > 0 then return end
 
-	if __block_fd then
-		posix.unistd.close(__block_fd)
-		posix.unistd.unlink(__block_filename)
-		__block_fd = nil
+	if __block_fd[b] then
+		posix.unistd.close(__block_fd[b])
+		posix.unistd.unlink(__block_filename.."_"..b)
+		__block_fd[b] = nil
 	end
 end
 
