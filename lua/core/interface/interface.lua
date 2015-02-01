@@ -213,38 +213,49 @@ end
 --
 master["/interface"] = {}
 
---
--- We will use a table to manage the resolvers that come in from various sources
---
-TABLE["resolvers"] = {
-	schema = { source="string key", priority="integer", value="string" },
-	priority_resolvers = "select * from resolvers where priority = (select min(priority) from resolvers)",
-	remove_source = "delete from resolvers where source = :source"
-}
 
 --
--- Store all of our routes, resolvers and rules in here so we can do some processing
--- when interfaces go up and down
+-- We use the runtime table for tracking routes, resovlers and rules and then the status
+-- table for tracking interface status
 --
-TABLE["runtime"] = {
-	schema = {  class = "string key",
-				source = "string key",
-				item = "string" },
-	routes = "select * from runtime where class = 'route'",
-	rm_routes = "delete from runtime where class = 'route' and source = :source",
-	rules = "select * from runtime where class = 'rule'",
-	resolvers = "select * from runtime where class = 'resolver'",
-	rm_resolvers = "delete from runtime where class = 'resolver' and source = :source",
+-- TODO: why not use runtime for interfaces???
+--
+local function boot()
+	--
+	-- Create the runtime table
+	--
+	local schema = {
+		class = "string key",
+		source = "string key",
+		item = "string"
+	}
+	local queries = {
+		routes = "select * from runtime where class = 'route'",
+		rm_routes = "delete from runtime where class = 'route' and source = :source",
+		rules = "select * from runtime where class = 'rule'",
+		resolvers = "select * from runtime where class = 'resolver'",
+		rm_resolvers = "delete from runtime where class = 'resolver' and source = :source",
+	}
+	lib.db.create("runtime", schema, queries)
+
+	--
+	-- Status table
+	--
+	local schema = {
+		node="string primary key", 
+		status="string" 
+	}
+	local queries = {
+		set_status = "insert or replace into status (node, status) values (:node, :status)",
+		get_status = "select status from status where node = :node",
+		all_up = "select * from status where status = 'up'",
+	}
+	lib.db.create("status", schema, queries)
+end
+
+return {
+	boot = boot
 }
 
---
--- We'll also use a table to track status information so we know whether to apply
--- routes etc.
---
-TABLE["status"] = {
-	schema = { node="string primary key", status="string" },
-	set_status = "insert or replace into status (node, status) values (:node, :status)",
-	get_status = "select status from status where node = :node",
-	all_up = "select * from status where status = 'up'",
-}
+
 

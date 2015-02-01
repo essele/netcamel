@@ -25,40 +25,12 @@ package.path = "./lib/?.lua;" .. package.path
 dofile("lib/lib.lua")
 
 
---package.path = "/usr/share/lua/5.1/?.lua;./lib/?.lua;./?.lua"
---package.cpath = "/usr/lib/lua/5.1/?.so;./lib/?.so"
-
 -- global level packages
---require("lfs")
 require("utils")
 require("config")
 require("validators")
---require("api")
 
--- different namespace packages
-local posix		= { 
-	dirent = require("posix.dirent"), 
-	glob = require("posix.glob"),
-	fnmatch = require("posix.fnmatch"),
-	sys = { stat = require("posix.sys.stat") }
-}
-local base64 	= require("base64")
 local ffi 		= require("ffi")
---local service 	= require("service")
---local db 		= require("db")
-
---
--- Cause load of db module so the TABLE list is initialised
---
-local _ = lib.db
-
-
-lib.service.init()
-
--- bring in our syntax checkers and completers
--- this also brings in readline
-require("cmdline")
-
 
 --
 -- global configuration spaces
@@ -67,63 +39,48 @@ master={ ["/"] = {} }
 current={}
 new={}
 
-
 --
--- Find all files (recursively) in a directory that match a given
--- shell like match (i.e. *.lua)
+-- Import all of the modules into a core table so that we can
+-- make functions public etc. This is recursive to ensure the
+-- directory structure is maintained in the table.
 --
-local function matching_files_in(dir, match)
+local function load_modules(dir)
 	local rc = {}
-	match = match or "*"
-
-	local function recursive_files(dir, match, rc)
-		for file in posix.dirent.files(dir) do
-			if file:sub(1,1) ~= "." then
-				local stat = posix.sys.stat.stat(dir.."/"..file)
-
-				if posix.sys.stat.S_ISDIR(stat.st_mode) ~= 0 then
-					recursive_files(dir.."/"..file, match, rc)
-				elseif posix.fnmatch.fnmatch(match, file) == 0 then
-					table.insert(rc, dir.."/"..file)
+	for file in posix.dirent.files(dir) do
+		if file:sub(1,1) ~= "." then
+			local stat = posix.sys.stat.stat(dir.."/"..file)
+			if posix.sys.stat.S_ISDIR(stat.st_mode) ~= 0 then
+				rc[file] = load_modules(dir.."/"..file)
+			else
+				local mod = file:match("^(.*)%.lua$")
+				if mod then
+					print("Loading: "..dir.."/"..mod)
+					rc[mod] = dofile(dir.."/"..file)
 				end
 			end
 		end
 	end
-
-	recursive_files(dir, match, rc)
-	table.sort(rc)
 	return rc
 end
 
 --
--- Build a list of all the modules, working out the right init
--- function name as well
+-- For all of our core modules look through the table recursively
+-- and call any init routines that we find.
 --
-local core_modules = {}
-for _,f in ipairs(matching_files_in("core", "*.lua")) do
-	local mname = f:gsub("^core/(.*)%.lua$", "%1"):gsub("/", "_")
-	table.insert(core_modules, { name = mname, file = f })
+local function init_modules(t, funcname, path)
+	path = path or "core"
+
+	for k,v in pairs(t) do
+		if type(v) == "table" and v[funcname] and type(v[funcname]) == "function" then
+			print(string.format("Initialising (%s): %s.%s", funcname, path, k))
+			v[funcname]()
+		elseif type(v) == "table" then
+			init_modules(v, funcname, path.."."..k)
+		end
+	end
 end
 
-
---
--- work out which are all of the core modules
---
---[[
-local core_modules = {}
-for _,m in ipairs(posix.glob.glob("core/*.lua")) do
-	local mname = m:match("^core/(.*)%.lua$")
-	if mname then table.insert(core_modules, mname) end
-end
-table.sort(core_modules)
-]]--
---
--- Import each of the modules...
---
-for module in each(core_modules) do
-	print("Loading: "..module.file)
-	dofile(module.file)
-end
+core = load_modules("core")
 
 --
 -- If we are in "init" mode then initialise the transient data
@@ -132,7 +89,12 @@ end
 --
 if arg[1] == "init" then
 	print("Initialising transient data...")
-	lib.db.init()
+	lib.db.boot()
+
+	print("Initialising service manager...")
+	lib.service.boot()
+
+	init_modules(core, "boot")
 end
 
 --
@@ -140,19 +102,7 @@ end
 -- intent of this is to initialise the depends and triggers once we know
 -- that all the structures are initialised.
 --
-for module in each(core_modules) do
---	local funcname = string.format("%s_init", module)
-	local funcname = module.name .. "_init"
-	if _G[funcname] then
-		-- TODO: return code (assert)
---		local ok, err = pcall(_G[funcname])
---		if not ok then assert(false, string.format("[%s]: %s code error: %s", key, funcname, err)) end
-		print("Initialising module: "..module.file)
-		_G[funcname]()
-	end
-end
-
-
+init_modules(core, "init")
 
 --
 -- INIT (commit)
@@ -220,7 +170,7 @@ if not CF_current then
 end
 CF_new = copy(CF_current)
 
-interactive()
+lib.cmdline.interactive()
 os.exit(0)
 
 

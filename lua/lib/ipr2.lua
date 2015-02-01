@@ -27,8 +27,6 @@
 --
 -- ==============================================================================
 
-local posix = { sys = { stat = require("posix.sys.stat") } }
-
 local ipr2 = {
 	["table"] = {
 		filename = "/etc/iproute2/rt_tables",

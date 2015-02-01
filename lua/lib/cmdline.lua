@@ -19,12 +19,6 @@
 
 require("config")
 
-local posix = { 
-	dirent = require("posix.dirent"),
-	unistd = require("posix.unistd"),
-	sys = { stat = require("posix.sys.stat") } 
-}
-
 --
 -- Will be populated with our cmdline commands
 --
@@ -910,7 +904,7 @@ CMDS["cd"].func = function(cmd, cmdline, tags)
 end
 
 
-function interactive()
+local function interactive()
 	-- Read History
 	history = {}
 	local file = io.open("etc/__history", "r")
@@ -975,5 +969,7 @@ function interactive()
 	end
 end
 
-
+return {
+	interactive = interactive
+}
 

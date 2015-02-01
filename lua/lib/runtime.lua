@@ -20,18 +20,6 @@
 -- This module provides a number of runtime helpers
 --
 
---
--- Build the specific posix commands we need, this saves using the full
--- require which adds quite a delay to startup.
---
-local posix = {
-	fcntl = require("posix.fcntl"),
-	unistd = require("posix.unistd"),
-	stdlib = require("posix.stdlib"),
-	sys = { 
-		stat = require("posix.sys.stat") 
-	}
-}
 posix.fcntl.FD_CLOEXEC = 1
 
 --
@@ -73,7 +61,7 @@ local function block_on(b)
 
 	local lock = {
 		l_type = posix.fcntl.F_WRLCK,
-		l_whence = posix.fcntl.SEEK_SET,
+		l_whence = posix.unistd.SEEK_SET,
 		l_start = 0,
 		l_len = 0,
 	}

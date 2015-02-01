@@ -403,7 +403,7 @@ function dump(filename, config)
 			file:write(string.format("%s: <%s>\n", k, mc["type"]))
 			local ftype = mc["type"]:sub(6)
 			if ftype == "binary" then
-				local binary = base64.enc(v)
+				local binary = lib.base64.enc(v)
 				for i=1, #binary, 76 do
 					file:write(string.format("\t|%s\n", binary:sub(i, i+75)))
 				end
@@ -430,7 +430,7 @@ function import(filename)
 
 	function decode(data, ftype)
 		if ftype == "file/binary" then
-			return base64.dec(data)
+			return lib.base64.dec(data)
 		elseif ftype == "file/text" then
 			return data
 		else
@@ -532,7 +532,7 @@ function show(current, new, kp)
 
 		rc = op(disposition, indent, parent..key, "<"..ftype..">")
 		if(ftype == "binary") then
-			local binary = base64.enc(value)
+			local binary = lib.base64.enc(value)
 			for i=1, #binary, 76 do
 				rc = rc .. op(disposition, indent+4, binary:sub(i, i+75))
 				if(i >= 76*3) then

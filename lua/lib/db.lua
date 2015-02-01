@@ -22,9 +22,6 @@
 -- but then used by various systems to facilitate concurrent updates
 -- and communication.
 --
-
-TABLE = {}
-
 local sqlite3 = require("lsqlite3")
 
 --
@@ -36,18 +33,16 @@ local db = sqlite3.open("/tmp/netcamel_t.sqlite3")
 db:busy_timeout(2000)
 
 --
--- Create a table given the spec from the TABLE table.
+-- Create a table given the spec from the arguments
 --
-local function create_table(name)
+local function create_table(name, schema, queries)
 	local sql, rc
-	local tabdef = TABLE[name] and TABLE[name].schema
-	if not tabdef then return false, "unknown table" end
 
 	--
 	-- Prepare the fields for the table
 	--
 	local fields = {}
-	for k,v in pairs(tabdef) do table.insert(fields, "'"..k.."' "..v) end
+	for k,v in pairs(schema) do table.insert(fields, "'"..k.."' "..v) end
 
 	--
 	-- Drop the old one if it exists
@@ -68,12 +63,10 @@ local function create_table(name)
 	if rc ~= 0 then return false, "unable to delete old queries for table "..name..": "..db:errmsg() end
 	local stmt = db:prepare("insert into __queries values (?, ?, ?)")
 	if not stmt then return false, "queryadd: "..db:errmsg() end
-	for k, v in pairs(TABLE[name]) do
-		if k ~= "schema" then
-			stmt:reset()
-			stmt:bind_values(name, k, v)
-			stmt:step()
-		end
+	for k, v in pairs(queries) do
+		stmt:reset()
+		stmt:bind_values(name, k, v)
+		stmt:step()
 	end
 	stmt:finalize()
 
@@ -129,7 +122,7 @@ end
 
 --
 -- Return a list of all the results of a query that is pre-populated in the
--- TABLE list
+-- __queries table
 --
 local function query(name, qname, ...)
 	--
@@ -184,7 +177,7 @@ local function close()
 end
 
 
-local function init()
+local function boot()
 	--
 	-- Create the __queries table
 	--
@@ -193,21 +186,11 @@ local function init()
 		drop table if exists __queries;
 		create table __queries ( name string, query string, sql string );
 	]]
-
-	--
-	-- Create each table from the TABLE hash
-	--
-	for name, tabdef in pairs(TABLE) do
-		print("Creating table: "..name)
-		local rc, err = create_table(name)
-		if not rc then print("err="..err) end
-	end
-
 	return true
 end
 
 return {
-	init = init,
+	boot = boot,
 	create = create_table,
 	query = query,
 	insert = insert_into_table,

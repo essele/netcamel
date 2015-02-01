@@ -461,4 +461,7 @@ function iptables_init()
 	add_dependency("/iptables/*", "/iptables/set")
 end
 
+return {
+	init = iptables_init
+}
 

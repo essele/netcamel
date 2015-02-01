@@ -23,8 +23,6 @@
 -- The role of this script is to configure the interface, setup the default
 -- route and configure the resolvers.
 --
-package.path = "/netcamel/lib/?.lua;"..package.path
-
 dofile("/netcamel/lib/lib.lua")
 
 --

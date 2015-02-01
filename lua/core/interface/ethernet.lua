@@ -279,3 +279,8 @@ function interface_ethernet_init()
 						classes = { "all", "ethernet" } })
 
 end
+
+return {
+	init = interface_ethernet_init
+}
+

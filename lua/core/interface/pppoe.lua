@@ -285,3 +285,6 @@ function interface_pppoe_init()
 	add_dependency("/interface/pppoe", "/interface/ethernet")
 end
 
+return {
+	init = interface_pppoe_init
+}

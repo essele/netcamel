@@ -53,7 +53,34 @@ local function loader(v, name)
 	end
 end
 
+--
+-- An equivalent loader for the posix modules, so they get loaded on demand
+--
+local function posixloader(v, name)
+	print("Autoloading posix module: "..name)
+	local path = v.__base .. "." .. name
+	local i
+
+	--
+	-- Special case to avoid calling sys.lua
+	--
+	if path == "posix.sys" then
+		i = {}
+	else
+		i = require(path)
+	end
+
+	i.__base = path
+	setmetatable(i, { __index = posixloader })
+	rawset(v, name, i)
+	return i
+end
+
+
+
 lib = {}
-mt = { __index = loader }
-setmetatable(lib, mt)
+setmetatable(lib, { __index = loader } )
+
+posix = { __base = "posix" }
+setmetatable(posix, { __index = posixloader } )
 

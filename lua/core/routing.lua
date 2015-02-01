@@ -89,33 +89,3 @@ master["/routing/route/*/gateway"] = 	{ ["type"] = "OK" }
 master["/routing/route/*/table"] =		{ ["type"] = "OK", ["default"] = "main" }
 master["/routing/route/*/priority"] = 	{ ["type"] = "2-digit" }
 
-TABLE["routes"] = {
-	schema = { 	source="string key",
-				dest="string",
-				gateway="string" ,
-				interface="string",
-				priority="integer", 
-				table="string",
-	},
-	
-	--
-	-- Remove a specific route matching source, dest and table
-	--
-	delete_route_for_source = "delete from routes where source = :source and dest = :dest and \"table\" = :table",
-
-	--
-	-- Return the defaultroute with the lowest priority for the given table
-	--
-	priority_defaultroutes_for_table = 
-			"select * from routes where \"table\" = :table and dest = 'default' and " ..
-			"priority = (select min(priority) from routes where \"table\" = :table and dest = 'default')",
-
-	--
-	-- Find all non-default routes for the given interface (where the interface is up!)
-	--
-	routes_for_interface = "select * from routes where interface = :interface",
-
-	remove_all_routes = "delete from routes where source = 'routes'",
-}
-
-

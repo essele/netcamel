@@ -19,19 +19,9 @@
 
 require("utils")
 
-local watcher = require("watcher")
+--local watcher = require("watcher")
 local ffi = require("ffi")
 local bit = require("bit")
-local posix = {
-	termio = require("posix.termio"),
-	fcntl = require("posix.fcntl"),
-	signal = require("posix.signal"),
-	unistd = require("posix.unistd"),
-	poll = require("posix.poll"),
-	sys = {
-		time = require("posix.sys.time"),
-	},
-}
 
 -- watcher file handle
 local __ifd
@@ -299,9 +289,9 @@ local function init()
 	__width = ti.columns
 	__height = ti.lines
 
-	__ifd = watcher.init()
+	__ifd = lib.watcher.init()
 
-	watcher.add_watch("/tmp/nc.log")
+	lib.watcher.add_watch("/tmp/nc.log")
 end
 local function finish()
 	posix.termio.tcsetattr(0, posix.termio.TCSANOW, __saved_tios)
@@ -824,7 +814,7 @@ local function readline(prompt, history, syntax_func, completer_func)
 		elseif c == "WATCH" then
 			move_to(0, 0)
 			ti.out(ti.clr_eos)
-			local lines = watcher.read_inotify()
+			local lines = lib.watcher.read_inotify()
 			if lines then
 				for _, line in ipairs(lines) do print(line) end
 			end

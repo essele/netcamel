@@ -20,13 +20,6 @@
 -- ------------------------------------------------------------------------------
 -- Utility functions for file and directory manipulation
 -- ------------------------------------------------------------------------------
-local posix = {
-	unistd = require("posix.unistd"),
-	sys = {
-		stat = require("posix.sys.stat"),
-		time = require("posix.sys.time"),
-	}
-}
 
 --
 -- Find a temporary name that doesn't exist, we'll use our pid and some random

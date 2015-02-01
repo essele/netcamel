@@ -18,18 +18,6 @@
 -----------------------------------------------------------------------------
 
 --
--- Build the specific posix commands we need, this saves using the full
--- require which adds quite a delay to startup.
---
-local posix = { 
-	unistd = require("posix.unistd"),
-	stdlib = require("posix.stdlib"),
-	sys = { 
-		wait = require("posix.sys.wait") 
-	} 
-}
-
---
 -- Given a file descriptor, return an iterator that will return each line
 -- in turn, closing the filehandle at the end.
 --

@@ -211,3 +211,7 @@ function ntp_init()
 	iptables_add_macro_item("(input-allowed-services)", ntp_iptables_rules)
 end
 
+return {
+	init = ntp_init
+}
+

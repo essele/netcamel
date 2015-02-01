@@ -17,9 +17,6 @@
 ------------------------------------------------------------------------------
 
 ffi = require("ffi")
-posix = {}
-posix.fcntl = require("posix.fcntl")
-posix.unistd = require("posix.unistd")
 
 ffi.cdef[[
 	typedef int32_t		ssize_t;
@@ -46,17 +43,22 @@ ffi.cdef[[
 local __watch = {}
 local __ifd
 
-function init()
+local function init()
 	__ifd = ffi.C.inotify_init()
 	return __ifd
 end
+
+--
+-- The default function doesn't do anything to the line
+--
+local function watch_func_normal(line) return line end
 
 --
 -- Work out the position we need to be at in order to show the last however
 -- many lines of the file
 --
 local CHUNK_SIZE = 1024
-function find_x_lines_back(fd, x)
+local function find_x_lines_back(fd, x)
 	local data = ""
 	local pos = posix.unistd.lseek(fd, -CHUNK_SIZE, posix.unistd.SEEK_END) or 0
 
@@ -81,33 +83,11 @@ function find_x_lines_back(fd, x)
 	end
 end
 
-
---
--- Add a file to the watch list, with an optional function that will
--- process each line
---
--- TODO: how far back? should it be optional
-function add_watch(filename, func)
-	local fd = posix.fcntl.open(filename, posix.fcntl.O_RDONLY)
-	func = func or watch_func_normal
-
-	find_x_lines_back(fd, 5)
-	
-	local wid = ffi.C.inotify_add_watch(__ifd, filename, ffi.C.IN_MODIFY)
-	__watch[wid] = { filename = filename, fd = fd, data = "", func = func }
-	return process_file(wid)
-end
-
---
--- The default function doesn't do anything to the line
---
-function watch_func_normal(line) return line end
-
 --
 -- If we get an inotify event then we need to process the file, this
 -- returns a list of lines
 --
-function process_file(wid)
+local function process_file(wid)
 	local watch = __watch[wid]
 	if not watch then print("UNKNOWN WATCH") return end
 
@@ -134,11 +114,29 @@ function process_file(wid)
 	return rc
 end
 
-function lee(line)
+--
+-- Add a file to the watch list, with an optional function that will
+-- process each line
+--
+-- TODO: how far back? should it be optional
+local function add_watch(filename, func)
+	local fd = posix.fcntl.open(filename, posix.fcntl.O_RDONLY)
+	func = func or watch_func_normal
+
+	find_x_lines_back(fd, 5)
+	
+	local wid = ffi.C.inotify_add_watch(__ifd, filename, ffi.C.IN_MODIFY)
+	__watch[wid] = { filename = filename, fd = fd, data = "", func = func }
+	return process_file(wid)
+end
+
+
+
+local function lee(line)
 	return("!!"..line.."!!")
 end
 
-function read_inotify()
+local function read_inotify()
 	local readsize = ffi.sizeof("struct inotify_event")
 	local ev = ffi.new("struct inotify_event")
 

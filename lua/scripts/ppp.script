@@ -24,8 +24,6 @@
 -- We should be linked by multiple sources, therefore we need to look
 -- at arg[0] to work out what function we need to perform
 --
-package.path = "/netcamel/lib/?.lua;"..package.path
-
 dofile("/netcamel/lib/lib.lua")
 
 --

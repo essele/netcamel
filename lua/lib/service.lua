@@ -21,18 +21,6 @@
 -- The main services array
 --
 
-local posix = {
-	unistd = require("posix.unistd"),
-	stdlib = require("posix.stdlib"),
-	fcntl = require("posix.fcntl"),
-	signal = require("posix.signal"),
-	time = require("posix.time"),
-	glob = require("posix.glob"),
-	sys = {
-		wait = require("posix.sys.wait"),
-		stat = require("posix.sys.stat"),
-	},
-}
 require("bit")
 require("utils")
 --require("execute")
@@ -391,9 +379,8 @@ end
 -- We will create a services table for tracking the state of
 -- active services
 --
-local function init()
-	TABLE["services"] = {
-		schema = {  service="string primary key",
+local function boot()
+	local schema = {  service="string primary key",
 					name="string",
 					binary="string",
 					pidfile="string",
@@ -408,10 +395,12 @@ local function init()
 					maxkilltime="integer",
 					stop_binary="string",
 					stop_args="string",
-		},
+	}
+	local queries = {
 		["get_service"] = "select * from services where service = :service",
 		["remove_service"] = "delete from services where service = :service",
 	}
+	lib.db.create("services", schema, queries)
 end
 
 --
@@ -421,7 +410,7 @@ return {
 	--
 	-- Main Functions
 	--
-	init = init,
+	boot = boot,
 	define = define,
 	remove = remove,
 	get = get,
