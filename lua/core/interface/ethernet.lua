@@ -257,7 +257,7 @@ master["/interface/ethernet/*/resolver"] =				{ ["type"] = "ipv4", ["list"] = tr
 master["/interface/ethernet/*/resolver-pri"] =			{ ["type"] = "2-digit", ["default"] = "80" }
 master["/interface/ethernet/*/mtu"] = 					{ ["type"] = "mtu" }
 master["/interface/ethernet/*/disabled"] = 				{ ["type"] = "boolean" }
-master["/interface/ethernet/*/route"] = 				{ ["type"] = "OK", ["list"] = 1 }
+master["/interface/ethernet/*/route"] = 				{ ["type"] = "route", ["list"] = 1 }
 
 --
 -- Support DHCP on the interface (off by default)

@@ -49,8 +49,49 @@ local function var(list, interface)
 	return rc
 end
 
+--
+-- TODO: move somewhere else
+--
+local function partial_match(v, list)
+	for _,l in ipairs(list) do
+		if v == l then return OK end
+		if l:sub(1,#v) == v then return PARTIAL end
+	end
+	return FAIL
+end
+
+
+--
+-- The validator for a route spec
+--
+local function validate(v, mp, kp)
+	local items = lib.utils.split(v, "%s")
+
+	if #items == 0 then return PARTIAL end
+	
+	-- item 1 is a destination (default or ipv4_nm)
+	local i1 = partial_match(items[1], {"default"})
+	if i1 == FAIL then i1 = VALIDATOR["ipv4_nm"](items[1], mp, kp) end
+
+	if i1 == PARTIAL and (#items > 1 or v:sub(-1) == " ") then return FAIL end
+	if i1 == FAIL then return FAIL end
+	if not items[2] then return i1 end
+
+	-- item 2 is a specifier
+	local i2 = partial_match(items[2], {"gw", "dev", "pri", "table"})
+	if i2 == PARTIAL and (#items > 2 or v:sub(-1) == " ") then return FAIL end
+	
+	return i2
+
+
+
+	--
+	-- TODO ... gw, dev, pri or table
+	--
+end
 
 return {
 	parse = parse,
-	var = var
+	var = var,
+	validate = validate,
 }

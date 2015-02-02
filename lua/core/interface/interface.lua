@@ -208,6 +208,8 @@ OPTIONS["all_interfaces"] = function(kp, mp)
 	return options_from_interfaces("all")
 end
 
+VALIDATOR["route"] = lib.route.validate
+
 --
 -- Master interface node...
 --
