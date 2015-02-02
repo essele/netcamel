@@ -16,46 +16,138 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
-package.path = "./lib/?.lua;" .. package.path
 
-local db = require("db")
+dofile("lib/lib.lua")
+lib = { term = dofile("./term.lua") }
 
-TABLE["resolvers"] = { 
-	schema = { key="string key", priority="integer", value="sring" },
-	priority_resolvers = "select * from resolvers where priority = (select min(priority) from resolvers)",
-	remove_with_key = "delete from resolvers where key = :key"
+-- ==============================================================================
+--
+-- Requiring this library will cause subsequent modules to be loaded on demand
+-- into the lib table.
+--
+-- ==============================================================================
+
+--
+-- Return a token for each call, once we get to the end the flag the end
+-- state (calling again is undefined)
+--
+local function get_token(state, sep)
+	sep = sep or "%z"
+	local start, finish = state.value:find("[^"..sep.."]+", state.pos)
+	if not start then return nil end
+
+	-- update our basic state to past the separator
+	state.pos = state.value:find("[^"..sep.."]+", finish + 1)
+	state.pos = state.pos or #state.value + 1
+
+	-- update token number and ensure token table setup
+	state.n = (state.n and state.n+1) or 1
+	state.tokens = state.tokens or {}
+
+	-- see if we have an existing token, if not create a new one
+	local token = state.tokens[state.n] or {}
+	local value = state.value:sub(start, finish)
+
+	-- set flags for change/nochange
+	token.samevalue = value == token.value
+	token.nochange = value == token.value and value.begin == start and value.finish == finish
+
+	-- if we have changed value then we need to remove all futures since they need recheck
+	if not token.samevalue then
+		while state.tokens[state.n+1] do table.remove(state.tokens, state.n+1) end
+	end
+
+	token.begin = start
+	token.finish = finish
+	token.value = value
+	token.final = (finish == #state.value)
+
+	-- make sure our state is accurate
+	state.tokens[state.n] = token
+
+	return token
+end
+local function reset_state(state)
+	state.pos = nil
+	state.n = nil
+end
+
+
+function process_cfpath(state)
+	-- pull the token, return if unchanged
+	local path = get_token(state, "%s")
+	if not path or path.samevalue then return end
+	print("path="..path.value)
+
+	-- update accordingly
+	reset_state(path)
+
+	while true do
+		local elem = get_token(path, "/")
+		if not elem then break end
+
+		print("got elem: "..elem.value)
+
+		if elem.valid and elem.samevalue then
+			print("no check needed")
+		else
+			print("processing")
+			elem.valid = true
+		end
+	end	
+end
+
+
+
+function process(state) 
+	reset_state(state)
+	local cmd = get_token(state, "%s")
+	if cmd.value == "set" then
+		process_cfpath(state)
+
+		local rest = get_token(state)
+		if rest then
+			print("rest: ["..rest.value.."]")
+			print("rsame: " .. tostring(rest.samevalue))
+		end
+	end
+end
+
+local state = {
+value = "set /bill/fred/joe 1abc 2d$ef 3xzxx 4yyy"
 }
-TABLE["defaultroutes"] = {
-	schema = { key="string key", priority="integer", value="sring" },
-	priority_defaultroutes = "select * from defaultroutes where priority = (select min(priority) from defaultroutes)",
-	remove_with_key = "delete from defaultroutes where key = :key"
-}
 
-local rc, err = db.init()
+print("-----")
+process(state)
+print("-----")
+state.value = "set /bill/fred/joe 1abc 2d$ef 3xzxx 4yyy"
+process(state)
 
-local rc, err = db.create("resolvers")
-if not rc then print("INSERT ERR: " .. err ) os.exit(1) end
-local rc, err = db.create("defaultroutes")
-if not rc then print("INSERT ERR: " .. err ) os.exit(1) end
+lib.term.push("raw")
+local line = ""						-- running buffer
+local pos = 0						-- cursor pos
+while true do
+	local x = lib.term.read()
+	if x == "q" then break end
 
---local rc, err = db.insert("resolvers", { key = "mykey", priority = 34, value = "myval" })
---if not rc then print("INSERT ERR: " .. err ) os.exit(1) end
+	if x == "BACKSPACE" then
+		if pos > 0 then	
+			pos = pos - 1
+		end
+	else
+		line = line .. x
+		pos = pos + 1
+	end
 
---local rc, err = query("resolvers", "remove_with_key", "mykey")
+	state.value = line
+	process(state)
 
-
-local resolvers, err = db.query("resolvers", "priority_resolvers")
-if not resolvers then print("QFAIL: "..err) end
-print("resolvers = "..tostring(resolvers))
-print("Rcount = "..#resolvers)
-
-print("V="..resolvers[1].value)
-
-
---for row in db:nrows("SELECT * FROM resolvers where priority = (select min(priority) from resolvers)") do
---	print("key="..row.key.." pri="..row.priority.." value="..row.value)
---end
-
-db.close()
+	print()
+	lib.term.reset_pos()
+	lib.term.output(line)
+	lib.term.move_to_pos(pos)
+	io.flush()
+end
+lib.term.pop()
 
 
