@@ -290,6 +290,27 @@ local function reset_pos()
 	__row, __col = 0, 0
 end
 
+local function clear_to_eol()
+	ti.out(ti.clr_eol)
+end
+
+local __color = {
+	red = 1,
+	yellow = 3,
+	green = 2,
+	default = 9,
+}
+local __last_color = "default"
+
+local function set_color(c)
+	if ti.set_a_foreground then
+		if c ~= __last_color then
+			ti.out(ti.tparm(ti.set_a_foreground, __color[c]))
+			__last_color = c
+		end
+	end
+end
+
 -- ------------------------------------------------------------------------------
 -- Setup the ti stuff automatically when we are accessed
 -- ------------------------------------------------------------------------------
@@ -308,5 +329,7 @@ return {
 	move_to = move_to,
 	move_to_pos = move_to_pos,
 	reset_pos = reset_pos,
+	clear_to_eol = clear_to_eol,
+	set_color = set_color,
 }
 

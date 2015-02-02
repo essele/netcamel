@@ -32,17 +32,24 @@ lib = { term = dofile("./term.lua") }
 -- state (calling again is undefined)
 --
 local function get_token(state, sep)
-	sep = sep or "%z"
-	local start, finish = state.value:find("[^"..sep.."]+", state.pos)
-	if not start then return nil end
-
-	-- update our basic state to past the separator
-	state.pos = state.value:find("[^"..sep.."]+", finish + 1)
-	state.pos = state.pos or #state.value + 1
-
 	-- update token number and ensure token table setup
 	state.n = (state.n and state.n+1) or 1
 	state.tokens = state.tokens or {}
+	sep = sep or "%z"
+
+	-- if previous was last then return nil and clear our old tokesn
+	if state.final then
+		while state.tokens[state.n] do table.remove(state.tokens, state.n) end
+		return nil 
+	end
+
+	-- find the token (or empty)
+	local start, finish = state.value:find("[^"..sep.."]+", state.pos)
+	if not start then start = #state.value + 1 finish = start - 1 end
+
+	-- work out if we are the last and setup pos for next time
+	state.final = start == #state.value or finish == #state.value or nil
+	state.pos = finish + 1
 
 	-- see if we have an existing token, if not create a new one
 	local token = state.tokens[state.n] or {}
@@ -50,17 +57,18 @@ local function get_token(state, sep)
 
 	-- set flags for change/nochange
 	token.samevalue = value == token.value
-	token.nochange = value == token.value and value.begin == start and value.finish == finish
+	token.nochange = value == token.value and token.start == start and token.finish == finish
 
 	-- if we have changed value then we need to remove all futures since they need recheck
+	-- if we are the last item then make sure we clear all subsequent old tokens
 	if not token.samevalue then
 		while state.tokens[state.n+1] do table.remove(state.tokens, state.n+1) end
 	end
 
-	token.begin = start
+	token.start = start
 	token.finish = finish
 	token.value = value
-	token.final = (finish == #state.value)
+	token.final = state.final
 
 	-- make sure our state is accurate
 	state.tokens[state.n] = token
@@ -70,14 +78,15 @@ end
 local function reset_state(state)
 	state.pos = nil
 	state.n = nil
+	state.final = nil
 end
 
 
 function process_cfpath(state)
 	-- pull the token, return if unchanged
 	local path = get_token(state, "%s")
+
 	if not path or path.samevalue then return end
-	print("path="..path.value)
 
 	-- update accordingly
 	reset_state(path)
@@ -86,12 +95,12 @@ function process_cfpath(state)
 		local elem = get_token(path, "/")
 		if not elem then break end
 
-		print("got elem: "..elem.value)
+--		print("got elem: "..elem.value)
 
 		if elem.valid and elem.samevalue then
-			print("no check needed")
+--			print("no check needed")
 		else
-			print("processing")
+--			print("processing")
 			elem.valid = true
 		end
 	end	
@@ -102,50 +111,112 @@ end
 function process(state) 
 	reset_state(state)
 	local cmd = get_token(state, "%s")
-	if cmd.value == "set" then
-		process_cfpath(state)
 
-		local rest = get_token(state)
-		if rest then
-			print("rest: ["..rest.value.."]")
-			print("rsame: " .. tostring(rest.samevalue))
+	if cmd then
+
+		if cmd.value == "set" then
+			cmd.color = "green"
+			process_cfpath(state)
+			if state.tokens and state.tokens[2] and state.tokens[2].tokens and state.tokens[2].tokens[2] then
+				state.tokens[2].tokens[2].color = "green"
+			end
+		else
+			cmd.color = "red"
 		end
+	end
+
+	local rest = get_token(state)
+	if rest then
+--			print("rest: ["..rest.value.."]")
+--			print("rsame: " .. tostring(rest.samevalue))
 	end
 end
 
-local state = {
-value = "set /bill/fred/joe 1abc 2d$ef 3xzxx 4yyy"
-}
+--
+-- String manipulation (should be in utils)
+--
+function string_insert(s, i, pos)
+	return s:sub(1,pos-1) .. i .. s:sub(pos)
+end
+function string_remove(s, pos, count)
+	return s:sub(1,pos-1) .. s:sub(pos+count)
+end
 
-print("-----")
-process(state)
-print("-----")
-state.value = "set /bill/fred/joe 1abc 2d$ef 3xzxx 4yyy"
-process(state)
+
+--
+-- Efficiently output the line working on things that have specifically changed
+-- only
+--
+local function display_line(state, force)
+	local function token_output(tokens, value, offset, force)
+		local p = 1
+		-- process the tokens
+		for _,token in ipairs(tokens) do
+			if not token.nochange or force then
+				lib.term.set_color(token.color or "red")
+
+				-- leading separators
+				if token.start > p then
+					lib.term.move_to_pos(offset+p-1)
+					lib.term.output(value:sub(p, token.start-1))
+				end
+				if token.tokens then
+					token_output(token.tokens, token.value, offset + token.start-1, force)
+				else
+					lib.term.move_to_pos(offset+token.start-1)
+					lib.term.output(token.value)
+				end
+				lib.term.set_color("default")
+			end
+			p = token.finish+1
+		end
+		lib.term.set_color("default")
+
+		-- if we just deleted the last char in the second token and the first one is unchanged
+		-- then we won't have output anything, when we clreol we will delete the first token!
+	end
+	token_output(state.tokens, state.value, 0, force)
+	lib.term.move_to_pos(#state.value)
+	lib.term.clear_to_eol()
+end
+
 
 lib.term.push("raw")
 local line = ""						-- running buffer
 local pos = 0						-- cursor pos
+local state = {}
 while true do
+	local oldpos = pos
+	local chg = false
+
 	local x = lib.term.read()
 	if x == "q" then break end
 
 	if x == "BACKSPACE" then
-		if pos > 0 then	
-			pos = pos - 1
-		end
+		if pos > 0 then	line = string_remove(line, pos, 1) chg = true pos = pos - 1 end
+	elseif x == "DELETE" then
+		if pos < #line+1 then line = string_remove(line, pos+1, 1) chg = true end
+	elseif x == "LEFT" then
+		if pos > 0 then pos = pos - 1 end
+	elseif x == "RIGHT" then
+		if pos < #line then pos = pos + 1 end
 	else
-		line = line .. x
-		pos = pos + 1
+		line = string_insert(line, x, pos+1) chg = true pos = pos + #x
 	end
 
-	state.value = line
-	process(state)
+	if chg then
+		state.value = line
+		process(state)
 
-	print()
-	lib.term.reset_pos()
-	lib.term.output(line)
-	lib.term.move_to_pos(pos)
+	--	lib.term.output(line)
+		lib.term.move_to(0, 0)
+		display_line(state)
+--		lib.term.move_to_pos(#line)
+
+		lib.term.move_to_pos(pos)
+	elseif pos ~= oldpos then
+		lib.term.move_to_pos(pos)
+	end
 	io.flush()
 end
 lib.term.pop()
