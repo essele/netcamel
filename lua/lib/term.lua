@@ -117,9 +117,7 @@ local function ti_init()
 	--
 	-- VT100 doesn't have a delete key???
 	--
-	if ti.key_dc then
-		keymap[ffi.string(ti.key_dc)] = "DELETE"
-	end
+	if ti.key_dc then keymap[ffi.string(ti.key_dc)] = "DELETE" end
 end
 
 --
@@ -192,7 +190,6 @@ local function now()
 	local timeval = posix.sys.time.gettimeofday()
 	return math.floor((timeval.tv_sec * 1000) + (timeval.tv_usec/1000))
 end
-
 
 -- ------------------------------------------------------------------------------
 -- Read a char (or sequence) from stdin, we also support other filehandles
@@ -278,35 +275,63 @@ local function move_to(r, c)
 	else
 		while r > __row do ti.out(ti.cursor_down) __row = __row + 1 end
 		while r < __row do ti.out(ti.cursor_up) __row = __row - 1 end
-		if math.abs(__col - c) then ti.out(ti.carriage_return) __col = 0 end
+		if math.abs(__col - c) > c then ti.out(ti.carriage_return) __col = 0 end
 		while c > __col do ti.out(ti.cursor_right) __col = __col + 1 end
 		while c < __col do ti.out(ti.cursor_left) __col = __col - 1 end
 	end
 end
-local function move_to_pos(pos)
-	move_to(row_and_col_from_pos(pos))
-end
-local function reset_pos()
-	__row, __col = 0, 0
-end
+local function move_to_pos(pos) move_to(row_and_col_from_pos(pos)) end
 
-local function clear_to_eol()
-	ti.out(ti.clr_eol)
-end
+--
+-- If we do something that puts the cursor back at the start then we need a way
+-- to tell the term code.
+--
+local function reset_pos() __row, __col = 0, 0 end
 
+-- 
+-- Send a clr_eol, used by the readline code to properly display editable command
+-- lines
+--
+local function clear_to_eol() ti.out(ti.clr_eol) end
+
+--
+-- Colours for set_color()
+--
 local __color = {
+	black = 0,
 	red = 1,
-	yellow = 3,
 	green = 2,
+	yellow = 3,
+	blue = 4,
+	magenta = 5,
+	cyan = 6,
+	white = 7,
 	default = 9,
 }
 local __last_color = "default"
+local __last_bold = false
 
+--
+-- Change the colour of the subsequent text, but optimised to only do this
+-- if the previous colour was different.
+--
+-- We also support "bright <colour>" to use the brighter versions, unfortunately
+-- there is no way to turn off bold so we have to exit all attributes.
+--
 local function set_color(c)
 	if ti.set_a_foreground then
-		if c ~= __last_color then
-			ti.out(ti.tparm(ti.set_a_foreground, __color[c]))
-			__last_color = c
+		local bold = (c:sub(1,7) == "bright ")
+		local color = c:match("([^%s]+)$") or "default"
+
+		if bold ~= __last_bold then
+			if bold then ti.out(ti.enter_bold_mode)
+			else ti.out(ti.exit_attribute_mode) __last_color = "default" end
+			__last_bold = bold
+		end
+
+		if color ~= __last_color then
+			ti.out(ti.tparm(ti.set_a_foreground, __color[color]))
+			__last_color = color
 		end
 	end
 end
