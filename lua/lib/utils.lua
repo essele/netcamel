@@ -390,5 +390,7 @@ return {
 	split = split,
 	unserialise = unserialise,
 	serialise = serialise,
+	prefixmatches = prefixmatches,
+	count = count,
 }
 

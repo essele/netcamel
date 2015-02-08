@@ -23,26 +23,28 @@
 --
 local function get_token(state, sep)
 	-- update token number and ensure token table setup
-	state.n = (state.n and state.n+1) or 1
+	state.__n = (state.__n and state.__n+1) or 1
 	state.tokens = state.tokens or {}
 	sep = sep or "%z"
 
 	-- if previous was last then return nil and clear our old tokesn
-	if state.final then
-		while state.tokens[state.n] do table.remove(state.tokens, state.n) end
+	if state.__final then
+		while state.tokens[state.__n] do table.remove(state.tokens, state.__n) end
 		return nil 
 	end
 
 	-- find the token (or empty)
-	local start, finish = state.value:find("[^"..sep.."]+", state.pos)
+	local start, finish = state.value:find("[^"..sep.."]+", state.__pos)
 	if not start then start = #state.value + 1 finish = start - 1 end
 
-	-- work out if we are the last and setup pos for next time
-	state.final = start == #state.value or finish == #state.value or nil
-	state.pos = finish + 1
+	-- work out if we are the last and setup pos for next time, past the seps
+	state.__final = start == #state.value or finish == #state.value or nil
+--	state.__pos = finish + 1
+	local ss, sf = state.value:find("["..sep.."]*", finish+1)
+	state.__pos = math.max(ss, sf+1)
 
 	-- see if we have an existing token, if not create a new one
-	local token = state.tokens[state.n] or {}
+	local token = state.tokens[state.__n] or {}
 	local value = state.value:sub(start, finish)
 
 	-- set flags for change/nochange
@@ -51,16 +53,17 @@ local function get_token(state, sep)
 
 	-- if we have changed value then we need to remove all futures since they need recheck
 	if not token.samevalue then
-		while state.tokens[state.n+1] do table.remove(state.tokens, state.n+1) end
+		while state.tokens[state.__n+1] do table.remove(state.tokens, state.__n+1) end
 	end
 
 	token.start = start
 	token.finish = finish
 	token.value = value
-	token.final = state.final
+	token.final = state.__final
+	token.n = state.__n
 
 	-- make sure our state is accurate
-	state.tokens[state.n] = token
+	state.tokens[state.__n] = token
 	return token
 end
 
@@ -68,9 +71,9 @@ end
 -- Before we start getting tokens we need to ensure our state is clean
 --
 local function reset_state(state)
-	state.pos = nil
-	state.n = nil
-	state.final = nil
+	state.__pos = nil
+	state.__n = nil
+	state.__final = nil
 end
 
 --
