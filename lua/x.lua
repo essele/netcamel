@@ -51,10 +51,136 @@ end
 function completeCB(tokens, line, pos)
 	local i = which_token(tokens, pos)
 
-	if i==2 then
-		local j = which_subtoken(tokens, i, pos)
-		print("j="..j)
+	if tokens[i].completer then return tokens[i].completer(tokens, i, pos) end
+
+--	if i==2 then
+--		local j = which_subtoken(tokens, i, pos)
+--		print("j="..j)
+--	end
+end
+
+CMDS = {}
+CMDS["set"] = {
+}
+
+CMDS["show"] = {
+	usage = "fred",
+	flags = {
+		["help"] = { 1,2,3 },
+		["fast"] = { 3, 4, 5 },
+		["mode="] = { "a" },
+	},
+	args = {
+		{ ["type"] = "cfpath", optional = true, allow_value = true }
+	}
+}
+
+--
+-- Set the status (and colour) of a token
+--
+local OK = 1
+local PARTIAL = 2
+local FAIL = 3
+local WEIRD = 4
+local status_color = { [OK] = "green", [PARTIAL] = "yellow", [FAIL] = "red", [WEIRD] = "blue" }
+
+function set_status(token, status)
+	if token.status ~= status then
+		token.stats = status
+		token.color = status_color[status]
+		token.nochange = nil
+	end	
+end
+
+--
+--
+--
+function usage_completer(tokens, n, pos)
+	print("Usage: <abc> <def> <ghosdkjhdfg>")
+end
+
+--
+--
+--
+function flag_completer(tokens, n, pos)
+	local flagtoken = tokens[n]
+
+	if not flagtoken.tokens then return end
+	
+	print("HERE")
+	local j = which_subtoken(tokens, n, pos)
+	print("j="..j)
+	if j == 1 then
+		for k,v in pairs(flagtoken.flagoptions) do
+			print("OPT: "..k)
+		end
 	end
+end
+
+--
+-- Validate any provided flags
+--
+function flag_validator(token, flags)
+	local dash = token.value:sub(1,2)
+
+	--
+	-- Make sure we really are a flag...
+	--
+	if dash ~= "-" and dash ~= "--" then set_status(token, FAIL) return end
+
+	--
+	-- Populate a set of options we could be choosing from...
+	--
+	if not token.flagoptions then
+		token.flagoptions = {}
+		for n, f in pairs(flags) do
+			local fname = "--" .. n:gsub("=$", "")
+			token.flagoptions[fname] = true
+			print("Added option: "..fname)
+		end
+	end
+	token.completer = flag_completer
+
+	if value == "-" or value == "--" then set_status(token, PARTIAL) return end
+
+	--
+	-- Get the parts of the flag
+	--
+	lib.readline2.reset_state(token)
+	local flag = lib.readline2.get_token(token, "=")
+	print("Flag="..tostring(flag and flag.value))
+	local val = lib.readline2.get_token(token, "=")
+
+	--
+	-- See if we need a trailing equals
+	--
+	local item = flag.value:sub(3)
+	if val then item = item .. "=" end
+
+	--
+	-- Get the matches (and count them)
+	--
+	local m = lib.utils.prefixmatches(flags, item)
+	local n = lib.utils.count(m)
+
+	if n == 0 then set_status(token, FAIL) return end
+	if flags[item] then 	
+		set_status(flag, OK)
+		if val then 
+			if val.value:match("^%d*$") then
+				if val.value:len() == 4 then set_status(val, OK)
+				else set_status(val, PARTIAL) end
+			else
+				set_status(val, FAIL) 
+			end
+		end 
+		return 
+	end
+
+	--
+	-- We can only be partial if we are at the end (i.e. we are still typing)
+	--
+	set_status(token, (token.final and PARTIAL) or FAIL)
 end
 
 
@@ -62,8 +188,50 @@ end
 -- TEST CODE ONLY
 --
 function processCB(state) 
-	local cmd = lib.readline2.get_token(state, "%s")
+	local token = lib.readline2.get_token(state, "%s")
+	local cmd = CMDS[token.value]
+	local argn = 0
 
+	if cmd then
+		set_status(token, OK)
+
+		--
+		-- Process all the remaining tokens
+		--
+		local args = cmd.args
+		while true do
+			token = lib.readline2.get_token(state, "%s")
+			if not token then break end
+			if token.value == "" then 
+				token.completer = usage_completer
+				goto continue 
+			end
+
+			--
+			-- See if we have flags
+			--
+			if argn == 0 then
+				if cmd.flags then
+					if token.value:sub(1, 1) == "-" then
+						flag_validator(token, cmd.flags)
+						goto continue
+					end
+				end
+				argn = 1
+			end
+
+			--
+			-- Try to match our argument
+			--
+			print("Looking at ["..token.value.."] for arg type "..args[argn]["type"])
+
+			argn = argn + 1
+::continue::
+		end
+	end
+
+
+--[[
 	if cmd then
 		if cmd.value == "set" then
 			cmd.color = "green"
@@ -81,6 +249,7 @@ function processCB(state)
 			print("rest: ["..rest.value.."]")
 --			print("rsame: " .. tostring(rest.samevalue))
 	end
+]]--
 end
 
 local prompt = { value = "prompt > ", len = 9 }
