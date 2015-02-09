@@ -24,6 +24,10 @@ package.path = "./lib/?.lua;" .. package.path
 --
 dofile("lib/lib.lua")
 
+--
+-- Important globals for configuration
+--
+VALIDATOR = {}
 
 -- global level packages
 require("utils")
@@ -35,9 +39,13 @@ local ffi 		= require("ffi")
 --
 -- global configuration spaces
 --
+
+
 master={ ["/"] = {} }
 current={}
 new={}
+CF_current = {}
+CF_new = {}
 
 --
 -- Import all of the modules into a core table so that we can
@@ -122,8 +130,6 @@ init_modules(core, "init")
 -- take current and write it out as saved.
 --
 
-CF_current = {}
-CF_new = {}
 
 --[[
 CF_new["/system/hostname"] = "blahblah"
@@ -170,7 +176,16 @@ if not CF_current then
 end
 CF_new = copy(CF_current)
 
-lib.cmdline.interactive()
+dofile("x.lua")
+local prompt = { value = "prompt > ", len = 9 }
+local history = { "fred", "one two thre", "set /abc/def/ghi" }
+
+lib.readline2.read_command(prompt, history, processCB, completeCB)
+
+
+
+
+--lib.cmdline.interactive()
 os.exit(0)
 
 

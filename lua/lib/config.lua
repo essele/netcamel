@@ -20,7 +20,7 @@
 --
 -- Globals for the validation routines
 --
-VALIDATOR = {}		-- validator by type
+--VALIDATOR = {}		-- validator by type
 TYPEOPTS = {}		-- options by type
 OPTIONS = {}		-- options by name
 FAIL=0
@@ -807,4 +807,9 @@ function undo(config, u)
 	for k,v in pairs(u.add) do config[k] = v count = count + 1 end
 	return count
 end
-	
+
+
+return {
+	node_list = node_list,
+	append_token = append_token,
+}	

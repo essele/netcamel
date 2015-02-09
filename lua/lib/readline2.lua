@@ -50,6 +50,7 @@ local function get_token(state, sep)
 	-- set flags for change/nochange
 	token.samevalue = value == token.value
 	token.nochange = value == token.value and token.start == start and token.finish == finish
+	token.finalchange = token.final ~= state.__final
 
 	-- if we have changed value then we need to remove all futures since they need recheck
 	if not token.samevalue then
@@ -61,6 +62,7 @@ local function get_token(state, sep)
 	token.value = value
 	token.final = state.__final
 	token.n = state.__n
+	token.parent = state
 
 	-- make sure our state is accurate
 	state.tokens[state.__n] = token
