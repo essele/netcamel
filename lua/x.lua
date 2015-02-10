@@ -23,14 +23,13 @@ dofile("lib/lib.lua")
 -- TEST CODE ONLY
 --
 function completeCB(tokens, line, pos)
-	local i = which_token(tokens, pos)
+	local toks = { lib.readline2.which_token2(tokens, pos) }
+	local ptoken = toks[#toks]
 
-	if tokens[i].completer then return tokens[i].completer(tokens, i, pos) end
+--	print("PTOKEN: "..tostring(ptoken))
 
---	if i==2 then
---		local j = which_subtoken(tokens, i, pos)
---		print("j="..j)
---	end
+--	if ptoken.completer then return ptoken.completer(tokens, ptoken.n, pos) end
+	if ptoken.completer then return ptoken.completer(unpack(toks)) end
 end
 
 --
@@ -63,17 +62,18 @@ end
 --
 --
 --
-function flag_completer(tokens, n, pos)
-	local flagtoken = tokens[n]
-
-	if not flagtoken.tokens then return end
-	
-	local j = which_subtoken(tokens, n, pos)
-	if j == 1 then
-		for k,v in pairs(flagtoken.flagoptions) do
+function flag_completer(token, ptoken)
+	--
+	-- If we are in the flag (i.e. n=1) then give flag options
+	--
+	if token.n == 1 then
+		for k,v in pairs(ptoken.flagoptions) do
 			print("OPT: "..k)
 		end
+		return
 	end
+
+	-- TODO: value completion
 end
 
 --
@@ -128,20 +128,62 @@ function cfpath_options(mp, kp, opts)
 ::continue::
 		end
 	end
-	for k,t in pairs(list) do
-		print("k="..k.." mp="..t.mp.." kp="..t.kp)
-	end
 	return list
 end
 
+--
+-- Given a token and a list of options handle the standard completer
+-- actions (single match, common prefix etc)
+--
+function standard_completer(token, options)
+	local value = token.value
+	
+	local m = lib.utils.prefixmatches(options, value)
+	local n = lib.utils.count(m)
+
+	if n == 0 then return end
+	if n > 1 then
+		local rc = common_prefix(m)
+		if rc:len() > token.cpos then return rc:sub(token.cpos+1) end
+		return m
+	end
+	return next(m):sub(token.cpos + 1), true
+end
+
+--
+-- The cfpath completer uses a common completer but then adds logic to handle
+-- the 'next' item (space or / could be added). Plus some logic for . and ..
+--
+function cfpath_completer(token, ptoken)
+	--
+	-- First consider . and ..
+	--
+	local value = token.value:sub(1, token.cpos)
+	if value == "." then return "./" end
+	if value == ".." then return "/" end
+
+	--
+	-- Now run the standard compeleter
+	--
+	local opts = ptoken.opts
+	local comp, done = standard_completer(token, token.options)
+	return comp
+end
 
 --
 -- Validate a configpath by running through each element in turn and
 -- expanding kp and mp for each node. Build the options at each element
 -- so we also prepare for the tab expansion.
 --
-function cfpath_validator(token, opts)
+function cfpath_validator(token)
 	if token.samevalue and not token.finalchange then return end
+
+	--
+	-- Options from the argument
+	--
+	local opts = token.opts
+
+	token.completer = cfpath_completer
 
 	local kp, mp = "/", "/"
 	local value
@@ -232,13 +274,14 @@ function flag_validator(token, flags)
 			token.flagoptions[fname] = true
 		end
 	end
---	token.completer = flag_completer
+	token.completer = flag_completer
 
 	--
 	-- We have changed, so split the token, into two
 	--
 	lib.readline2.reset_state(token)
 	local flag = lib.readline2.get_token(token, "=")
+	print("flag="..tostring(flag).." p.toks="..tostring(token.tokens))
 	local val = lib.readline2.get_token(token)
 
 	--
@@ -285,7 +328,7 @@ function flag_validator(token, flags)
 	if val and val.status == PARTIAL and not token.final then set_status(val, FAIL) end
 	if flag.status == PARTIAL and not token.final then set_status(flag, FAIL) end
 
-	if flag.status ~= OK then token.tokens = nil val = nil end
+	if flag.status ~= OK then token.tokens[2] = nil val = nil end
 	set_status(token, (val and val.status) or flag.status)
 end
 
@@ -358,10 +401,12 @@ function processCB(state)
 		if not token then print("NOT ENOUGH") goto done end
 
 		--
-		-- At this point we have a token and a matching arg, validate...
+		-- At this point we have a token and a matching arg, validate... we
+		-- will keep a reference to 'opts' in the token for the completer to
+		-- use
 		--
-		print("Argn="..argn.." type="..arg["type"].." token=["..token.value.."]")
-		arg.validator(token, arg.opts)
+		token.opts = arg.opts
+		arg.validator(token)
 		if token.status ~= OK then goto restfail end
 
 		-- get the next token
@@ -376,16 +421,16 @@ function processCB(state)
 	-- command line
 	--
 	if token then
-		print("TOO MUCH STUFF")
+--		print("TOO MUCH STUFF")
 		goto restfail
 	end
 
 ::done::
-		print("DONE")
+--		print("DONE")
 
 
 ::restfail::
-	print("RESTFAIL")
+--	print("RESTFAIL")
 	local rest = lib.readline2.get_token(state)
 	if rest then
 			print("rest: ["..rest.value.."]")

@@ -217,7 +217,10 @@ local function read_command(prompt, history, syntax_cb, complete_cb)
 			lib.term.reset_pos() 
 			line, pos, chg, prompt.show = "", 0, true, true
 		elseif x == "TAB" then
-			complete_cb(state.tokens, line, pos)
+			local comp = complete_cb(state.tokens, line, pos)
+			if type(comp) == "string" then
+				line = string_insert(line, comp, pos+1) chg = true pos = pos + comp:len()
+			end
 		else
 			if #x > 1 then x = "?" end
 			line = string_insert(line, x, pos+1) chg = true pos = pos + 1
@@ -231,7 +234,7 @@ end
 -- Given the tokens and a position work out which token we are in so
 -- that we can run the completer effectively.
 --
-function which_token(tokens, pos)
+local function which_token(tokens, pos)
 	for i,token in ipairs(tokens) do
 		print("i="..i.." pos="..pos)
 		if pos <= token.finish then return i end
@@ -242,17 +245,41 @@ end
 -- If we are subtoken'd then given the tokens and main token index
 -- and the cursor pos then work out which subtoken.
 --
-function which_subtoken(tokens, n, pos)
+local function which_subtoken(tokens, n, pos)
 	return which_token(tokens[n].tokens, pos+1 - tokens[n].start)
 end
 
+--
+-- Find out which token and return a set of args going back up
+-- the whole heirarchy chain
+--
+local function which_token2(tokens, pos)
+	local function wt(tokens, pos)
+		for i,token in ipairs(tokens) do
+			if pos <= token.finish then return tokens[i] end
+		end
+		return nil
+	end
 
+	local rc = {}
+	while tokens do
+		local t = wt(tokens, pos)
+		if t then 
+			t.cpos = pos + 1 - t.start
+			table.insert(rc, 1, t) 
+			pos = pos + 1 - t.start
+		end
+		tokens = t and t.tokens
+	end
+	return unpack(rc)
+end
 
 return {
 	read_command = read_command,
 	get_token = get_token,
 	reset_state = reset_state,
 	which_token = which_token,
+	which_token2 = which_token2,
 	which_subtoken = which_subtoken,
 }
 	

@@ -392,5 +392,6 @@ return {
 	serialise = serialise,
 	prefixmatches = prefixmatches,
 	count = count,
+	common_prefix = common_prefix,
 }
 
