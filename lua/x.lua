@@ -35,10 +35,10 @@ end
 --
 -- Set the status (and colour) of a token
 --
+local FAIL = 0
 local OK = 1
 local PARTIAL = 2
-local FAIL = 3
-local WEIRD = 4
+local WEIRD = 3
 local status_color = { [OK] = "green", [PARTIAL] = "yellow", [FAIL] = "red", [WEIRD] = "blue" }
 
 function set_status(token, status)
@@ -195,18 +195,31 @@ function cfpath_completer(token, ptoken)
 end
 
 --
+-- Validator for a cfvalue
+--
+--
+function cfvalue_validator(token, opts)
+	if token.samevalue and not token.finalchange then return end
+
+	local cfindex = (opts and opts.path and opts.path+1) or token.n-1
+	local cftoken = token.parent.tokens[cfindex]
+	local t = master[cftoken.mp]["type"]
+
+	set_status(token, VALIDATOR[t](token.value, cftoken.mp, cftoken.kp))
+end
+
+--
 -- Validate a configpath by running through each element in turn and
 -- expanding kp and mp for each node. Build the options at each element
 -- so we also prepare for the tab expansion.
 --
-function cfpath_validator(token)
+function cfpath_validator(token, opts)
 	if token.samevalue and not token.finalchange then return end
 
 	--
-	-- Options from the argument
+	-- Options from the argument, needed for the completer
 	--
-	local opts = token.opts
-
+	token.opts = opts
 	token.completer = cfpath_completer
 
 	local kp, mp = "/", "/"
@@ -274,9 +287,10 @@ function cfpath_validator(token)
 	elem = lib.readline2.get_token(token)
 	if elem then set_status(elem, FAIL) end
 
-	-- find the last token, check for PARTIAL at end, then propogate
+	-- find the last token, check for PARTIAL at end, then propogate status, mp and kp
 	elem = token.tokens[#token.tokens]
 	if elem.status == PARTIAL and not token.final then set_status(elem, FAIL) end
+	if elem.status == OK then token.mp, token.kp = elem.mp, elem.kp end
 	set_status(token, elem.status)
 end
 
@@ -367,17 +381,18 @@ CMDS["show"] = {
 		["fast"] = { 3, 4, 5 },
 		["mode="] = { "a" },
 	},
+	argc = { min = 0, max = 1 },
 	args = {
-		{ ["type"] = "cfpath", validator = cfpath_validator, optional = nil, 
-								opts = { allow_value = 1, allow_container = 1, use_master = 1, use_new = 1 },
-		}
+		{ validator = cfpath_validator, opts = { allow_value = 1, allow_container = 1, use_master = 1, use_new = 1 }}
 	}
 }
 CMDS["set"] = {
+	desc = "set configuration values",
+	usage = "<config_path> <value>",
+	argc = { min = 2, max = 2 },
 	args = {
-		{ ["type"] = "cfpath", validator = cfpath_validator, optional = nil, 
-								opts = { allow_value = 1, use_master = 1, use_new = 1, gap = 1 },
-		}
+		{ validator = cfpath_validator, opts = { allow_value = 1, use_master = 1, use_new = 1, gap = 1 }},
+		{ validator = cfvalue_validator, all = 1 },
 	}
 }
 
@@ -387,89 +402,47 @@ CMDS["set"] = {
 function processCB(state) 
 	local token = lib.readline2.get_token(state, "%s")
 	local cmd = CMDS[token.value]
-	local argn = 1
-	local args
+	local argn = 0
 
-	if not cmd then
-		set_status(token, FAIL)
-		goto restfail
-	end
-
+	if not cmd then set_status(token, FAIL) goto restfail end
 	set_status(token, OK)
-
-	--
-	-- Process all the remaining tokens
-	--
-	args = cmd.args
 
 	--
 	-- First handle flags (if present)
 	--
-	token = lib.readline2.get_token(state, "%s")
-	while token and cmd.flags and token.value:sub(1, 1) == "-" do
+	if cmd.flags and lib.readline2.peek_char(state) == "-" then
+		token = lib.readline2.get_token(state, "%s")
 		flag_validator(token, cmd.flags)
 		print("tv=["..token.value.."] status="..token.status)
 		if token.status ~= OK then goto restfail end
-
-		token = lib.readline2.get_token(state, "%s")
 	end
 
 	--
-	-- Now go through the arguments
+	-- Process all the remaining tokens
 	--
-	while args[argn] do
-		local arg = args[argn]
-		--
-		-- If arg is optional and we don't have a token, then that's ok we just
-		-- skip it.
-		--
-		if not token and arg.optional then goto argnext end
-
-		--
-		-- If we have no token here then we haven't got enough args
-		--
-		if not token then print("NOT ENOUGH") goto done end
-
-		--
-		-- At this point we have a token and a matching arg, validate... we
-		-- will keep a reference to 'opts' in the token for the completer to
-		-- use
-		--
-		token.opts = arg.opts
-		arg.validator(token)
+	for _, arg in ipairs(cmd.args) do
+		token = lib.readline2.get_token(state, (not arg.all and "%s") or nil)
+		if not token then break end
+	
+		arg.validator(token, arg.opts)
 		if token.status ~= OK then goto restfail end
-
-		-- get the next token
-		token = lib.readline2.get_token(state, "%s")
-
-::argnext::
 		argn = argn + 1
 	end
 
-	--
-	-- If we get here and still have a token then we have too much on the 
-	-- command line
-	--
-	if token then
---		print("TOO MUCH STUFF")
-		goto restfail
-	end
-
-::done::
---		print("DONE")
-
-
 ::restfail::
---	print("RESTFAIL")
-	local rest = lib.readline2.get_token(state)
-	if rest then
-			print("rest: ["..rest.value.."]")
-			set_status(rest, FAIL)
+	--
+	-- If there is any more stuff (other than empty stuff) then it's wrong
+	--
+	if lib.readline2.peek_char(state) ~= "" then
+		local rest = lib.readline2.get_token(state)
+		print("rest: ["..rest.value.."]")
+		set_status(rest, FAIL)
 	end
+
+	local fstat = state.tokens[#state.tokens].status
+	print("Fstat = "..fstat)
+
+
 end
 
---local prompt = { value = "prompt > ", len = 9 }
---local history = { "fred", "one two thre", "set /abc/def/ghi" }
-
---lib.readline2.read_command(prompt, history, processCB, completeCB)
 

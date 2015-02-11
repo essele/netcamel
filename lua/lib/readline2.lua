@@ -18,6 +18,14 @@
 ------------------------------------------------------------------------------
 
 --
+-- Get the next n chars so we can check stuff without getting the token
+--
+local function peek_char(state, n)
+	if not state.__pos or not state.value then return "" end
+	return state.value:sub(state.__pos, state.__pos + (n or 1)-1)
+end
+
+--
 -- Return a token for each call, once we get to the end the flag the end
 -- state (calling again is undefined)
 --
@@ -314,6 +322,7 @@ end
 return {
 	read_command = read_command,
 	get_token = get_token,
+	peek_char = peek_char,
 	reset_state = reset_state,
 	which_token = which_token,
 	which_token2 = which_token2,
