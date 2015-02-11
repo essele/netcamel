@@ -84,6 +84,38 @@ end
 function string_insert(s, i, pos) return s:sub(1,pos-1) .. i .. s:sub(pos) end
 function string_remove(s, pos, count) return s:sub(1,pos-1) .. s:sub(pos+count) end
 
+
+--
+-- Tab completion output, depending on what kind of list it is we will
+-- format it differently.
+--
+local function completer_output(comp)
+	--
+	-- If we have spaces in our list then it won't read well in columns so
+	-- we'll force the text flag
+	--
+	if not comp.text then
+		for _,m in ipairs(comp) do if m:match("%s") then comp.text = true break end end
+	end
+	--
+	-- If the text flag is set then we just output each line.
+	-- Otherwise we consider it a list of smallish items, so we work out the
+	-- longest, and see how many we can fit across a line.
+	--
+	if comp.text then for _,m in ipairs(comp) do ti.out(m .. "\n") end return end
+
+	local maxlen = 0
+	for _,m in ipairs(comp) do maxlen = math.max(maxlen, #m + 2) end
+
+	local cols = math.floor(lib.term.width()/maxlen)
+	local rows = math.ceil(#comp/cols)
+	local format = string.format("%%-%d.%ds", maxlen, maxlen)
+	for r = 1, rows do
+		for c = 1, cols do io.write(string.format(format, comp[((c-1)*rows)+r] or "")) end
+		io.write("\n")
+	end
+end
+
 --
 -- Go backwards to the nearest word start
 --
@@ -164,7 +196,7 @@ local function read_command(prompt, history, syntax_cb, complete_cb)
 	local line, hline = "", ""			-- running buffer, history line
 	local pos, oldpos = 0, 0			-- cursor pos
 	local state = { value = line }		-- starting point
-	local chg = true					-- show prompt first time
+	local chg, force = true, false		-- ensure line is shown first time
 	local hpos = #history				-- at end of history
 
 	prompt.show = true					-- show prompt first time
@@ -177,7 +209,7 @@ local function read_command(prompt, history, syntax_cb, complete_cb)
 			state.value = line
 			reset_state(state)
 			syntax_cb(state)
-			display_line(prompt, state)
+			display_line(prompt, state, force)
 			lib.term.move_to_pos(prompt.len + pos)
 		elseif pos ~= oldpos then
 			lib.term.move_to_pos(prompt.len + pos)
@@ -188,7 +220,7 @@ local function read_command(prompt, history, syntax_cb, complete_cb)
 		-- Reset state variables for the next user input
 		--
 		oldpos = pos
-		chg = false
+		chg, force = false, false
 
 		--
 		-- Process input
@@ -220,6 +252,11 @@ local function read_command(prompt, history, syntax_cb, complete_cb)
 			local comp = complete_cb(state.tokens, line, pos)
 			if type(comp) == "string" then
 				line = string_insert(line, comp, pos+1) chg = true pos = pos + comp:len()
+			elseif type(comp) == "table" then
+				print()
+				lib.term.reset_pos()
+				completer_output(comp)
+				chg, prompt.show, force = true, true, true
 			end
 		else
 			if #x > 1 then x = "?" end

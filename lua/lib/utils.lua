@@ -393,5 +393,8 @@ return {
 	prefixmatches = prefixmatches,
 	count = count,
 	common_prefix = common_prefix,
+
+	keys_to_values = keys_to_values,
+	values_to_keys = values_to_keys,
 }
 

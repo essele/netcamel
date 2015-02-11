@@ -336,6 +336,11 @@ local function set_color(c)
 	end
 end
 
+--
+-- For column drawing etc
+--
+local function get_width() return __width end
+
 -- ------------------------------------------------------------------------------
 -- Setup the ti stuff automatically when we are accessed
 -- ------------------------------------------------------------------------------
@@ -356,5 +361,6 @@ return {
 	reset_pos = reset_pos,
 	clear_to_eol = clear_to_eol,
 	set_color = set_color,
+	width = get_width,
 }
 

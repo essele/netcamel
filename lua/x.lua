@@ -47,16 +47,10 @@ function set_status(token, status)
 		token.color = status_color[status]
 		token.nochange = nil
 
-		-- support one level of subtoken parent updating
-		if token.parent then token.parent.nochange = nil end
+		-- support updating all parent nochange statuses
+		local p = token.parent
+		while p do p.nochange = nil p = p.parent end
 	end	
-end
-
---
---
---
-function usage_completer(tokens, n, pos)
-	print("Usage: <abc> <def> <ghosdkjhdfg>")
 end
 
 --
@@ -77,21 +71,23 @@ function flag_completer(token, ptoken)
 end
 
 --
---
+-- Work out which options are available for a given mp/kp value and set of options,
+-- we store mp,kp and term in the return so we can identify sensible next steps.
 --
 function cfpath_options(mp, kp, opts)
 	--	
 	-- Get the full list of master nodes that match mp and the options we have provided
-	-- 
+	-- flag if it's a terminal match
 	--
 	local m_list = {}
-	local match = mp:gsub("/$", ""):gsub("([%-%+%.%*])", "%%%1").."/([^/]+)"
+	local match = mp:gsub("/$", ""):gsub("([%-%+%.%*])", "%%%1").."/([^/]+)(.*)"
 	for k, m in pairs(master) do
-		local item = k:match(match)
+		local item, term = k:match(match)
 		if item then
-			if opts.must_be_wildcard and master[k].style ~= nil then m_list[item] = 1 end
-			if opts.allow_container and master[k]["type"] == nil then m_list[item] = 1 end
-			if opts.allow_value and master[k]["type"] ~= nil then m_list[item] = 1 end
+			term = (m_list[item] or 0) + ((term=="" and 1) or 0)
+			if opts.must_be_wildcard and master[k].style ~= nil then m_list[item] = term end
+			if opts.allow_container and master[k]["type"] == nil then m_list[item] = term end
+			if opts.allow_value and master[k]["type"] ~= nil then m_list[item] = term end
 		end
 	end
 
@@ -104,7 +100,7 @@ function cfpath_options(mp, kp, opts)
 	-- If opts.use_master then add all master items (leave * in at this point)
 	--
 	if opts.use_master then
-		for item,_ in pairs(m_list) do list[item] = { mp=item, kp=item } end
+		for item,_ in pairs(m_list) do list[item] = { mp=item, kp=item, term=(m_list[item]>0) } end
 	end
 
 	--
@@ -119,11 +115,11 @@ function cfpath_options(mp, kp, opts)
 	
 			if m_list[item] then
 				if opts.must_be_wildcard and (item:find("*", 1, true) or rest:find("*", 1, true)) then
-					list[item] = { mp=item, kp=item }
+					list[item] = { mp=item, kp=item, term=(m_list[item]>0) }
 				end
-				if opts.allow_value or opts.allow_container then list[item] = { mp=item, kp=item } end
-			elseif wc == "*" and list["*"] then
-				list[item] = { mp="*", kp="*"..item }
+				if opts.allow_value or opts.allow_container then list[item] = { mp=item, kp=item, term=(m_list[item]>0) } end
+			elseif wc == "*" and m_list["*"] then
+				list[item] = { mp="*", kp="*"..item, term=(m_list["*"]>0) }
 			end
 ::continue::
 		end
@@ -147,7 +143,8 @@ function standard_completer(token, options)
 		if rc:len() > token.cpos then return rc:sub(token.cpos+1) end
 		return m
 	end
-	return next(m):sub(token.cpos + 1), true
+	local key = next(m)
+	return key:sub(token.cpos + 1), key, m[key]
 end
 
 --
@@ -166,8 +163,35 @@ function cfpath_completer(token, ptoken)
 	-- Now run the standard compeleter
 	--
 	local opts = ptoken.opts
-	local comp, done = standard_completer(token, token.options)
-	return comp
+	local comp, value, match = standard_completer(token, token.options)
+	local gap = (opts.gap and " ") or ""
+
+	--
+	-- If we didn't fully complete then deal with the two cases, partial or output
+	--
+	if not match then
+		if type(comp) == "table" then return lib.utils.keys_to_values(comp) end
+		return comp
+	end
+
+	--
+	-- If we are not a terminal node then we can add a slash
+	--
+	if not match.term then return comp .. "/" end
+
+	--
+	-- If we have returned something to complete, then we can use it
+	--
+	if comp:len() > 0 then return comp..gap end
+
+	--
+	-- This means we have pressed tab again after we've already completed, so
+	-- we need to see if we have more... (mp and kp will be there because of
+	-- the second tab)
+	--
+	local more = cfpath_options(token.mp, token.kp, ptoken.opts)
+	if next(more) then return comp .. "/" end
+	return comp..gap
 end
 
 --
@@ -349,7 +373,13 @@ CMDS["show"] = {
 		}
 	}
 }
-
+CMDS["set"] = {
+	args = {
+		{ ["type"] = "cfpath", validator = cfpath_validator, optional = nil, 
+								opts = { allow_value = 1, use_master = 1, use_new = 1, gap = 1 },
+		}
+	}
+}
 
 --
 -- TEST CODE ONLY
