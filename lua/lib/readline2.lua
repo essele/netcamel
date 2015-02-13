@@ -234,7 +234,7 @@ local function read_command(prompt, history, syntax_cb, complete_cb)
 		-- Process input
 		--
 		local x = lib.term.read()
-		if x == "q" then break end
+		if x == "q" then state = nil break end
 
 		if x == "BACKSPACE" then if pos > 0 then line = string_remove(line, pos, 1) chg = true pos = pos - 1 end
 		elseif x == "DELETE" then if pos < #line+1 then line = string_remove(line, pos+1, 1) chg = true end
@@ -266,6 +266,10 @@ local function read_command(prompt, history, syntax_cb, complete_cb)
 				completer_output(comp)
 				chg, prompt.show, force = true, true, true
 			end
+		elseif x == "ENTER" then
+			print()
+			state.line = line
+			break
 		else
 			if #x > 1 then x = "?" end
 			line = string_insert(line, x, pos+1) chg = true pos = pos + 1
@@ -273,6 +277,8 @@ local function read_command(prompt, history, syntax_cb, complete_cb)
 	end
 	lib.term.pop()
 	table.remove(history)
+
+	return state
 end
 
 --

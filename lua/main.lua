@@ -176,12 +176,12 @@ if not CF_current then
 end
 CF_new = copy(CF_current)
 
-dofile("x.lua")
+--dofile("x.lua")
 local prompt = { value = "prompt > ", len = 9 }
 local history = { "fred", "one two thre", "set /abc/def/ghi" }
 
-lib.readline2.read_command(prompt, history, processCB, completeCB)
-
+--lib.readline2.read_command(prompt, history, processCB, completeCB, enterCB)
+lib.cmdline2.interactive()
 
 
 
