@@ -17,10 +17,6 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
---require("log")
---local runtime = require("runtime")
---local service = require("service")
-
 local DNSMASQ = "/usr/sbin/dnsmasq"
 local DNSMASQ_CONF = "/tmp/dnsmasq.conf"
 

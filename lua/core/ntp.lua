@@ -17,8 +17,6 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
---local service = require("service")
-
 local NTPD = "/usr/sbin/ntpd"
 local NTPD_NAME = "ntpd"
 local NTPD_CONFIG = "/tmp/ntpd.conf"
@@ -52,7 +50,7 @@ local function ntp_commit(changes)
 	--
 	local cfdict = { 
 		["server"] = cf.server, 	
-		["interface"] = interface_names(cf["listen-on"])
+		["interface"] = interface_names(cf["listen-on"] or {})
 	}
 
 	--

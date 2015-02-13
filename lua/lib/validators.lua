@@ -17,8 +17,6 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -----------------------------------------------------------------------------
 
-require("utils")
-
 --
 -- For TYPEOPTS we support fixed entries or function calls using @type
 --
@@ -88,7 +86,7 @@ VALIDATOR["ipv4"] = function(v, mp, kp)
 	local err = "ipv4 must be nnn.nnn.nnn.nnn"
 
 	if not v:match("^[%d%.]+$") then return FAIL, err end
-	local nums = split(v, "%.")
+	local nums = lib.utils.split(v, "%.")
 	if #nums > 4 then return FAIL, err end
 
 	for i,num in ipairs(nums) do

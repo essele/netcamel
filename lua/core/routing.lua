@@ -17,9 +17,6 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
---local db = require("db")
---local runtime = require("runtime")
-
 --
 -- Commit will just remove all the routes and then re-add them
 --

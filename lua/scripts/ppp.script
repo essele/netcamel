@@ -27,16 +27,6 @@
 dofile("/netcamel/lib/lib.lua")
 
 --
--- We need to access the database for resolvers and routes
---
---runtime = require("runtime")
-
---
--- Needed for split
---
---require("utils")
-
---
 -- Pull out the relevent bits from the environment
 --
 local interface	= os.getenv("IFNAME")

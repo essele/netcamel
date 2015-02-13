@@ -21,21 +21,7 @@
 --
 
 posix.fcntl.FD_CLOEXEC = 1
-
---
--- We need to access the database
---
---local db = require("db")
---local rr = require("runtime-route")
-
---
--- We will need lots of logging
---
--- TODO: fix execute and log!!!
-require("bit")
---require("lib.execute")
---require("lib.log")
-
+local bit = require("bit")
 
 --
 -- Support blocking so we can have only one process doing something at a time

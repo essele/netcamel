@@ -17,13 +17,7 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -----------------------------------------------------------------------------
 
---
--- The main services array
---
-
-require("bit")
-require("utils")
---require("execute")
+local bit = require("bit")
 
 --
 -- Install a service defnition into the transient database
@@ -31,10 +25,10 @@ require("utils")
 --
 local function define(name, svc)
 	svc.service = name
-	if svc.args then svc.args = serialise(svc.args) end
-	if svc.env then svc.env = serialise(svc.env) end
-	if svc.vars then svc.vars = serialise(svc.vars) end
-	if svc.stop_args then svc.stop_args = serialise(svc.stop_args) end
+	if svc.args then svc.args = lib.utils.serialise(svc.args) end
+	if svc.env then svc.env = lib.utils.serialise(svc.env) end
+	if svc.vars then svc.vars = lib.utils.serialise(svc.vars) end
+	if svc.stop_args then svc.stop_args = lib.utils.serialise(svc.stop_args) end
 	rc, err = lib.db.query("services", "remove_service", name)
 	print("remove rc="..tostring(rc).." err="..tostring(err))
 	rc, err = lib.db.insert("services", svc)
@@ -57,9 +51,9 @@ local function get(name)
 	if not svc or #svc ~= 1 then return nil, "unknown service" end
 
 	svc = svc[1]
-	if svc.args then svc.args = unserialise(svc.args) end
-	if svc.env then svc.env = unserialise(svc.env) end
-	if svc.stop_args then svc.stop_args = unserialise(svc.stop_args) end
+	if svc.args then svc.args = lib.utils.unserialise(svc.args) end
+	if svc.env then svc.env = lib.utils.unserialise(svc.env) end
+	if svc.stop_args then svc.stop_args = lib.utils.unserialise(svc.stop_args) end
 	svc.create_pidfile = (svc.create_pidfile == 1)
 	return svc
 end

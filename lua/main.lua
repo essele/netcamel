@@ -30,7 +30,7 @@ dofile("lib/lib.lua")
 VALIDATOR = {}
 
 -- global level packages
-require("utils")
+--require("utils")
 require("config")
 require("validators")
 

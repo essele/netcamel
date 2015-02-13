@@ -296,8 +296,11 @@ function rlv_cfpath(token, opts)
 	while elem do
 		if elem.nochange and not token.finalchange then goto continue end
 
-		-- build options if we don't already have them
-		if not elem.options then elem.options = cfpath_options(mp, kp, opts) end
+		-- build options if we don't already have them (or don't have the right set)
+		if elem.__okp ~= kp then 
+			elem.options = cfpath_options(mp, kp, opts)
+			elem.__okp = kp
+		end
 
 		-- allow "/" for a container (at the token level, not elem)
 		if opts.allow_container and token.value == "/" then
@@ -313,7 +316,7 @@ function rlv_cfpath(token, opts)
 				set_status(elem, PARTIAL)
 			elseif value == ".." then
 				elem.mp, elem.kp = mp:gsub("/[^/]+$", ""), kp:gsub("/[^/]+$", "")
-				if #mp == 0 then mp, kp = "/", "/" end
+				if #elem.mp == 0 then elem.mp, elem.kp = "/", "/" end
 				set_status(elem, OK)
 			end
 			goto continue
@@ -514,7 +517,10 @@ function processCB(state)
 	local fstat = state.tokens[#state.tokens].status
 end
 
-
+--
+-- Build the prompt table with colour information for displaying by the
+-- readline module.
+--
 local function build_prompt()
 	local path = __path_kp:gsub("%*", "")
 	local prompt = {

@@ -16,7 +16,7 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
-require("utils")
+--require("utils")
 
 --
 -- A master list of interface types, used for validation and name mapping
@@ -39,7 +39,7 @@ local INTERFACE_TYPE_LIST = {}
 --
 --function interface_register(path, fullpath, phys_num, phys_alpha, types)
 function interface_register(details)
-	details.classes = values_to_keys(details.classes)
+	details.classes = lib.utils.values_to_keys(details.classes)
 	INTERFACE_TYPE_LIST[details.module] = details
 
 --[[
@@ -97,7 +97,7 @@ function interface_name(path)
 end
 function interface_names(list)
 	local rc = {}
-	for interface in each(list) do table.insert(rc, interface_name(interface)) end
+	for _,interface in ipairs(list) do table.insert(rc, interface_name(interface)) end
 	return rc
 end
 
@@ -118,7 +118,7 @@ function interface_precommit(changes)
 	local ifs={}
 
 	for sp, entry in pairs(INTERFACE_TYPE_LIST) do
-		for node in each(node_list(entry.path, CF_new, true)) do
+		for _,node in ipairs(node_list(entry.path, CF_new, true)) do
 			local intf = interface_name(sp.."/"..node)
 			if ifs[intf] then
 				return false, string.format("duplicate interface name: [%s] and [%s]", sp.."/"..node, ifs[intf])
@@ -166,8 +166,8 @@ local function options_from_interfaces(class)
 	local rc = {}
 	for path,entry in pairs(INTERFACE_TYPE_LIST) do
 		if entry.classes[class] then
-			for node in each(node_list(entry.path, CF_new)) do
-				push(rc, path.."/"..node:gsub("^%*", ""))
+			for _,node in ipairs(node_list(entry.path, CF_new)) do
+				table.insert(rc, path.."/"..node:gsub("^%*", ""))
 			end
 		end
 	end

@@ -17,9 +17,6 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
---require("log")
---runtime = require("runtime")
-
 local function system_precommit(changes)
 	return true
 end

@@ -26,17 +26,6 @@
 dofile("/netcamel/lib/lib.lua")
 
 --
--- We need to access the database
---
---runtime = require("runtime")
-
---
--- For string split and each
---
---require("utils")
---require("log")
-
---
 -- Pull out all of the environment variables
 --
 local interface 		= os.getenv("interface")

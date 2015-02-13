@@ -16,33 +16,6 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
---[[
-# 
-# 
-# HISTFILESIZE=1000
-# INPUTRC=/etc/inputrc
-# USER=root
-# HOSTNAME=buildroot
-# SHLVL=3
-# OLDPWD=/tmp/tinc
-# HOME=/root
-# PAGER=/bin/more
-# PS1=#
-# NETNAME=
-# LOGNAME=root
-# NAME=camel
-# TERM=vt100
-# PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin
-# DMALLOC_OPTIONS=debug=0x34f47d83,inter=100,log=logfile
-# HISTSIZE=1000
-# SHELL=/bin/sh
-# INTERFACE=tun0
-# PWD=/tmp/tinc/tnet
-# EDITOR=/bin/vi
-# DEVICE=/dev/net/tun
-# 
-]]--
-
 
 --
 -- This script is called by tincd when various things happen during the
@@ -53,16 +26,6 @@
 --
 
 dofile("/netcamel/lib/lib.lua")
-
---
--- We need to access the database for resolvers and routes
---
---runtime = require("runtime")
-
---
--- Needed for split
---
---require("utils")
 
 --
 -- Pull out the relevent bits from the environment
