@@ -41,11 +41,7 @@ function get_path() return { mp = __path_mp, kp = __path_kp } end
 --
 -- Set the status (and colour) of a token
 --
-local FAIL = 0
-local OK = 1
-local PARTIAL = 2
-local WEIRD = 3
-local status_color = { [OK] = "green", [PARTIAL] = "yellow", [FAIL] = "red", [WEIRD] = "blue" }
+local status_color = { [OK] = "green", [PARTIAL] = "yellow", [FAIL] = "red" }
 
 function set_status(token, status, err)
 	if token.status ~= status then

@@ -23,9 +23,6 @@
 --VALIDATOR = {}		-- validator by type
 TYPEOPTS = {}		-- options by type
 OPTIONS = {}		-- options by name
-FAIL=0
-OK=1
-PARTIAL=2
 
 --
 -- Remove all elements that start with the prefix and return them in a list, if

@@ -76,11 +76,14 @@ local function posixloader(v, name)
 	return i
 end
 
-
-
 lib = {}
 setmetatable(lib, { __index = loader } )
 
 posix = { __base = "posix" }
 setmetatable(posix, { __index = posixloader } )
+
+--
+-- Load in the constants
+--
+_ = lib.const
 
