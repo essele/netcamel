@@ -780,6 +780,16 @@ function rename(config, kp, new)
 	-- First make sure new doesn't exist
 	if node_exists(newkp, config) then return false, "node ["..new.."] already exists." end
 
+	-- If we are a value then rename the single item
+	local mp = find_master_key(kp)
+	if master[mp]["type"] then
+		undo.add[kp] = config[kp]
+		undo.delete[newkp] = 1
+		config[newkp] = config[kp]
+		config[kp] = nil
+		return true, undo
+	end
+
 	-- Now process the config
 	kp = kp .. "/"
 	newkp = newkp .. "/"
@@ -815,4 +825,6 @@ return {
 	undo = undo,
 	show = show,
 	set = set,
+	delete = delete,
+	rename = rename,
 }	

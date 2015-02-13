@@ -89,8 +89,8 @@ CMDS["show"] = {
 	}
 }
 CMDS["show"].func = function(cmd, cmdline, tokens)
-    local kp = (tokens[2] and tokens[2].kp) or __path_kp
-    lib.config.show(CF_current, CF_new, kp)
+	 local kp = (tokens[2] and tokens[2].kp) or __path_kp
+	 lib.config.show(CF_current, CF_new, kp)
 end
 
 -- ------------------------------------------------------------------------------
@@ -133,4 +133,54 @@ CMDS["set"].func = function(cmd, cmdline, tokens)
 	__undo = err
 	__undo.cmd = cmdline
 end
+
+-- ------------------------------------------------------------------------------
+-- DELETE COMMAND
+-- ------------------------------------------------------------------------------
+CMDS["delete"] = {
+	desc = "delete sections or items from the configuration",
+	usage = "delete <config_path> [<list value>]",
+	argc = { min = 1, max = 2 },
+	args = {
+		{ validator = rlv_cfpath, opts = { use_master=1, use_new=1, allow_value=1, allow_container=1 }},
+		{ validator = rlv_cfvalue, all = 1, opts = { only_if_list = 1 }},
+	}
+}
+CMDS["delete"].func = function(cmd, cmdline, tokens)
+	 local kp = tokens[2].kp
+	 local list_elem = tokens[3] and tokens[3].value
+
+	 local rc, err = lib.config.delete(CF_new, kp, list_elem)
+	 if not rc then
+		  print("error: " .. tostring(err))
+		  return
+	 end
+	 print(string.format("delete: removed %s configuration item%s.", rc, (rc > 1 and "s") or ""))
+	 __undo = err
+	 __undo.cmd = cmdline
+end
+
+------------------------------------------------------------------------------
+-- RENAME COMMAND (for wildcards)
+-- ------------------------------------------------------------------------------
+CMDS["rename"] = {
+	desc = "rename a (wildcard) node in the config",
+	usage = "rename <cfg_path> <new_node>",
+	argc = { min = 2, max = 2 },
+	args = {
+		{ validator = rlv_cfpath, opts = { use_new=1, must_be_wildcard=1, gap=1 }},
+		{ validator = rlv_cfvalue },
+	}
+}
+CMDS["rename"].func = function(cmd, cmdline, tokens)
+	local rc, err = lib.config.rename(CF_new, tokens[2].kp, tokens[3].value)
+	if not rc then
+		print("error: " .. tostring(err))
+		return
+	end
+	print("rename: done.")
+	__undo = err
+	__undo.cmd = cmdline
+end
+
 
