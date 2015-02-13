@@ -267,7 +267,7 @@ function rlv_cfvalue(token, opts)
 	if t:sub(1,5) == "file/" then
 		rlv_cffilevalue(token, opts)
 	else
-		set_status(token, VALIDATOR[t](token.value, cftoken.mp, cftoken.kp))
+		set_status(token, VALIDATOR[t](token.value, cftoken.mp, cftoken.kp, token))
 	end
 end
 
@@ -617,6 +617,10 @@ return {
 	interactive = interactive,
 	set_path = set_path,
 	get_path = get_path,
+	set_status = set_status,
+	FAIL = FAIL,
+	PARTIAL = PARTIAL,
+	OK = OK,
 }
 
 

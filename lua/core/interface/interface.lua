@@ -209,6 +209,7 @@ OPTIONS["all_interfaces"] = function(kp, mp)
 end
 
 VALIDATOR["route"] = lib.route.validate
+VALIDATOR["route"] = lib.route.rlv
 
 --
 -- Master interface node...

@@ -90,8 +90,64 @@ local function validate(v, mp, kp)
 	--
 end
 
+--
+-- A custom readline validator for the route spec
+--
+local function rlv(v, mp, kp, token)
+	local elem
+	lib.readline.reset_state(token)
+
+	-- first check the destination (allowing default as well)
+	elem = lib.readline.get_token(token, "%s")
+	if not elem.samevalue then
+		local rc, err = partial_match(elem.value, {"default"})
+		if rc == FAIL then rc, err = VALIDATOR["ipv4_nm"](elem.value, mp, kp) end
+		lib.cmdline.set_status(elem, rc, err)
+		if rc ~= OK then goto done end
+	end
+
+	-- now loop through all the arg/value pairs
+	while true do
+		-- arg
+		elem = lib.readline.get_token(token, "%s")
+		if not elem then break end
+		if not elem.samevalue then
+			lib.cmdline.set_status(elem, partial_match(elem.value, {"gw", "dev", "pri", "table"}))
+			if elem.status ~= OK then break end
+		end
+		local arg = elem.value
+		-- value
+		elem = lib.readline.get_token(token, "%s")
+		if not elem then break end
+		if not elem.samevalue then
+			if arg == "gw" then rc, err = VALIDATOR["ipv4"](elem.value, mp, kp)
+			elseif arg == "dev" then rc, err = VALIDATOR["any_interface"](elem.value, mp, kp)
+			elseif arg == "pri" then rc = OK
+			elseif arg == "table" then rc = OK
+			else rc, err = FAIL, "unknown route argument" end
+			
+			lib.cmdline.set_status(elem, rc, err)
+			if elem.status ~= OK then break end
+		end
+	end	
+
+::done::
+	-- if we have other stuff, mark it FAIL
+	elem = lib.readline.get_token(token)
+	if elem then set_status(elem, FAIL) end
+
+	-- find the last token, check for PARTIAL at end, then propogate status, mp and kp
+	elem = token.tokens[#token.tokens]
+	if elem.status == PARTIAL and not token.final then set_status(elem, FAIL) end
+	if elem.status == OK then token.mp, token.kp = elem.mp, elem.kp end
+	set_status(token, elem.status, elem.status ~= OK and "invalid route specification")
+end
+
+
+
 return {
 	parse = parse,
 	var = var,
 	validate = validate,
+	rlv = rlv,
 }
