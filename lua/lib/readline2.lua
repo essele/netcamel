@@ -185,8 +185,12 @@ local function display_line(prompt, state, force)
 
 	if prompt.show or force then
 		lib.term.move_to_pos(0)
-		lib.term.set_color("bright blue")
-		lib.term.output(prompt.value)
+		for _,e in ipairs(prompt) do
+			lib.term.set_color(e.color)
+			lib.term.output(e.text)
+		end
+--		lib.term.set_color("bright blue")
+--		lib.term.output(prompt.value)
 	end
 
 	token_output(state.tokens, 0, force)
