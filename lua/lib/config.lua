@@ -827,4 +827,5 @@ return {
 	set = set,
 	delete = delete,
 	rename = rename,
+	revert = revert,
 }	

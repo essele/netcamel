@@ -77,7 +77,7 @@ end
 -- ------------------------------------------------------------------------------
 CMDS["show"] = {
 	desc = "display configuration",
-	usage = "show [<config_path>]",
+	usage = "show [<cfg_path>]",
 	flags = {
 		["help"] = { 1,2,3 },
 		["fast"] = { 3, 4, 5 },
@@ -89,7 +89,7 @@ CMDS["show"] = {
 	}
 }
 CMDS["show"].func = function(cmd, cmdline, tokens)
-	 local kp = (tokens[2] and tokens[2].kp) or __path_kp
+	 local kp = (tokens[2] and tokens[2].kp) or lib.cmdline2.get_path().kp
 	 lib.config.show(CF_current, CF_new, kp)
 end
 
@@ -98,7 +98,7 @@ end
 -- ------------------------------------------------------------------------------
 CMDS["set"] = {
 	desc = "set configuration values",
-	usage = "set <config_path> <value>",
+	usage = "set <cfg_path> <value>",
 	argc = { min = 2, max = 2 },
 	args = {
 		{ validator = rlv_cfpath, opts = { allow_value = 1, use_master = 1, use_new = 1, gap = 1 }},
@@ -139,7 +139,7 @@ end
 -- ------------------------------------------------------------------------------
 CMDS["delete"] = {
 	desc = "delete sections or items from the configuration",
-	usage = "delete <config_path> [<list value>]",
+	usage = "delete <cfg_path> [<list value>]",
 	argc = { min = 1, max = 2 },
 	args = {
 		{ validator = rlv_cfpath, opts = { use_master=1, use_new=1, allow_value=1, allow_container=1 }},
@@ -160,9 +160,9 @@ CMDS["delete"].func = function(cmd, cmdline, tokens)
 	 __undo.cmd = cmdline
 end
 
-------------------------------------------------------------------------------
+-- ----------------------------------------------------------------------------
 -- RENAME COMMAND (for wildcards)
--- ------------------------------------------------------------------------------
+-- ----------------------------------------------------------------------------
 CMDS["rename"] = {
 	desc = "rename a (wildcard) node in the config",
 	usage = "rename <cfg_path> <new_node>",
@@ -182,5 +182,83 @@ CMDS["rename"].func = function(cmd, cmdline, tokens)
 	__undo = err
 	__undo.cmd = cmdline
 end
+
+-- ----------------------------------------------------------------------------
+-- REVERT COMMAND
+-- ----------------------------------------------------------------------------
+CMDS["revert"] = {
+	desc = "revert part of the new config back to current settings",
+	usage = "revert <cfg_path>",
+	argc = { min = 1, max = 1 },
+	args = {
+		{ validator = rlv_cfpath, opts = { use_master=1, use_new=1, allow_value=1, allow_container=1 }}
+	}
+}
+CMDS["revert"].func = function(cmd, cmdline, tokens)
+	local rc, err = lib.config.revert(CF_new, tokens[2].kp)
+	if not rc then
+		print("error: " .. tostring(err))
+		return
+	end
+	print(string.format("revert: considered %s configuration item%s.", rc, (rc > 1 and "s") or ""))
+	__undo = err
+	__undo.cmd = cmdline
+end
+
+-- ----------------------------------------------------------------------------
+-- COMMIT COMMAND
+-- ----------------------------------------------------------------------------
+CMDS["commit"] = {
+	desc = "make the new configuration active",
+	usage = "commit",
+	argc = { min = 0, max = 0 },
+	args = {}
+}
+CMDS["commit"].func = function(cmd, cmdline, tokens)
+	local rc, err = commit(CF_current, CF_new)
+	if not rc then
+		print("error: " .. err)
+		return
+	else
+		CF_current = copy(CF_new)
+	end
+	__undo = nil
+end
+
+-- ----------------------------------------------------------------------------
+-- SAVE COMMAND
+-- ----------------------------------------------------------------------------
+CMDS["save"] = {
+	desc = "save the currently active configuration so its applied at boot time",
+	usage = "save",
+	argc = { min = 0, max = 0 },
+	args = {}
+}
+CMDS["save"].func = function(cmd, cmdline, tokens)
+	local rc, err = save(CF_current)
+	if not rc then
+		print("error: " .. err)
+		return
+	end
+	__undo = nil
+end
+
+-- ----------------------------------------------------------------------------
+-- CD COMMAND
+-- ----------------------------------------------------------------------------
+CMDS["cd"] = {
+	desc = "change to a particular area of config",
+	usage = "cd <cfg_path>",
+	argc = { min = 1, max = 1 },
+	args = {
+		{ validator = rlv_cfpath, opts = { use_master=1, use_new=1, allow_container=1 }}
+	}
+}
+CMDS["cd"].func = function(cmd, cmdline, tokens)
+	lib.cmdline2.set_path(tokens[2].mp, tokens[2].kp)
+--	__prompt = setprompt(__path_kp)
+
+end
+
 
 
