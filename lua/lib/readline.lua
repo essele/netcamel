@@ -238,10 +238,10 @@ local function read_command(prompt, history, syntax_cb, complete_cb)
 		-- Process input
 		--
 		local x = lib.term.read()
-		if x == "q" then state = nil break end
-
 		if x == "BACKSPACE" then if pos > 0 then line = string_remove(line, pos, 1) chg = true pos = pos - 1 end
-		elseif x == "DELETE" then if pos < #line+1 then line = string_remove(line, pos+1, 1) chg = true end
+		elseif x == "DELETE" or x == "EOF" then 
+			if pos < #line then line = string_remove(line, pos+1, 1) chg = true 
+			elseif x == "EOF" and line == "" then state = nil print() break end
 		elseif x == "LEFT" then if pos > 0 then pos = pos - 1 end
 		elseif x == "RIGHT" then if pos < #line then pos = pos + 1 end
 		elseif x == "UP" or x == "DOWN" then

@@ -20,7 +20,7 @@
 -- TEST CODE ONLY
 --
 function completeCB(tokens, line, pos)
-	local toks = { lib.readline2.which_token2(tokens, pos) }
+	local toks = { lib.readline.which_token2(tokens, pos) }
 	local ptoken = toks[#toks]
 
 --	print("PTOKEN: "..tostring(ptoken))
@@ -291,8 +291,8 @@ function rlv_cfpath(token, opts)
 	if token.value:sub(1,1) == "/" then mp, kp = "/", "/" end
 
 	-- run through each subtoken
-	lib.readline2.reset_state(token)
-	local elem = lib.readline2.get_token(token, "/")
+	lib.readline.reset_state(token)
+	local elem = lib.readline.get_token(token, "/")
 	while elem do
 		if elem.nochange and not token.finalchange then goto continue end
 
@@ -348,11 +348,11 @@ function rlv_cfpath(token, opts)
 ::continue::
 		if elem.status ~= OK then break end
 		mp, kp = elem.mp, elem.kp
-		elem = lib.readline2.get_token(token, "/")
+		elem = lib.readline.get_token(token, "/")
 	end
 
 	-- if we have other stuff, mark it FAIL
-	elem = lib.readline2.get_token(token)
+	elem = lib.readline.get_token(token)
 	if elem then set_status(elem, FAIL) end
 
 	-- find the last token, check for PARTIAL at end, then propogate status, mp and kp
@@ -385,10 +385,10 @@ function flag_validator(token, flags)
 	--
 	-- We have changed, so split the token, into two
 	--
-	lib.readline2.reset_state(token)
-	local flag = lib.readline2.get_token(token, "=")
+	lib.readline.reset_state(token)
+	local flag = lib.readline.get_token(token, "=")
 	print("flag="..tostring(flag).." p.toks="..tostring(token.tokens))
-	local val = lib.readline2.get_token(token)
+	local val = lib.readline.get_token(token)
 
 	--
 	-- Process the flag...
@@ -465,7 +465,7 @@ end
 -- TEST CODE ONLY
 --
 function processCB(state) 
-	local token = lib.readline2.get_token(state, "%s")
+	local token = lib.readline.get_token(state, "%s")
 	local cmd = CMDS[token.value]
 	local argn = 0
 
@@ -486,8 +486,8 @@ function processCB(state)
 	--
 	-- First handle flags (if present)
 	--
-	if cmd.flags and lib.readline2.peek_char(state) == "-" then
-		token = lib.readline2.get_token(state, "%s")
+	if cmd.flags and lib.readline.peek_char(state) == "-" then
+		token = lib.readline.get_token(state, "%s")
 		flag_validator(token, cmd.flags)
 		print("tv=["..token.value.."] status="..token.status)
 		if token.status ~= OK then goto restfail end
@@ -497,7 +497,7 @@ function processCB(state)
 	-- Process all the remaining tokens
 	--
 	for _, arg in ipairs(cmd.args) do
-		token = lib.readline2.get_token(state, (not arg.all and "%s") or nil)
+		token = lib.readline.get_token(state, (not arg.all and "%s") or nil)
 		if not token then break end
 	
 		arg.validator(token, arg.opts)
@@ -509,8 +509,8 @@ function processCB(state)
 	--
 	-- If there is any more stuff (other than empty stuff) then it's wrong
 	--
-	if lib.readline2.peek_char(state) ~= "" then
-		local rest = lib.readline2.get_token(state)
+	if lib.readline.peek_char(state) ~= "" then
+		local rest = lib.readline.get_token(state)
 		set_status(rest, FAIL)
 	end
 
@@ -570,7 +570,7 @@ local function interactive()
 	-- Interact!
 	while true do
 		local prompt = build_prompt()
-		local state = lib.readline2.read_command(prompt, history, processCB, completeCB)
+		local state = lib.readline.read_command(prompt, history, processCB, completeCB)
 		local tokens = state and state.tokens
 	
 		if not tokens then break end

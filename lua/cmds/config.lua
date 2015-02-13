@@ -89,7 +89,7 @@ CMDS["show"] = {
 	}
 }
 CMDS["show"].func = function(cmd, cmdline, tokens)
-	 local kp = (tokens[2] and tokens[2].kp) or lib.cmdline2.get_path().kp
+	 local kp = (tokens[2] and tokens[2].kp) or lib.cmdline.get_path().kp
 	 lib.config.show(CF_current, CF_new, kp)
 end
 
@@ -255,7 +255,7 @@ CMDS["cd"] = {
 	}
 }
 CMDS["cd"].func = function(cmd, cmdline, tokens)
-	lib.cmdline2.set_path(tokens[2].mp, tokens[2].kp)
+	lib.cmdline.set_path(tokens[2].mp, tokens[2].kp)
 --	__prompt = setprompt(__path_kp)
 
 end
