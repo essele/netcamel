@@ -24,15 +24,8 @@ package.path = "./lib/?.lua;" .. package.path
 --
 dofile("lib/lib.lua")
 
---
--- Important globals for configuration
---
-VALIDATOR = {}
-
--- global level packages
---require("utils")
 require("config")
-require("validators")
+--require("validators")
 
 local ffi 		= require("ffi")
 

@@ -17,12 +17,6 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
---require("log")
-
---require("route")
---local runtime = require("runtime")
---local service = require("service")
-
 local PPPD="/usr/sbin/pppd"
 
 
@@ -228,20 +222,6 @@ local function pppoe_commit(changes)
 
 	return true
 end
-
---
---
---
-VALIDATOR["pppoe_if"] = interface_validate_number_and_alpha
-
---[[
-VALIDATOR["pppoe_if"] = function(v, mp, kp)
-	local err = "interface numbers should be [nnn] only"
-	if v:len() == 0 then return PARTIAL end
-	if v:match("^%d+$") then return OK end
-	return FAIL, err
-end
-]]--
 
 --
 -- pppoe interfaces...

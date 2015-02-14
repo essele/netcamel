@@ -202,10 +202,37 @@ function cfpath_completer(token, ptoken)
 end
 
 --
+-- Compeleter for a file based value we can't use a standard completer since
+-- we keep the whole path in a single token
+--
+function rlc_cffilevalue(token, ptoken)
+	local matches = lib.utils.prefixmatches(token.options, token.basename)
+	for k,v in pairs(matches) do print("k="..k.." v="..tostring(v)) end
+	
+	local m1 = next(matches)
+	if not m1 then return nil end
+	local m2 = next(matches, m1)
+
+	-- single match ... add / if needed
+	if not m2 then
+		local match = m1:sub(#token.basename+1)
+		if matches[m1] == 2 then match = match .. "/" end
+		return match
+	end
+
+	-- multiple, so handle common prefix
+	local cp = lib.utils.common_prefix(matches)
+	if cp ~= token.basename then return cp:sub(#token.basename+1) end
+	return lib.utils.sorted_keys(lib.utils.prefixmatches(token.options, token.basename))
+end
+
+--
 -- Validator for a file based value
 --
 function rlv_cffilevalue(token, opts)
 	local value = token.value
+
+	token.completer = rlc_cffilevalue
 	
 	--
 	-- Handle + and -
@@ -229,8 +256,8 @@ function rlv_cffilevalue(token, opts)
 		token.options = {}
 		for _,file in ipairs(posix.dirent.dir(dirname)) do
 			local stat = posix.sys.stat.stat(dirname.."/"..file)
-			if posix.sys.stat.S_ISREG(stat.st_mode) then token.options[file] = 1
-			elseif posix.sys.stat.S_ISDIR(stat.st_mode) then token.options[file] = 2 end
+			if posix.sys.stat.S_ISREG(stat.st_mode) ~= 0 then token.options[file] = 1
+			elseif posix.sys.stat.S_ISDIR(stat.st_mode) ~= 0 then token.options[file] = 2 end
 		end
 	end
 

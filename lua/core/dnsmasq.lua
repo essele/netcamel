@@ -232,12 +232,12 @@ local function dnsmasq_precommit(changes)
 	return true
 end
 
-
-VALIDATOR["text_label"] = function(v, mp, kp)
+lib.types.DB["text_label"] = {}
+lib.types.DB["text_label"].validate = function(value, mp, kp, token, t)
 	return OK
 end
-
-VALIDATOR["ipset"] = function(v, mp, kp)
+lib.types.DB["ipset"] = {}
+lib.types.DB["ipset"].validate = function(value, mp, kp, token, t)
 	return OK
 end
 

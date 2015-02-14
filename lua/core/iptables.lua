@@ -378,39 +378,26 @@ local function ipt_precommit(changes)
 	return ipt_rebuild(true)
 end
 
+lib.types.DB["iptables_table"] = {}
+lib.types.DB["iptables_table"].validator = lib.types.validate_std
+lib.types.DB["iptables_table"].options = { ["filter"] = 1, ["mangle"] = 1, ["nat"] = 1, ["raw"] = 1 }
 
-VALIDATOR["iptables_table"] = function(v, mp, kp)
-	local valid = { ["filter"] = 1, ["mangle"] = 1, ["nat"] = 1, ["raw"] = 1 }
+lib.types.DB["iptables_policy"] = {}
+lib.types.DB["iptables_policy"].validator = lib.types.validate_std
+lib.types.DB["iptables_policy"].options = { ["accept"] = 1, ["drop"] = 1 }
 
-	if valid[v] then return OK end
-	for k,_ in pairs(valid) do
-		if k:sub(1, #v) == v then return PARTIAL, "invalid table name" end
-	end
-	return FAIL, "invalid table name"
-end
-VALIDATOR["iptables_policy"] = function(v, mp, kp)
-	local valid = { ["accept"] = 1, ["drop"] = 1 }
-
-	if valid[v] then return OK end
-	for k,_ in pairs(valid) do
-		if k:sub(1, #v) == v then return PARTIAL, "invalid policy" end
-	end
-	return FAIL, "invalid policy"
-end	
-
-VALIDATOR["iptables_chain"] = function(v, mp, kp)
-	print("Validating chain ("..v..") for keypath ("..kp..")")
-	if v:len() < 1 then return PARTIAL end
+lib.types.DB["iptables_chain"] = {}
+lib.types.DB["iptables_chain"].validator = function(value, mp, kp, token, t)
 	return OK
 end
 
-VALIDATOR["iptables_rule"] = function(v, mp, kp)
-	print("Validating rule ("..v..") for keypath ("..kp..")")
-	if v:len() < 1 then return PARTIAL end
+lib.types.DB["iptables_rule"] = {}
+lib.types.DB["iptables_rule"].validator = function(value, mp, kp, token, t)
 	return OK
 end
 
-VALIDATOR["OK"] = function(v, mp, kp)
+lib.types.DB["OK"] = {}
+lib.types.DB["OK"].validator = function(value, mp, kp, token, t)
 	return OK
 end
 

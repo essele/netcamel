@@ -17,10 +17,6 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
 
---require("log")
---local runtime = require("runtime")
---local service = require("service")
-
 local DHCPC="/sbin/udhcpc"
 local DHCP_SCRIPT="/netcamel/scripts/dhcp.script"
 
@@ -220,25 +216,6 @@ local function ethernet_commit(changes)
 	end	
 
 	return true
-end
-
---
--- For ethernet interfaces we expect a simple number, but it needs
--- to map to a real interface (or be a virtual)
---
-
-VALIDATOR["ethernet_if"] = function(v, mp, kp)
-	return interface_validate_number(v, mp, kp)
-end
-
---
--- Where we expect an ethernet interface name...
---
-VALIDATOR["eth_interface"] = function(v, mp, kp)
-	return interface_validator(v, {"ethernet"})
-end
-OPTIONS["eth_interfaces"] = function(kp, mp)
-	return options_from_interfaces({"ethernet"})
 end
 
 --

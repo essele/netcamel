@@ -31,12 +31,14 @@ local function system_commit(changes)
 	return true
 end
 
-
-
-VALIDATOR["hostname"] = function(v, mp, kp)
-	if v:match("^%-") then return FAIL, "hostnames cannot start with hyphen" end
-	if v:match("%-$") then return FAIL, "hostnames cannot end with hyphen" end
-	if v:match("^[%w%-]+$") then return OK end
+--
+-- Setup the hostname type
+--
+lib.types.DB["hostname"] = {}
+lib.types.DB["hostname"].validator = function(value, mp, kp, token, t)
+	if value:match("^%-") then return FAIL, "hostnames cannot start with hyphen" end
+	if value:match("%-$") then return FAIL, "hostnames cannot end with hyphen" end
+	if value:match("^[%w%-]+$") then return OK end
 	return FAIL, "hostnames must only be letters, numbers and hyphen"
 end
 

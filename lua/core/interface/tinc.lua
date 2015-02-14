@@ -189,11 +189,6 @@ local function tinc_commit(changes)
 end
 
 --
---
---
-VALIDATOR["tinc_if"] = interface_validate_number_and_alpha
-
---
 -- If we set the key-generate item then we will actually generate the private keys
 --
 local function action_key_generate(v, mp, kp)

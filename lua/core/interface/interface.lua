@@ -16,7 +16,6 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------------
---require("utils")
 
 --
 -- A master list of interface types, used for validation and name mapping
@@ -84,22 +83,6 @@ lib.types.DB["mtu"].options = function()
 		(this is not required in most situations)
 	]] }
 	return rc
-end
-
---
--- The MTU needs to be a sensible number
---
-VALIDATOR["mtu"] = function(v, mp, kp)
-	--
-	-- TODO: check the proper range of MTU numbers, may need to support
-	--	   jumbo frames
-	--
-	if not v:match("^%d+$") then return FAIL, "mtu must be numeric only" end
-	local mtu = tonumber(v)
-
-	if mtu < 100 then return PARTIAL, "mtu must be above 100" end
-	if mtu > 1500 then return FAIL, "mtu must be 1500 or less" end
-	return OK
 end
 
 --
@@ -181,8 +164,6 @@ function interface_validator(v, mp, kp, class)
 				local wc = v:sub(path:len()+2)
 				local mp = entry.path .. "/*"
 				return lib.types.validate(wc, mp, kp)
---				local iftype = master[mp]["style"]
---				return VALIDATOR[iftype](wc, mp, kp)
 			end
 		
 			-- Are we a partial
@@ -201,7 +182,6 @@ local function options_from_interfaces(class)
 	for path,entry in pairs(INTERFACE_TYPE_LIST) do
 		if entry.classes[class] then
 			for _,node in ipairs(node_list(entry.path, CF_new)) do
---				table.insert(rc, path.."/"..node:gsub("^%*", ""))
 				rc[path.."/"..node:gsub("^%*", "")] = 1
 			end
 		end
@@ -236,25 +216,10 @@ end
 -- ------------------------------------------------------------------------------
 -- Support an "any_interface" type where the value should match one of our
 -- interface definitions
---
--- TODO: how to handle existing vs potential
 -- ------------------------------------------------------------------------------
 lib.types.DB["any_interface"] = {}
 lib.types.DB["any_interface"].validator = lib.types.validate_std
 lib.types.DB["any_interface"].options = function(mp) return options_from_interfaces("all") end
-
---
--- Where we expect an interface name...
---
-VALIDATOR["any_interface"] = function(v, mp, kp)
-	return interface_validator(v, mp, kp, "all")
-end
-OPTIONS["all_interfaces"] = function(kp, mp)
-	return options_from_interfaces("all")
-end
-
-VALIDATOR["route"] = lib.route.validate
-VALIDATOR["route"] = lib.route.rlv
 
 --
 -- Master interface node...

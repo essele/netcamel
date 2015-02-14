@@ -18,13 +18,6 @@
 ------------------------------------------------------------------------------
 
 --
--- Globals for the validation routines
---
---VALIDATOR = {}		-- validator by type
-TYPEOPTS = {}		-- options by type
-OPTIONS = {}		-- options by name
-
---
 -- Remove all elements that start with the prefix and return them in a list, if
 -- the prefix ends with a * then we leave it alone, otherwise we add a slash to
 -- ensure a correct match.
@@ -669,7 +662,6 @@ function set(config, kp, value)
 
 	if master[mp]["type"] then
 		local rc, newval = lib.types.validate(value, mp, kp)
---		local rc, newval = VALIDATOR[master[mp]["type"]](value, mp, kp)
 		if not rc then return false, newval end
 		if type(newval) ~= "nil" then value = newval end
 	else
