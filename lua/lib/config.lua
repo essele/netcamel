@@ -668,7 +668,8 @@ function set(config, kp, value)
 	local mp = find_master_key(kp)
 
 	if master[mp]["type"] then
-		local rc, newval = VALIDATOR[master[mp]["type"]](value, mp, kp)
+		local rc, newval = lib.types.validate(value, mp, kp)
+--		local rc, newval = VALIDATOR[master[mp]["type"]](value, mp, kp)
 		if not rc then return false, newval end
 		if type(newval) ~= "nil" then value = newval end
 	else

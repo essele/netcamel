@@ -32,8 +32,13 @@ FAIL = 0
 OK = 1
 PARTIAL = 2
 
-
-
+--
+-- Unindent any inline text, this is just so we can make the code look better
+--
+function TEXT(t)
+	local indent = t:match("^(%s*)")
+	return t:gsub("^"..indent, ""):gsub("\n"..indent, "\n")
+end
 
 
 return 1

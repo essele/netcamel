@@ -244,12 +244,29 @@ function rlv_cffilevalue(token, opts)
 end
 
 --
+-- Completer for a value
+--
+function rlc_cfvalue(token, ptoken)
+	if not token.options then return end
+
+	-- if we have textual options then its really help
+	if token.options.text then return token.options end
+
+	local comp, value, match = standard_completer(token, token.options)
+	if type(comp) == "table" then return lib.utils.keys_to_values(comp) end
+	return comp
+end
+
+
+--
 -- Validator for a cfvalue, passes the error (if there is one) back into
 -- the token using set_status
 --
 --
 function rlv_cfvalue(token, opts)
 	if token.samevalue and not token.finalchange then return end
+
+	token.completer = rlc_cfvalue
 
 	local cfindex = (opts and opts.path and opts.path+1) or token.n-1
 	local cftoken = token.parent.tokens[cfindex]
@@ -263,7 +280,7 @@ function rlv_cfvalue(token, opts)
 	if t:sub(1,5) == "file/" then
 		rlv_cffilevalue(token, opts)
 	else
-		set_status(token, VALIDATOR[t](token.value, cftoken.mp, cftoken.kp, token))
+		set_status(token, lib.types.validate(token.value, cftoken.mp, cftoken.kp, token))
 	end
 end
 
@@ -330,7 +347,7 @@ function rlv_cfpath(token, opts)
 		if opts.use_master and master[lib.config.append_token(mp, "*")] then
 			mp = lib.config.append_token(mp, "*")
 			kp = lib.config.append_token(kp, "*"..value)
-			local rc, err = VALIDATOR[master[mp].style](value, mp, kp)
+			local rc, err = lib.types.validate(value, mp, kp)
 			if rc ~= FAIL then
 				elem.mp, elem.kp = mp, kp
 				set_status(elem, rc)

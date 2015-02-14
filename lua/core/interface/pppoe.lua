@@ -229,7 +229,6 @@ local function pppoe_commit(changes)
 	return true
 end
 
-
 --
 --
 --
@@ -274,6 +273,7 @@ function interface_pppoe_init()
 	interface_register({ module = "pppoe", path = "/interface/pppoe", 
 						if_numeric = "pppoe%", if_alpha = "%", 
 						classes = { "all", "ppp" }})
+
 	--
 	-- Trigger the pppoe work if the underlying ethernet changes
 	--

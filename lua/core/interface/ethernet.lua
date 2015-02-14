@@ -163,11 +163,11 @@ local function ethernet_commit(changes)
 			end
 			if not cf.disabled then
 				local vars = {
-					["no-defaultroute"]     = cf["no-defaultroute"],
-					["no-resolv"]           = cf["no-resolv"],
-					["resolver-pri"]        = 80,
-					["defaultroute-pri"]    = 80,
-					["route"]               = cf.route and lib.route.var(cf.route, physical),
+					["no-defaultroute"]	 = cf["no-defaultroute"],
+					["no-resolv"]		   = cf["no-resolv"],
+					["resolver-pri"]		= 80,
+					["defaultroute-pri"]	= 80,
+					["route"]			   = cf.route and lib.route.var(cf.route, physical),
 				}
 				lib.runtime.interface_up(physical, cf.resolver or {}, nil, vars)
 			end
@@ -208,11 +208,11 @@ local function ethernet_commit(changes)
 				end
 
 				local vars = {
-					["no-defaultroute"]     = cf["no-defaultroute"],
-					["no-resolv"]           = cf["no-resolv"],
-					["resolver-pri"]        = 80,
-					["defaultroute-pri"]    = 80,
-					["route"]               = cf.route and lib.route.var(cf.route, physical),
+					["no-defaultroute"]	 = cf["no-defaultroute"],
+					["no-resolv"]		   = cf["no-resolv"],
+					["resolver-pri"]		= 80,
+					["defaultroute-pri"]	= 80,
+					["route"]			   = cf.route and lib.route.var(cf.route, physical),
 				}
 				lib.runtime.interface_up(physical, cf.resolver or {}, nil, vars)
 			end
@@ -226,6 +226,7 @@ end
 -- For ethernet interfaces we expect a simple number, but it needs
 -- to map to a real interface (or be a virtual)
 --
+
 VALIDATOR["ethernet_if"] = function(v, mp, kp)
 	return interface_validate_number(v, mp, kp)
 end
@@ -272,12 +273,9 @@ function interface_ethernet_init()
 	-- Tell the interface module we are here, we don't support alpha names, so only
 	-- numeric (matching the validator)
 	--
---	interface_register("ethernet", "/interface/ethernet", "eth%", nil, { "all", "ethernet" } )
-
 	interface_register({ module = "ethernet", path = "/interface/ethernet",
 						if_numeric = "eth%", if_alpha = nil,
 						classes = { "all", "ethernet" } })
-
 end
 
 return {

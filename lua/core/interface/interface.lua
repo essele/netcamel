@@ -37,21 +37,54 @@ local INTERFACE_TYPE_LIST = {}
 -- if_alpha		-- the physical if name (for alpha matches)
 -- classes		-- a list of type matches (will be turned to keys)
 --
---function interface_register(path, fullpath, phys_num, phys_alpha, types)
 function interface_register(details)
 	details.classes = lib.utils.values_to_keys(details.classes)
 	INTERFACE_TYPE_LIST[details.module] = details
 
---[[
-	INTERFACE_TYPE_LIST[path] = {
-		fullpath = fullpath,
-		phys_num = phys_num,
-		phys_alpha = phys_alpha,
-		types = values_to_keys(types or {}),
-	}
-]]--
+	--
+	-- Work out how to validate the interface name/number
+	--
+	local validator
+	if details.if_alpha and details.if_numeric then validator = interface_validate_number_and_alpha
+	elseif details.if_alpha then validator = interface_validate_alpha
+	else validator = interface_validate_number end
+
+	--
+	-- Create the <module>_if type
+	--
+	lib.types.DB[details.module.."_if"] = {}
+	lib.types.DB[details.module.."_if"].validator = validator
+
+	--
+	-- Create the <module>_interface type
+	--
+	lib.types.DB[details.module.."_interface"] = {}
+	lib.types.DB[details.module.."_interface"].validator = lib.types.validate_std
+	lib.types.DB[details.module.."_interface"].options = function(mp) return options_from_interfaces(details.module) end
 end
 
+-- ------------------------------------------------------------------------------
+-- MTU validator
+--
+-- TODO: jumbo frame support??
+-- ------------------------------------------------------------------------------
+lib.types.DB["mtu"] = {}
+lib.types.DB["mtu"].validator = function(value, mp, kp, token, t)
+	local err = "mtu must be between 100 and 1500"
+	local rc = lib.types.validate_number(value, 100, 1500)
+	return rc, (rc ~= OK and err) or nil
+end
+lib.types.DB["mtu"].options = function()
+	local rc = { text = 1, [1] = TEXT[[
+		mtu - maximum transmission unit for the interface
+
+		typical values:
+			1500 - normal ethernet
+			1492 - pppoe interface
+		(this is not required in most situations)
+	]] }
+	return rc
+end
 
 --
 -- The MTU needs to be a sensible number
@@ -147,8 +180,9 @@ function interface_validator(v, mp, kp, class)
 			if v:sub(1,path:len()+1) == path.."/" then
 				local wc = v:sub(path:len()+2)
 				local mp = entry.path .. "/*"
-				local iftype = master[mp]["style"]
-				return VALIDATOR[iftype](wc, mp, kp)
+				return lib.types.validate(wc, mp, kp)
+--				local iftype = master[mp]["style"]
+--				return VALIDATOR[iftype](wc, mp, kp)
 			end
 		
 			-- Are we a partial
@@ -167,7 +201,8 @@ local function options_from_interfaces(class)
 	for path,entry in pairs(INTERFACE_TYPE_LIST) do
 		if entry.classes[class] then
 			for _,node in ipairs(node_list(entry.path, CF_new)) do
-				table.insert(rc, path.."/"..node:gsub("^%*", ""))
+--				table.insert(rc, path.."/"..node:gsub("^%*", ""))
+				rc[path.."/"..node:gsub("^%*", "")] = 1
 			end
 		end
 	end
@@ -197,6 +232,16 @@ function interface_validate_number_and_alpha(v, mp, kp)
 	if v:match("^%a%w*$") then return OK end
 	return FAIL, err
 end
+
+-- ------------------------------------------------------------------------------
+-- Support an "any_interface" type where the value should match one of our
+-- interface definitions
+--
+-- TODO: how to handle existing vs potential
+-- ------------------------------------------------------------------------------
+lib.types.DB["any_interface"] = {}
+lib.types.DB["any_interface"].validator = lib.types.validate_std
+lib.types.DB["any_interface"].options = function(mp) return options_from_interfaces("all") end
 
 --
 -- Where we expect an interface name...

@@ -299,3 +299,7 @@ function interface_tinc_init()
 						classes = { "all", "vpn" } })
 end
 
+return {
+	init = interface_tinc_init
+}
+
