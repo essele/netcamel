@@ -142,7 +142,7 @@ CMDS["delete"] = {
 	usage = "delete <cfg_path> [<list value>]",
 	argc = { min = 1, max = 2 },
 	args = {
-		{ validator = rlv_cfpath, opts = { use_master=1, use_new=1, allow_value=1, allow_container=1 }},
+		{ validator = rlv_cfpath, opts = { use_new=1, allow_value=1, allow_container=1 }},
 		{ validator = rlv_cfvalue, all = 1, opts = { only_if_list = 1 }},
 	}
 }

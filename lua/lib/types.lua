@@ -43,10 +43,11 @@ local function partial_match(v, list)
 end
 
 --
--- Get the list of suitable options for this type
+-- Get the list of suitable options for this type: use mp to find type
+-- or force it's mp is nil
 --
-local function options(mp)
-	local t = master[mp]["type"] or master[mp]["style"]
+local function options(mp, t)
+	local t = (mp and (master[mp]["type"] or master[mp]["style"])) or t
 	local o = TYPE[t].options
 
 	if type(o) == "function" then return o(mp) end
@@ -57,7 +58,7 @@ end
 -- Used for any type that has a list of options
 --
 local function validate_std(value, mp, kp, token, t)
-	return partial_match(value, token and token.options or options(mp) or {})
+	return partial_match(value, token and token.options or options(mp, t) or {})
 end
 
 --
@@ -70,6 +71,16 @@ local function validate(value, mp, kp, token)
 	assert(TYPE[t].validator, "no validator for type ["..t.."]")
 	return TYPE[t].validator(value, mp, kp, token, t)
 end
+
+--
+-- Allow support for calling specific validators by type, there is no
+-- kp or mp support here, we also won't call options() so you will have to
+-- do that manually if you want them.
+--
+local function validate_type(value, t)
+	return TYPE[t].validator(value, nil, nil, nil, t)
+end
+
 
 --
 -- Generic case for simple positive number range validation
@@ -90,9 +101,9 @@ TYPE["boolean"] = {
 	options = { ["true"]=1, ["false"]=1 },
 }
 TYPE["boolean"].validator = function(value, mp, kp, token, t)
-	if v == "true" or v == "yes" or v == "1" then return OK, true end
-	if v == "false" or v == "no" or v == "0" then return OK, false end
-	return partial_match(value, {"true", "false", "yes", "no"})
+	if value == "true" or value == "yes" or value == "1" then return OK, true end
+	if value == "false" or value == "no" or value == "0" then return OK, false end
+	return partial_match(value, {["true"]=1, ["false"]=1, ["yes"]=1, ["no"]=1})
 end
 
 -- ------------------------------------------------------------------------------
@@ -101,7 +112,7 @@ end
 TYPE["2-digit"] = {}
 TYPE["2-digit"].validator = function(value, mp, kp, token, t)
 	local err = "require two digits (nn)"
-	local a, b = v:match("^(%d)(%d?)$")
+	local a, b = value:match("^(%d)(%d?)$")
 	if not a then return FAIL, err end
 	if b == "" then return PARTIAL, err end
 	return OK
@@ -139,6 +150,12 @@ TYPE["ipv4_nm"].validator = function(value, mp, kp, token, t)
 	if tonumber(n) > 32 then return FAIL, err end
 	return OK
 end
+TYPE["ipv4_nm"].options = { text = 1, [1] = TEXT[[
+		Use a standard ip dotted quad address with a /netmask
+	
+		eg. 192.168.95.1/24 or 10.1.0.5/16
+	]] 
+}
 
 -- ------------------------------------------------------------------------------
 -- ipv4_nm with an optional "default"
@@ -146,7 +163,7 @@ end
 TYPE["ipv4_nm_default"] = {}
 TYPE["ipv4_nm_default"].validator = function(value, mp, kp, token, t)
 	local err = "must be ip address with netmask or 'default'"
-	local rc = partial_match(value, {"default"})
+	local rc = partial_match(value, {["default"]=1})
 	if rc ~= FAIL then return rc, (rc ~= OK and err) or nil end
 	rc = TYPE["ipv4_nm"].validator(value, mp, kp, token, t)
 	return rc, (rc ~= OK and err) or nil
@@ -160,5 +177,7 @@ return {
 	DB = TYPE,
 	validate_number = validate_number,
 	validate_std = validate_std,
+	validate_type = validate_type,
+	partial_match = partial_match,
 }
 

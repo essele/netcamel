@@ -50,85 +50,69 @@ local function var(list, interface)
 end
 
 --
--- TODO: move somewhere else
+-- Completer function for command line input of a route spec
 --
-local function partial_match(v, list)
-	for _,l in ipairs(list) do
-		if v == l then return OK end
-		if l:sub(1,#v) == v then return PARTIAL end
+local function rlc(token, ptoken)
+	if token.options then 
+		local comp, value, match = lib.cmdline.standard_completer(token, token.options)
+		if type(comp) == "table" then return lib.utils.keys_to_values(comp) end
+		if match then return comp .. " " end
+		return comp
 	end
-	return FAIL
-end
-
-
---
--- The validator for a route spec
---
-local function validate(v, mp, kp)
-	local items = lib.utils.split(v, "%s")
-
-	if #items == 0 then return PARTIAL end
-	
-	-- item 1 is a destination (default or ipv4_nm)
-	local i1 = partial_match(items[1], {"default"})
-	if i1 == FAIL then i1 = VALIDATOR["ipv4_nm"](items[1], mp, kp) end
-
-	if i1 == PARTIAL and (#items > 1 or v:sub(-1) == " ") then return FAIL end
-	if i1 == FAIL then return FAIL end
-	if not items[2] then return i1 end
-
-	-- item 2 is a specifier
-	local i2 = partial_match(items[2], {"gw", "dev", "pri", "table"})
-	if i2 == PARTIAL and (#items > 2 or v:sub(-1) == " ") then return FAIL end
-	
-	return i2
-
-
-
-	--
-	-- TODO ... gw, dev, pri or table
-	--
 end
 
 --
 -- A custom readline validator for the route spec
 --
 local function rlv(v, mp, kp, token)
-	local elem
+	local elem, rc, err, arg, pend
+	local opts = { ["gw"]=1, ["dev"]=1, ["pri"]=1, ["table"]=1 }
+
+	-- if we don't have a token then we simulate one
+	if not token then token = { value = v } end
+
+	-- prepare the tokeniser and completer	
 	lib.readline.reset_state(token)
+	token.completer = rlc
 
 	-- first check the destination (allowing default as well)
 	elem = lib.readline.get_token(token, "%s")
 	if not elem.samevalue then
-		local rc, err = partial_match(elem.value, {"default"})
-		if rc == FAIL then rc, err = VALIDATOR["ipv4_nm"](elem.value, mp, kp) end
+		elem.options = { ["default"] = 1 }
+		rc, err = lib.types.validate_type(elem.value, "ipv4_nm_default")
 		lib.cmdline.set_status(elem, rc, err)
-		if rc ~= OK then goto done end
 	end
 
 	-- now loop through all the arg/value pairs
-	while true do
+	while elem.status == OK do
 		-- arg
 		elem = lib.readline.get_token(token, "%s")
 		if not elem then break end
 		if not elem.samevalue then
-			lib.cmdline.set_status(elem, partial_match(elem.value, {"gw", "dev", "pri", "table"}))
-			if elem.status ~= OK then break end
+			elem.options = opts
+			rc, err = lib.types.partial_match(elem.value, elem.options)
+			lib.cmdline.set_status(elem, rc, err)
 		end
-		local arg = elem.value
+		if elem.status ~= OK then break end
+		arg, pend = elem.value, true
 		-- value
 		elem = lib.readline.get_token(token, "%s")
 		if not elem then break end
 		if not elem.samevalue then
-			if arg == "gw" then rc, err = VALIDATOR["ipv4"](elem.value, mp, kp)
-			elseif arg == "dev" then rc, err = VALIDATOR["any_interface"](elem.value, mp, kp)
-			elseif arg == "pri" then rc = OK
-			elseif arg == "table" then rc = OK
+			if arg == "gw" then 
+				elem.options = { ["AUTO"] = 1 }
+				rc, err = lib.types.partial_match(elem.value, elem.options)
+				if rc == FAIL then rc, err = lib.types.validate_type(elem.value, "ipv4") end
+			elseif arg == "dev" then 
+				if not elem.options then elem.options = lib.types.options(nil, "any_interface") end
+				rc, err = lib.types.validate_type(elem.value, "any_interface")
+			elseif arg == "pri" then rc, err = lib.types.validate_type(elem.value, "2-digit")
+			elseif arg == "table" then rc, err = OK, nil
 			else rc, err = FAIL, "unknown route argument" end
 			
 			lib.cmdline.set_status(elem, rc, err)
-			if elem.status ~= OK then break end
 		end
+		pend = false
 	end	
 
 ::done::
@@ -136,18 +120,21 @@ local function rlv(v, mp, kp, token)
 	elem = lib.readline.get_token(token)
 	if elem then set_status(elem, FAIL) end
 
-	-- find the last token, check for PARTIAL at end, then propogate status, mp and kp
+	-- find the last token, check for PARTIAL at end, then return status and err
+	-- since we are a custom validator. Also check for pending args.
 	elem = token.tokens[#token.tokens]
 	if elem.status == PARTIAL and not token.final then set_status(elem, FAIL) end
-	if elem.status == OK then token.mp, token.kp = elem.mp, elem.kp end
-	set_status(token, elem.status, elem.status ~= OK and "invalid route specification")
+	if pend then return FAIL, "invalid route specification" end
+
+	return elem.status, (elem.status ~= OK and "invalid route specification") or nil
 end
 
-
+--
+-- Setup the "route" type
+--
+lib.types.DB["route"] = {}
+lib.types.DB["route"].validator = rlv
 
 return {
-	parse = parse,
 	var = var,
-	validate = validate,
-	rlv = rlv,
 }

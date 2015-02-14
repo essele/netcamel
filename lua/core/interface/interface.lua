@@ -226,6 +226,10 @@ lib.types.DB["any_interface"].options = function(mp) return options_from_interfa
 --
 master["/interface"] = {}
 
+--
+-- Make sure we load lib.route for the validator
+--
+_ = lib.route
 
 --
 -- We use the runtime table for tracking routes, resovlers and rules and then the status

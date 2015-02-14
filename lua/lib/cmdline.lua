@@ -299,8 +299,20 @@ function rlv_cfvalue(token, opts)
 	local cftoken = token.parent.tokens[cfindex]
 	local t = master[cftoken.mp]["type"] or master[cftoken.mp]["style"]
 
-	if opts and opts.only_if_list and not master[cftoken.mp].list then
-		set_status(token, FAIL, "value only for list items")
+	--
+	-- If we are dealing with only_if_list, then we will use the actual values
+	-- since we are probably deleting
+	--
+	if opts and opts.only_if_list then
+		if not master[cftoken.mp].list then
+			set_status(token, FAIL, "value only for list items")
+			return
+		end
+		token.options = lib.utils.values_to_keys(CF_new[cftoken.kp])
+		if token.options[token.value] then set_status(token, OK) return end
+		local m = prefixmatches(token.options, token.value)
+		if next(m) then set_status(token, PARTIAL, "not existing item") return end
+		set_status(token, FAIL, "not existing item")
 		return
 	end
 
@@ -599,6 +611,7 @@ local function interactive()
 
 	-- Read History
 	local history = {}
+	local histchange = false
 	local file = io.open("etc/__history", "r")
 	if file then
 		for h in file:lines() do table.insert(history, h) end
@@ -618,6 +631,7 @@ local function interactive()
 
 		-- update history
 		table.insert(history, state.value)
+		histchange = true
 
 		-- check for valid command
 		local cmd = tokens[1].cmd
@@ -648,7 +662,14 @@ local function interactive()
 ::continue::		
 	end
 
-	-- TODO: Write history (if it's changed)
+	-- Write history (if it's changed)
+	if histchange then
+		local file = io.open("etc/__history", "w+")
+		if file then
+			for _,h in ipairs(history) do file:write(h .. "\n") end
+			file:close()
+		end
+	end
 end
 
 
@@ -658,6 +679,7 @@ return {
 	set_path = set_path,
 	get_path = get_path,
 	set_status = set_status,
+	standard_completer = standard_completer,
 	FAIL = FAIL,
 	PARTIAL = PARTIAL,
 	OK = OK,
