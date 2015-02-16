@@ -50,12 +50,23 @@ local function build_var(base, cf, interface)
 	return rc
 end
 
+lib.types.DB["route-dest"] = {}
+lib.types.DB["route-dest"].validator = lib.types.validator_for_list_or_type({"default"}, "ipv4_nm",
+										"route destinations should be standard ip/netmask or default")
+lib.types.DB["route-dest"].options = { text=1, [1]=TEXT[[
+	Use a standard ipv4 address with a /netmask (eg. 192.168.32.0/24)
+	or use 'default' to use a default route (equivalent to 0.0.0.0/0)
+]] }
+
 lib.types.DB["route-gw"] = {}
-lib.types.DB["route-gw"].validator = lib.types.validator_for_list_or_type({"fred", "joe", "bill"}, "ipv4")
+lib.types.DB["route-gw"].validator = lib.types.validator_for_list_or_type({"AUTO"}, "ipv4",
+										"route gateway should be standard ip or AUTO")
 lib.types.DB["route-gw"].options = { text=1, [1]=TEXT[[
 	Use a standard ipv4 address as the gateway address (eg. 10.2.3.45)
 	or use "AUTO" to use the address provided by the interface mechanism.
 ]] }
+
+
 
 
 --
@@ -65,7 +76,7 @@ lib.types.DB["route-gw"].options = { text=1, [1]=TEXT[[
 local function add_config(mp)
 	master[mp] = { ["with_children"] = 1 }
 	master[mp.."/*"] =							{ ["style"] = "label" }
-	master[mp.."/*/dest"] =						{ ["type"] = "ipv4_nm_default" }
+	master[mp.."/*/dest"] =						{ ["type"] = "route-dest" }
 	master[mp.."/*/pri"] =						{ ["type"] = "2-digit" }
 	master[mp.."/*/dev"] =						{ ["type"] = "any_interface" }
 	master[mp.."/*/gw"] =						{ ["type"] = "route-gw" }

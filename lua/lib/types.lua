@@ -134,15 +134,16 @@ end
 -- ------------------------------------------------------------------------------
 TYPE["ipv4"] = {}
 TYPE["ipv4"].validator = function(value, mp, kp, token, t)
-	local nc, err = 0, "ipv4 must be standard dotted quad"
-	if not value:match("^[%d%.]+$") then return FAIL, err end
-	while value:len() > 0 do
-		local dig = value:match("^(%d+)")
+	local v, nc, err = value, 0, "ipv4 must be standard dotted quad"
+	if not v:match("^[%d%.]+$") then return FAIL, err end
+	while v:len() > 0 do
+		local dig = v:match("^(%d+)")
 		if not dig or tonumber(dig) > 255 then return FAIL, err end
 		nc = nc + 1
-		value = value:sub(#dig + 2)
+		v = v:sub(#dig + 2)
 	end
 	if nc ~= 4 then return (nc < 4 and PARTIAL) or FAIL, err end
+	if value:sub(#value) == "." then return FAIL, err end
 	return OK
 end
 
@@ -169,25 +170,16 @@ TYPE["ipv4_nm"].options = { text = 1, [1] = TEXT[[
 }
 
 -- ------------------------------------------------------------------------------
--- ipv4_nm with an optional "default"
+-- This returns a validator function that checks against a list of options and
+-- then drops back to the validator for the given type.
 -- ------------------------------------------------------------------------------
-TYPE["ipv4_nm_default"] = {}
-TYPE["ipv4_nm_default"].validator = function(value, mp, kp, token, t)
-	local err = "must be ip address with netmask or 'default'"
-	local rc = partial_match(value, {["default"]=1})
-	if rc ~= FAIL then return rc, (rc ~= OK and err) or nil end
-	rc = TYPE["ipv4_nm"].validator(value, mp, kp, token, t)
-	return rc, (rc ~= OK and err) or nil
-end
-
-
-local function validator_for_list_or_type(list, ort, err)
+local function validator_for_list_or_type(list, or_t, err)
 	local matches = lib.utils.values_to_keys(list)
 
 	return function(value, mp, kp, token, t) 
 		local rc = partial_match(value, matches)
 		if rc ~= FAIL then return rc, (rc ~= OK and err) or nil end
-		rc = TYPE[ort].validator(value, mp, kp, token, ort)
+		rc = TYPE[or_t].validator(value, mp, kp, token, or_t)
 		return rc, (rc ~= OK and err) or nil
 	end
 end
