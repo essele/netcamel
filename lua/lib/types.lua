@@ -181,6 +181,17 @@ TYPE["ipv4_nm_default"].validator = function(value, mp, kp, token, t)
 end
 
 
+local function validator_for_list_or_type(list, ort, err)
+	local matches = lib.utils.values_to_keys(list)
+
+	return function(value, mp, kp, token, t) 
+		local rc = partial_match(value, matches)
+		if rc ~= FAIL then return rc, (rc ~= OK and err) or nil end
+		rc = TYPE[ort].validator(value, mp, kp, token, ort)
+		return rc, (rc ~= OK and err) or nil
+	end
+end
+
 
 return {
 	validate = validate,
@@ -189,6 +200,7 @@ return {
 	validate_number = validate_number,
 	validate_std = validate_std,
 	validate_type = validate_type,
+	validator_for_list_or_type = validator_for_list_or_type,
 	partial_match = partial_match,
 }
 

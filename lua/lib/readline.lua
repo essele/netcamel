@@ -110,7 +110,7 @@ local function completer_output(comp)
 	-- Otherwise we consider it a list of smallish items, so we work out the
 	-- longest, and see how many we can fit across a line.
 	--
-	if comp.text then for _,m in ipairs(comp) do io.write(m .. "\n") end return end
+	if comp.text then for _,m in ipairs(comp) do io.write(m) end return end
 
 	local maxlen = 0
 	for _,m in ipairs(comp) do maxlen = math.max(maxlen, #m + 2) end

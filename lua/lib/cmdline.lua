@@ -500,11 +500,11 @@ function rlc_cmds(token, ptoken)
 		if type(comp) == "table" then 
 			local rc = { text = 1 }
 			if token.value == "" then
-				table.insert(rc, "Available Commands")
-				table.insert(rc, "------------------")
+				table.insert(rc, "Available Commands\n")
+				table.insert(rc, "------------------\n")
 			end
 			for _,k in ipairs(lib.utils.sorted_keys(comp)) do
-				table.insert(rc, string.format("%-20.20s %s", k, comp[k].desc or "?"))
+				table.insert(rc, string.format("%-20.20s %s\n", k, comp[k].desc or "?"))
 			end
 			return rc
 		end
