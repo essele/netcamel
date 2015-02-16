@@ -130,6 +130,9 @@ end
 -- interface configuration. At the moment this means making sure we don't
 -- have any interface name conflicts.
 --
+-- 1. Make sure we don't have any naming conflicts
+-- 2. Make sure any routing entries are valid
+--
 function interface_precommit(changes)
 	local ifs={}
 
@@ -140,6 +143,9 @@ function interface_precommit(changes)
 				return false, string.format("duplicate interface name: [%s] and [%s]", sp.."/"..node, ifs[intf])
 			end
 			ifs[intf] = sp.."/"..node
+
+			local routes, err = lib.route.build_var(entry.path.."/"..node.."/route", CF_new, "na")
+			if not routes then return false, string.format("route error: [%s] %s", sp.."/"..node, err) end
 		end
 	end
 	return true

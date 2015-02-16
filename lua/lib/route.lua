@@ -41,6 +41,37 @@ end
 -- Build a list of routes to populate the "routes" field
 -- in the interface var structure
 --
+local function build_var(base, cf, interface)
+	local rc = {}
+	for _,name in ipairs(lib.config.node_list(base, cf, true)) do 
+		local route = {}
+
+		--
+		-- Read the config and populate the route table
+		--
+		local vars = lib.config.node_vars(base.."/"..name, cf)
+		route.dest = vars.dest
+		route.dev = (vars.dev and interface_name(vars.dev)) or interface
+		route.pri = tonumber(vars.pri)
+		route.gw = vars.gw
+		route.table = vars.table
+
+		--
+		-- Validate and add to rc
+		--
+		if not route.dest then return nil, "route "..name:sub(2).." must have valid destination" end
+		table.insert(rc, route)
+	end
+	for i,r in ipairs(rc) do
+		print("i="..i)
+		for k,v in pairs(r) do
+			print("   k="..k.." v="..tostring(v))
+		end
+	end
+	return rc
+end
+
+
 local function var(list, interface)
 	local rc = {}
 	for _,r in ipairs(list) do
@@ -130,6 +161,20 @@ local function rlv(v, mp, kp, token)
 end
 
 --
+-- Install the route configuration options at the given point in the
+-- master structure
+--
+local function add_config(mp)
+	master[mp] = { ["with_children"] = 1 }
+	master[mp.."/*"] =							{ ["style"] = "label" }
+	master[mp.."/*/dest"] =						{ ["type"] = "ipv4_nm_default" }
+	master[mp.."/*/pri"] =						{ ["type"] = "2-digit" }
+	master[mp.."/*/dev"] =						{ ["type"] = "any_interface" }
+	master[mp.."/*/gw"] =						{ ["type"] = "ipv4" }
+end
+
+
+--
 -- Setup the "route" type
 --
 lib.types.DB["route"] = {}
@@ -137,4 +182,6 @@ lib.types.DB["route"].validator = rlv
 
 return {
 	var = var,
+	build_var = build_var,
+	add_config = add_config,
 }

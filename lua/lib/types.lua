@@ -119,6 +119,17 @@ TYPE["2-digit"].validator = function(value, mp, kp, token, t)
 end
 
 -- ------------------------------------------------------------------------------
+-- Simple label (alphas and underscore, do we allow minus?)
+-- ------------------------------------------------------------------------------
+TYPE["label"] = {}
+TYPE["label"].validator = function(value, mp, kp, token, t)
+	local err = "a label can be alphanumberic plus underscore and minus"
+	local a = value:match("^%w?[%w%-_]*$")
+	if not a then return FAIL, err end
+	return OK
+end
+
+-- ------------------------------------------------------------------------------
 -- Normal ipv4 address
 -- ------------------------------------------------------------------------------
 TYPE["ipv4"] = {}

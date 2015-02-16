@@ -267,7 +267,7 @@ local function update_routes()
 		local tbl = route.table or "main"
 		local key = tbl .. "/" .. route.dest
 
-		local my_pri = route.pri
+		local my_pri = route.pri or 50
 		local cur_pri = rt[key] and rt[key].pri
 
 		if cur_pri and my_pri > cur_pri then goto continue end

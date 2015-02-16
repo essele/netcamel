@@ -579,7 +579,7 @@ local function build_prompt()
 		{ text = "[", color = "green" },
 		{ text = path, color = "blue" },
 		{ text = "]", color = "green" },
-		{ text = " > ", color = "normal" }
+		{ text = " > ", color = "default" }
 	}
 	local len = 0
 	for _,i in ipairs(prompt) do len = len + i.text:len() end

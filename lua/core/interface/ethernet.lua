@@ -21,6 +21,7 @@ local DHCPC="/sbin/udhcpc"
 local DHCP_SCRIPT="/netcamel/scripts/dhcp.script"
 
 local function start_dhcp(intf, cf)
+	local cfbase = "/interface/ethernet/"..ifnum
 	--
 	-- Build a set of information to pass into the dhcp script so that
 	-- it can be a bit more clever
@@ -31,7 +32,7 @@ local function start_dhcp(intf, cf)
 		["no-defaultroute"]		= cf["no-defaultroute"],
 		["resolver-pri"]		= 60,
 		["defaultroute-pri"]	= 60,
-		["route"]				= cf["route"] and lib.route.var(cf["route"], intf)
+		["route"]			   = lib.route.build_var(cfbase.."/route", CF_new, physical)
 	}
 
 	--
@@ -95,7 +96,8 @@ local function ethernet_commit(changes)
 	-- Remove any interface that has been removed from the system...
 	--
 	for ifnum in each(state.removed) do 
-		local oldcf = node_vars("/interface/ethernet/"..ifnum, CF_current) or {}
+		local cfbase = "/interface/ethernet/"..ifnum
+		local oldcf = node_vars(cfbase, CF_current) or {}
 		local physical = interface_name("ethernet/"..ifnum)
 
 		lib.log.root("intf", physical)
@@ -114,11 +116,12 @@ local function ethernet_commit(changes)
 	-- the interface down for small changes.
 	--
 	for ifnum in each(state.changed) do 
-		local cf = node_vars("/interface/ethernet/"..ifnum, CF_new) or {}
-		local oldcf = node_vars("/interface/ethernet/"..ifnum, CF_current) or {}
+		local cfbase = "/interface/ethernet/"..ifnum
+		local cf = node_vars(cfbase, CF_new) or {}
+		local oldcf = node_vars(cdbase, CF_current) or {}
 		local physical = interface_name("ethernet/"..ifnum)
 
-		local changed = values_to_keys(node_list("/interface/ethernet/"..ifnum, changes))
+		local changed = values_to_keys(node_list(cfbase, changes))
 		lib.log.root("intf", physical)
 		lib.log.log("info", "changing interface")
 
@@ -163,7 +166,7 @@ local function ethernet_commit(changes)
 					["no-resolv"]		   = cf["no-resolv"],
 					["resolver-pri"]		= 80,
 					["defaultroute-pri"]	= 80,
-					["route"]			   = cf.route and lib.route.var(cf.route, physical),
+					["route"]			   = lib.route.build_var(cfbase.."/route", CF_new, physical)
 				}
 				lib.runtime.interface_up(physical, cf.resolver or {}, nil, vars)
 			end
@@ -179,7 +182,8 @@ local function ethernet_commit(changes)
 	-- Add an interface
 	--
 	for ifnum in each(state.added) do 
-		local cf = node_vars("/interface/ethernet/"..ifnum, CF_new)
+		local cfbase = "/interface/ethernet/"..ifnum
+		local cf = node_vars(cfbase, CF_new)
 		local physical = interface_name("ethernet/"..ifnum)
 
 		lib.log.root("intf", physical)
@@ -202,13 +206,12 @@ local function ethernet_commit(changes)
 				if cf.ip then
 					lib.runtime.execute("/sbin/ip", {"addr", "add", cf.ip, "brd", "+", "dev", physical})
 				end
-
 				local vars = {
 					["no-defaultroute"]	 = cf["no-defaultroute"],
 					["no-resolv"]		   = cf["no-resolv"],
 					["resolver-pri"]		= 80,
 					["defaultroute-pri"]	= 80,
-					["route"]			   = cf.route and lib.route.var(cf.route, physical),
+					["route"]			   = lib.route.build_var(cfbase.."/route", CF_new, physical)
 				}
 				lib.runtime.interface_up(physical, cf.resolver or {}, nil, vars)
 			end
@@ -235,7 +238,9 @@ master["/interface/ethernet/*/resolver"] =				{ ["type"] = "ipv4", ["list"] = tr
 master["/interface/ethernet/*/resolver-pri"] =			{ ["type"] = "2-digit", ["default"] = "80" }
 master["/interface/ethernet/*/mtu"] = 					{ ["type"] = "mtu" }
 master["/interface/ethernet/*/disabled"] = 				{ ["type"] = "boolean" }
-master["/interface/ethernet/*/route"] = 				{ ["type"] = "route", ["list"] = 1 }
+--master["/interface/ethernet/*/route"] = 				{ ["type"] = "route", ["list"] = 1 }
+
+lib.route.add_config("/interface/ethernet/*/route")
 
 --
 -- Support DHCP on the interface (off by default)

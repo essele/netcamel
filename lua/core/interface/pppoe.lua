@@ -77,6 +77,7 @@ end
 -- then adding the service and starting it.
 --
 local function start_pppoe(ifname, cf)
+	local cfbase = "/interface/pppoe/*"..ifname
 	--
 	-- Build a set of information to pass into the ppp script so that
 	-- it can be a bit more clever
@@ -87,7 +88,8 @@ local function start_pppoe(ifname, cf)
 		["no-resolv"]			= cf["no-resolv"],
 		["resolver-pri"] 		= 40,
 		["defaultroute-pri"] 	= 40,
-		["route"]				= cf["route"] and lib.route.var(cf["route"], ifname),
+		["route"]				= lib.route.build_var(cfbase.."/route", CF_new, ifname)
+
 	}
 
 	--
@@ -167,8 +169,9 @@ local function pppoe_commit(changes)
 
 	for nodename in each(todo) do
 		print("WOULD PROCESS: pppoe/"..nodename)
-		local cf = node_vars("/interface/pppoe/"..nodename, CF_new) or {}
-		local oldcf = node_vars("/interface/pppoe/"..nodename, CF_current) or {}
+		local cfbase = "/interface/pppoe/"..nodename
+		local cf = node_vars(cfbase, CF_new) or {}
+		local oldcf = node_vars(cfbase, CF_current) or {}
 		local ifname = interface_name("pppoe/"..nodename)
 
 		lib.log.root("intf", ifname)
@@ -241,7 +244,7 @@ master["/interface/pppoe/*/mtu"] =					{ ["type"] = "mtu" }
 master["/interface/pppoe/*/username"] =				{ ["type"] = "OK" }
 master["/interface/pppoe/*/password"] =				{ ["type"] = "OK" }
 master["/interface/pppoe/*/disabled"] = 			{ ["type"] = "boolean" }
-master["/interface/pppoe/*/route"] =				{ ["type"] = "OK", ["list"] = 1 }
+lib.route.add_config("/interface/pppoe/*/route")
 
 --
 -- Deal with triggers and depdencies

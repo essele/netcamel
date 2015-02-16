@@ -811,6 +811,7 @@ end
 
 return {
 	node_list = node_list,
+	node_vars = node_vars,
 	append_token = append_token,
 	undo = undo,
 	show = show,

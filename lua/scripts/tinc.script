@@ -60,7 +60,7 @@ if vars.logfile then lib.runtime.redirect(vars.logfile) end
 local action = arg[0]:match("/?([^/]-)$")
 
 --
--- Block all other interface related activity so that we have a clear tun
+-- Block all other interface related activity so that we have a clear run
 -- and our logs are easier to read.
 --
 lib.runtime.block_on()
@@ -88,6 +88,23 @@ if action == "tinc-down" then
 	-- This is called just before we exit, the interface will be removed along
 	-- with any associated routes, so nothing to do here.
 	--
+end
+
+if action == "host-up" then
+	--
+	-- TODO: add a specific route to the host so we keep going even if we change
+	--       the default route in subnet-up later.
+	--
+end
+
+if action == "subnet-up" then
+	--
+	-- TODO:
+	-- Add routes each time we get one (apart from our own) if we haven't already
+	-- done it.
+	--
+	--
+	os.execute("env")
 end
 
 --[[
