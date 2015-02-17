@@ -27,6 +27,7 @@ local TINC = "/usr/sbin/tinc"
 -- start the service.
 --
 local function start_tinc(ifname, cf)
+	local cfbase = "/interface/tinc/*"..ifname
 	--
 	-- Build a set of information to pass into the ppp script so that
 	-- it can be a bit more clever
@@ -37,7 +38,8 @@ local function start_tinc(ifname, cf)
 		["no-defaultroute"] 	= cf["no-defaultroute"],
 		["no-resolv"]			= cf["no-resolv"],
 		["resolver-pri"] 		= cf["resolver-pri"],
-		["defaultroute-pri"] 	= cf["defaultroute-pri"]
+		["defaultroute-pri"] 	= cf["defaultroute-pri"],
+		["route"]				= lib.route.build_var(cfbase.."/route", CF_new, ifname),
 	}
 
 	--
@@ -268,6 +270,9 @@ master["/interface/tinc/*"] =							{ ["style"] = "tinc_if" }
 master["/interface/tinc/*/ip"] =						{ ["type"] = "ipv4_nm" }
 master["/interface/tinc/*/hostname"] =					{ ["type"] = "OK",
 														  ["default"] = tinc_hostname, }
+lib.route.add_config("/interface/tinc/*/route")
+
+
 master["/interface/tinc/*/key-rsa-private"] =			{ ["type"] = "file/text" }
 master["/interface/tinc/*/key-ed25519-private"] =		{ ["type"] = "file/text" }
 master["/interface/tinc/*/connect-to"] =				{ ["type"] = "OK", ["list"] = true }

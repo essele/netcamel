@@ -59,11 +59,12 @@ lib.types.DB["route-dest"].options = { text=1, [1]=TEXT[[
 ]] }
 
 lib.types.DB["route-gw"] = {}
-lib.types.DB["route-gw"].validator = lib.types.validator_for_list_or_type({"AUTO"}, "ipv4",
-										"route gateway should be standard ip or AUTO")
+lib.types.DB["route-gw"].validator = lib.types.validator_for_list_or_type({"AUTO", "PRIOR-DEFAULT"}, "ipv4",
+										"route gateway should be standard ip, AUTO or PRIOR-DEFAULT")
 lib.types.DB["route-gw"].options = { text=1, [1]=TEXT[[
-	Use a standard ipv4 address as the gateway address (eg. 10.2.3.45)
-	or use "AUTO" to use the address provided by the interface mechanism.
+	Use a standard ipv4 address as the gateway address (eg. 10.2.3.45) or:
+	use "AUTO" to use the address provided by the interface mechanism
+	use "PRIOR-DEFAULT" to use the defaultroute from before this interface
 ]] }
 
 

@@ -116,6 +116,21 @@ end
 local function remove_routes_from_source(source)
 	local rc, err = lib.db.query("runtime", "rm_routes", source)
 end
+--
+-- Remove a specific route from the runtime table. We need to be careful with
+-- non-deterministic serialisation, so we look at each route and compare
+-- source, dest and table.
+--
+local function remove_route_from_source(route, source)
+	for _, r in ipairs(lib.db.query("runtime", "routes")) do
+		if r.source == source then
+			local rr = lib.utils.unserialise(r.item)
+			if rr.dest == route.dest and rr.table == route.table then
+				local rc, err = lib.db.query("runtime", "rm_route", {source=source, item=r.item})
+			end
+		end
+	end
+end
 
 --
 -- Add resolvers into our runtime table
@@ -211,6 +226,9 @@ function get_routes()
 		local f = split(route, "%s")
 
 		dest = table.remove(f, 1)
+		-- ensure /32 is added on where needed
+		if dest ~= "default" and not dest:find("/", 1, true) then dest = dest .. "/32" end
+
 		while f[1] do
 			local cmd = table.remove(f, 1)
 			if cmd == "dev" then dev = table.remove(f, 1)
@@ -227,38 +245,28 @@ function get_routes()
 	return rc
 end
 
-
-local function update_routes()
-	--
-	-- Clear gri routing cache, since we don't want it to persist
-	-- through any routing changes. Also pull out the list of all
-	-- of the interfaces that are up.
-	--
-	__gri_cache = {}
-	local up_interfaces = get_all_up_interfaces()
-
-	--
-	-- Pull out all the routes
-	--
+--
+-- Given a hash of up interfaces, build a list of all the routes that we would
+-- apply.
+--
+-- TODO: put back local
+function build_route_list_for_interfaces(interfaces)
 	local rt = {}
 	for _, r in ipairs(lib.db.query("runtime", "routes")) do
 		local route = lib.utils.unserialise(r.item)
-
+		
 		--
-		-- Check that the gw is local and dev matches (if provided)
+		-- Check that the gw is local and dev matches (if provided), we will add any
+		-- PRIOR-DEFAULT devices by default with no checks
 		--
-		if route.gw then
+		if route.gw and route.gw ~= "PRIOR-DEFAULT" then
 			local route_if = get_routing_interface(route.gw)
 			if not route_if then print("gw: "..route.gw.." not local") goto continue end
 			if route.dev and route.dev ~= route_if then print("gw: "..route.gw.." device mismatch") goto continue end
 			route.dev = route_if
 		end
-		if not route.dev then print("no device") goto continue end
-
-		--
-		-- See if the device is actually up
-		--
-		if not up_interfaces[route.dev] then print("device: "..route.dev.." not up") goto continue end
+		if not route.dev then print("dest: "..route.dest.." no device") goto continue end
+		if not interfaces[route.dev] then print("device: "..route.dev.." not considered") goto continue end
 
 		--
 		-- If our priority is better (lower) than the existing entry then we take over.
@@ -274,6 +282,42 @@ local function update_routes()
 		if not cur_pri or my_pri < cur_pri then rt[key] = route end
 		print("Key = "..key)
 ::continue::
+	end
+	return rt
+end
+
+
+local function update_routes()
+	--
+	-- Clear gri routing cache, since we don't want it to persist
+	-- through any routing changes. Also pull out the list of all
+	-- of the interfaces that are up.
+	--
+	__gri_cache = {}
+	local up_interfaces = get_all_up_interfaces()
+
+	--
+	-- Pull out all the routes
+	--
+	local rt = build_route_list_for_interfaces(up_interfaces)
+
+	--
+	-- Now process any PRIOR-DEFAULT routes
+	--
+	for dest, route in pairs(rt) do
+		if route.gw == "PRIOR-DEFAULT" then
+			local reduced_interfaces = lib.utils.copy(up_interfaces)
+			reduced_interfaces[route.dev] = nil
+			local new_routes = build_route_list_for_interfaces(reduced_interfaces)
+			local prior_default = new_routes["main/default"]
+			if prior_default then
+				route.gw = prior_default.gw
+				route.dev = prior_default.dev
+			else
+				print("Unable to make PRIOR-DEFAULT for "..dest)
+				rt[dest] = nil
+			end
+		end
 	end
 
 	--
@@ -421,6 +465,29 @@ local function interface_up(interface, dns, router, vars)
 	update_routes()
 	block_off()
 end
+
+--
+-- Add/remove a list of routes to the runtime table and then re-update so they
+-- are applied if relevant
+--
+local function add_routes(routes, source)
+	block_on()
+	for _, route in ipairs(routes) do
+		add_route_from_source(route, source)
+	end
+	update_routes()
+	block_off()
+end
+local function del_routes(routes, source)
+	block_on()
+	for _, route in ipairs(routes) do
+		remove_route_from_source(route, source)
+	end
+	update_routes()
+	block_off()
+end
+
+
 local function interface_down(interface, vars)
 	block_on()
 	set_status(interface, "down")
@@ -462,6 +529,9 @@ end
 return {
 	interface_up = interface_up,
 	interface_down = interface_down,
+
+	add_routes = add_routes,
+	del_routes = del_routes,
 
 	redirect = redirect,
 	get_vars = get_vars,

@@ -397,5 +397,6 @@ return {
 	keys_to_values = keys_to_values,
 	values_to_keys = values_to_keys,
 	sorted_keys = sorted_keys,
+	copy = copy,
 }
 

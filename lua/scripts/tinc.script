@@ -32,9 +32,9 @@ dofile("/netcamel/lib/lib.lua")
 --
 local interface	= os.getenv("INTERFACE")
 local netname	= os.getenv("NETNAME")
---local server	= os.getenv("IPREMOTE")
---local dns1		= os.getenv("DNS1")
---local dns2		= os.getenv("DNS2")
+local subnet 	= os.getenv("SUBNET")
+local node 		= os.getenv("NODE")
+local name 		= os.getenv("NAME")
 
 --
 -- Load the extra variables
@@ -70,7 +70,7 @@ lib.runtime.block_on()
 --
 print("Action is: " .. action)
 lib.log.log("info", "TINC event action=%s", action)
-os.execute("env")
+--os.execute("env")
 
 
 if action == "tinc-up" then
@@ -81,13 +81,17 @@ if action == "tinc-up" then
 	lib.runtime.execute("/sbin/ip", { "addr", "flush", "dev", interface })
 	lib.runtime.execute("/sbin/ip", { "addr", "add", ip, "broadcast", broadcast, "dev", interface })
 	lib.runtime.execute("/sbin/ip", { "link", "set", interface, "up" })
+
+	lib.runtime.interface_up(interface, nil, nil, vars)
 end
 
 if action == "tinc-down" then
 	--
 	-- This is called just before we exit, the interface will be removed along
-	-- with any associated routes, so nothing to do here.
+	-- with any associated routes, however we may have non-obvious routes so we
+	-- should call interface_down
 	--
+	lib.runtime.interface_down(interface, vars)
 end
 
 if action == "host-up" then
@@ -103,8 +107,21 @@ if action == "subnet-up" then
 	-- Add routes each time we get one (apart from our own) if we haven't already
 	-- done it.
 	--
-	--
-	os.execute("env")
+	print("SUBNET UP FOR: "..subnet.." node="..node)
+	if subnet and node ~= name then
+		print("ADDING ROUTE FOR: "..subnet)
+		local route = { dest = subnet, dev = interface }
+		lib.runtime.add_routes( {route}, interface )
+	end
+end
+
+if action == "subnet-down" then
+	print("SUBNET DOWN FOR: "..subnet.." node="..node)
+
+	if subnet and node ~= name then
+		local route = { dest = subnet, dev = interface }
+		lib.runtime.del_routes( {route}, interface )
+	end	
 end
 
 --[[

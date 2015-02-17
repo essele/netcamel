@@ -255,6 +255,7 @@ local function boot()
 	local queries = {
 		routes = "select * from runtime where class = 'route'",
 		rm_routes = "delete from runtime where class = 'route' and source = :source",
+		rm_route = "delete from runtime where class = 'route' and source = :source and item = :item",
 		rules = "select * from runtime where class = 'rule'",
 		resolvers = "select * from runtime where class = 'resolver'",
 		rm_resolvers = "delete from runtime where class = 'resolver' and source = :source",
