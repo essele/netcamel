@@ -35,6 +35,7 @@ local netname	= os.getenv("NETNAME")
 local subnet 	= os.getenv("SUBNET")
 local node 		= os.getenv("NODE")
 local name 		= os.getenv("NAME")
+local remote	= os.getenv("REMOTEADDRESS")
 
 --
 -- Load the extra variables
@@ -70,7 +71,7 @@ lib.runtime.block_on()
 --
 print("Action is: " .. action)
 lib.log.log("info", "TINC event action=%s", action)
---os.execute("env")
+os.execute("env")
 
 
 if action == "tinc-up" then
@@ -98,6 +99,21 @@ if action == "host-up" then
 	--
 	-- TODO: add a specific route to the host so we keep going even if we change
 	--       the default route in subnet-up later.
+	--
+	if node ~= name then
+		local route = { dest = remote.."/32", gw = "PRIOR-DEFAULT", dev = interface }
+		lib.runtime.add_routes( {route}, interface )
+	end
+end
+
+if action == "host-down" then
+	--
+	-- If we delete the host route, but still have default that goes over
+	-- the vpn then we will never be able to connect again!
+	--
+	-- TODO
+	-- TODO
+	-- TODO
 	--
 end
 

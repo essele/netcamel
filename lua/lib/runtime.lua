@@ -359,6 +359,11 @@ local function update_routes()
 		if new.table and new.table ~= "main" then lib.ipr2.use("table", new.table) end
 		execute("/sbin/ip", ip_route_args("add", new))
 	end
+	
+	--
+	-- Flush the cache to make changes effective immediately
+	--
+	execute("/sbin/ip", {"route", "flush", "cache"})
 end
 
 --
