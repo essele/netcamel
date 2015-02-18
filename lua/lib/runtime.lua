@@ -287,7 +287,7 @@ function build_route_list_for_interfaces(interfaces)
 end
 
 
-local function update_routes()
+local function update_routes(delta)
 	--
 	-- Clear gri routing cache, since we don't want it to persist
 	-- through any routing changes. Also pull out the list of all
@@ -296,6 +296,13 @@ local function update_routes()
 	__gri_cache = {}
 	local up_interfaces = get_all_up_interfaces()
 
+	--
+	-- Allow updates to the interface list so we can do work prior
+	-- to the interface being markes up/down
+	--
+	if delta and delta.add then up_interfaces[delta.add] = 1 end
+	if delta and delta.remove then up_interfaces[delta.remove] = nil end
+	
 	--
 	-- Pull out all the routes
 	--
@@ -418,10 +425,6 @@ end
 --
 local function interface_up(interface, dns, router, vars)
 	block_on()
-	--
-	-- Mark the interface up (needed for the routes to work properly)
-	--
-	set_status(interface, "up")
 
 	--
 	-- Add any listed resolvers, translate AUTO into each of the
@@ -448,7 +451,6 @@ local function interface_up(interface, dns, router, vars)
 			add_resolver_from_source({ip=r, pri=pri}, interface)
 		end
 	end
-	update_resolvers()
 
 	--
 	--  Add all of our routes, switch AUTO for the provided router if
@@ -467,7 +469,13 @@ local function interface_up(interface, dns, router, vars)
 		local pri = vars["defaultroute-pri"] or 50
 		add_route_from_source({ dest="default", gw=router, dev=interface, pri=pri }, interface)
 	end
-	update_routes()
+
+	--
+	-- Do the updates...
+	--
+	update_resolvers()
+	update_routes({add=interface})
+	set_status(interface, "up")
 	block_off()
 end
 
@@ -495,13 +503,14 @@ end
 
 local function interface_down(interface, vars)
 	block_on()
-	set_status(interface, "down")
 
 	remove_resolvers_from_source(interface)
-	update_resolvers()
-
 	remove_routes_from_source(interface)
-	update_routes()
+
+	update_resolvers()
+	update_routes({remove=interface})
+
+	set_status(interface, "down")
 	block_off()
 end
 
@@ -542,7 +551,7 @@ return {
 	get_vars = get_vars,
 
 	set_status = set_status,
-	get_status = get_stats,
+	get_status = get_status,
 
 	execute = execute,
 
