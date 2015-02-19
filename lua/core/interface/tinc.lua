@@ -159,6 +159,16 @@ local function configure_instance(net)
 			Address = {{ip}}
 			Port = {{port}}
 			Subnet = {{subnet}}
+			Cipher = {{cipher}}
+			ClampMSS = {{clamp-mss}}
+			Compression = {{compression}}
+			Digest = {{digest}}
+			IndirectData = {{indirect-data}}
+			MACLength = {{mac-length}}
+			PMTU = {{pmtu}}
+			PMTUDiscovery = {{pmtu-discovery}}
+			TCPOnly = {{tcp-only}}
+			Weight = {{weight}}
 
 			{{key-rsa-public}}
 
@@ -173,7 +183,7 @@ end
 
 local function tinc_precommit(changes)
 	--
-	--    -- Do the interface level precommit
+	--	-- Do the interface level precommit
 	--
 	local rc, err = interface_precommit(changes)
 	if not rc then return false, err end
@@ -256,6 +266,56 @@ local function tinc_hostname(mp, kp, kv)
 	return syscf.hostname
 end
 
+--
+-- Return a list of the available openssl ciphers and message digests
+--
+function openssl_ciphers()
+	local ciphers = {}
+	rc, op = lib.execute.pipe("/usr/bin/openssl", { "list-cipher-algorithms" }, nil, nil)
+	if rc ~= 0 then return {} end
+	for _,line in ipairs(op) do
+		local alias, value = line:match("(.*) => (.*)")
+		table.insert(ciphers, alias or line)
+	end
+	return ciphers
+end
+function openssl_digests()
+	local digests = {}
+	rc, op = lib.execute.pipe("/usr/bin/openssl", { "list-message-digest-algorithms" }, nil, nil)
+	if rc ~= 0 then return {} end
+	for _,line in ipairs(op) do
+		local alias, value = line:match("(.*) => (.*)")
+		table.insert(digests, alias or line)
+	end
+	return digests
+end
+
+
+-- ------------------------------------------------------------------------------
+-- -- Tinc Compression Level Validator
+-- -- ------------------------------------------------------------------------------
+lib.types.DB["tinc-compression"] = {}
+lib.types.DB["tinc-compression"].validator = function(value, mp, kp, token, t)
+	local err = "comrpession must be between 0 and 11"
+	local rc = lib.types.validate_number(value, 0, 11)
+	return rc, (rc ~= OK and err) or nil
+end
+lib.types.DB["tinc-compression"].options = function()
+	return { text = 1, [1] = TEXT[[
+		compression - level of compression used for UDP packets
+
+		typical values:
+		0  - no compression
+		1  - fast zlib
+		..
+		9  - best zlib
+		10 - fast lzo
+		11 - best lzo
+]] }
+end
+
+
+
 
 --
 -- tinc vpn interfaces...
@@ -280,12 +340,23 @@ master["/interface/tinc/*/key-generate"] =				{ ["type"] = "select",
 														  ["options"] = { "rsa", "ed25519", "both" },
 														  ["action"] = action_key_generate }
 master["/interface/tinc/*/host"] =						{}
-master["/interface/tinc/*/host/*"] =					{ ["style"] = "OK" }
+master["/interface/tinc/*/host/*"] =					{ ["style"] = "label" }
 master["/interface/tinc/*/host/*/ip"] =					{ ["type"] = "ipv4" }
 master["/interface/tinc/*/host/*/port"] =				{ ["type"] = "OK" }
 master["/interface/tinc/*/host/*/subnet"] =				{ ["type"] = "ipv4_nm", ["list"] = true }
 master["/interface/tinc/*/host/*/key-rsa-public"] =		{ ["type"] = "file/text" }
 master["/interface/tinc/*/host/*/key-ed25519-public"] =	{ ["type"] = "file/text" }
+master["/interface/tinc/*/host/*/cipher"] =				{ ["type"] = "select", ["options"] = openssl_ciphers() }
+master["/interface/tinc/*/host/*/clamp-mss"] =			{ ["type"] = "yesno" }
+master["/interface/tinc/*/host/*/compression"] =		{ ["type"] = "tinc-compression" }
+master["/interface/tinc/*/host/*/digest"] =				{ ["type"] = "select", ["options"] = openssl_digests() }
+master["/interface/tinc/*/host/*/indirect-data"] =		{ ["type"] = "yesno" }
+master["/interface/tinc/*/host/*/mac-length"] =			{ ["type"] = "number", min=0, max=9999 }
+master["/interface/tinc/*/host/*/pmtu"] =				{ ["type"] = "number", min=0, max=1600 }
+master["/interface/tinc/*/host/*/pmtu-discovery"] =		{ ["type"] = "yesno" }
+master["/interface/tinc/*/host/*/tcp-only"] =			{ ["type"] = "yesno" }
+master["/interface/tinc/*/host/*/weight"] =				{ ["type"] = "number", min=0, max=999 }
+
 
 --
 -- Deal with triggers and depdencies

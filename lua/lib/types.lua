@@ -92,7 +92,6 @@ local function validate_number(value, min, max)
 	return OK
 end
 
-
 -- ------------------------------------------------------------------------------
 -- BOOLEAN
 -- ------------------------------------------------------------------------------
@@ -166,20 +165,47 @@ TYPE["ipv4_nm"].options = { text = 1, [1] = TEXT[[
 		Use a standard ip dotted quad address with a /netmask
 	
 		eg. 192.168.95.1/24 or 10.1.0.5/16
-	]] 
-}
+]] }
 
 -- ------------------------------------------------------------------------------
 -- depends is a cfpath with a .dependable option
 -- ------------------------------------------------------------------------------
 TYPE["depends"] = {}
 TYPE["depends"].validator = function(value, mp, kp, token, t)
-	-- fake a new token if needed
-	token = token or { value = value }
+	token = token or { value = value } -- fake a new token if needed
 
 	rlv_cfpath(token, { use_master=1, use_config=1, t_dependable=1 })
 	return token.status, token.err
 end
+
+-- ------------------------------------------------------------------------------
+-- A simple option list validator
+-- ------------------------------------------------------------------------------
+TYPE["select"] = {}
+TYPE["select"].validator = validate_std
+TYPE["select"].options = function(mp)
+	if master[mp].options then return lib.utils.values_to_keys(master[mp].options) end
+	return
+end
+
+-- ------------------------------------------------------------------------------
+-- A simple yesno validator (where bool doesn't work)
+-- ------------------------------------------------------------------------------
+TYPE["yesno"] = { validator = validate_std, options = { yes=1, no=1 }}
+
+-- ------------------------------------------------------------------------------
+-- A number validator taking min and max from master
+-- ------------------------------------------------------------------------------
+TYPE["number"] = {}
+TYPE["number"].validator = function(value, mp, kp, token, t)
+	local rc, err
+	local min = master[mp].min or 0
+	local max = master[mp].max or math.huge
+	rc = validate_number(value, min, max)
+	if rc ~= OK then return rc, string.format("number must be between %d and %d", min, max) end
+	return OK
+end
+
 
 -- ------------------------------------------------------------------------------
 -- This returns a validator function that checks against a list of options and

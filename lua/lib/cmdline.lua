@@ -282,7 +282,8 @@ function rlc_cfvalue(token, ptoken)
 	if token.options.text then return token.options end
 
 	local comp, value, match = standard_completer(token, token.options)
-	if type(comp) == "table" then return lib.utils.keys_to_values(comp) end
+--	if type(comp) == "table" then return lib.utils.keys_to_values(comp) end
+	if type(comp) == "table" then return lib.utils.sorted_keys(comp) end
 	return comp
 end
 
