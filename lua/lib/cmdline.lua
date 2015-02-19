@@ -91,9 +91,11 @@ function cfpath_options(mp, kp, opts)
 				term = (m_list[item] and m_list[item].term) or (extra==""),
 				more = (m_list[item] and m_list[item].more) or (extra:len() > 0)
 			}
-			if opts.must_be_wildcard and master[k].style ~= nil then m_list[item] = set end
-			if opts.allow_container and master[k]["type"] == nil then m_list[item] = set end
-			if opts.allow_value and master[k]["type"] ~= nil then m_list[item] = set end
+			-- handle our different type requests
+			if opts.t_wildcard and master[k].style ~= nil then m_list[item] = set end
+			if opts.t_container and master[k]["type"] == nil then m_list[item] = set end
+			if opts.t_value and master[k]["type"] ~= nil then m_list[item] = set end
+			if opts.t_dependable and master[k].dependable then m_list[item] = set end
 		end
 	end
 
@@ -113,7 +115,7 @@ function cfpath_options(mp, kp, opts)
 	-- Now add the actuals where we have a match with the m_list so that we only
 	-- include containers/values/wildcards as needed
 	--
-	if opts.use_new then
+	if opts.use_config then
 		local match = kp:gsub("/$", ""):gsub("([%-%+%.%*])", "%%%1").."/(%*?)([^/]+)(.*)"
 		for k,_ in pairs(CF_new) do
 			local wc, item, rest = k:match(match)
@@ -121,10 +123,10 @@ function cfpath_options(mp, kp, opts)
 	
 			if m_list[item] then
 				local i = m_list[item]
-				if opts.must_be_wildcard and (item:find("*", 1, true) or rest:find("*", 1, true)) then
+				if opts.t_wildcard and (item:find("*", 1, true) or rest:find("*", 1, true)) then
 					list[item] = { mp=item, kp=item, term=i.term, more=i.more }
 				end
-				if opts.allow_value or opts.allow_container then 
+				if opts.t_value or opts.t_container then 
 					list[item] = { mp=item, kp=item, term=i.term, more=i.more } 
 				end
 			elseif wc == "*" and m_list["*"] then
@@ -318,6 +320,8 @@ function rlv_cfvalue(token, opts)
 
 	if t:sub(1,5) == "file/" then
 		rlv_cffilevalue(token, opts)
+	elseif t == "Xdepends" then
+		rlv_cfpath(token, { use_master=1, use_config=1, t_dependable=1 })
 	else
 		set_status(token, lib.types.validate(token.value, cftoken.mp, cftoken.kp, token))
 	end
@@ -355,7 +359,7 @@ function rlv_cfpath(token, opts)
 		end
 
 		-- allow "/" for a container (at the token level, not elem)
-		if opts.allow_container and token.value == "/" then
+		if opts.t_container and token.value == "/" then
 			elem.kp, elem.mp = "/", "/"
 			set_status(elem, OK)
 			goto continue
@@ -411,7 +415,7 @@ function rlv_cfpath(token, opts)
 	elem = token.tokens[#token.tokens]
 	if elem.status == PARTIAL and not token.final then set_status(elem, FAIL) end
 	if elem.status == OK then token.mp, token.kp = elem.mp, elem.kp end
-	set_status(token, elem.status, elem.status ~= OK and "invalid configuration path")
+	set_status(token, elem.status, (elem.status ~= OK and "invalid configuration path") or nil)
 end
 
 
@@ -683,6 +687,7 @@ return {
 	FAIL = FAIL,
 	PARTIAL = PARTIAL,
 	OK = OK,
+	rlv_cfpath = rlv_cfpath,
 }
 
 

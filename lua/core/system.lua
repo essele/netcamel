@@ -50,4 +50,5 @@ master["/system"] = 								{ ["commit"] = system_commit,
 master["/system/hostname"] =						{ ["type"] = "hostname", ["default"] = "camel" }
 
 master["/system/afile"] =							{ ["type"] = "file/text" }
+master["/system/depends"] =							{ ["type"] = "depends" }
 

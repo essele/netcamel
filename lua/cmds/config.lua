@@ -85,7 +85,7 @@ CMDS["show"] = {
 	},
 	argc = { min = 0, max = 1 },
 	args = {
-		{ validator = rlv_cfpath, opts = { allow_value = 1, allow_container = 1, use_master = 1, use_new = 1 }}
+		{ validator = rlv_cfpath, opts = { t_value = 1, t_container = 1, use_master = 1, use_config = 1 }}
 	}
 }
 CMDS["show"].func = function(cmd, cmdline, tokens)
@@ -101,7 +101,7 @@ CMDS["set"] = {
 	usage = "set <cfg_path> <value>",
 	argc = { min = 2, max = 2 },
 	args = {
-		{ validator = rlv_cfpath, opts = { allow_value = 1, use_master = 1, use_new = 1, gap = 1 }},
+		{ validator = rlv_cfpath, opts = { t_value = 1, use_master = 1, use_config = 1, gap = 1 }},
 		{ validator = rlv_cfvalue, all = 1 },
 	}
 }
@@ -142,7 +142,7 @@ CMDS["delete"] = {
 	usage = "delete <cfg_path> [<list value>]",
 	argc = { min = 1, max = 2 },
 	args = {
-		{ validator = rlv_cfpath, opts = { use_new=1, allow_value=1, allow_container=1 }},
+		{ validator = rlv_cfpath, opts = { use_config=1, t_value=1, t_container=1 }},
 		{ validator = rlv_cfvalue, all = 1, opts = { only_if_list = 1 }},
 	}
 }
@@ -168,7 +168,7 @@ CMDS["rename"] = {
 	usage = "rename <cfg_path> <new_node>",
 	argc = { min = 2, max = 2 },
 	args = {
-		{ validator = rlv_cfpath, opts = { use_new=1, must_be_wildcard=1, gap=1 }},
+		{ validator = rlv_cfpath, opts = { use_config=1, t_wildcard=1, gap=1 }},
 		{ validator = rlv_cfvalue },
 	}
 }
@@ -191,7 +191,7 @@ CMDS["revert"] = {
 	usage = "revert <cfg_path>",
 	argc = { min = 1, max = 1 },
 	args = {
-		{ validator = rlv_cfpath, opts = { use_master=1, use_new=1, allow_value=1, allow_container=1 }}
+		{ validator = rlv_cfpath, opts = { use_master=1, use_config=1, t_value=1, t_container=1 }}
 	}
 }
 CMDS["revert"].func = function(cmd, cmdline, tokens)
@@ -251,7 +251,7 @@ CMDS["cd"] = {
 	usage = "cd <cfg_path>",
 	argc = { min = 1, max = 1 },
 	args = {
-		{ validator = rlv_cfpath, opts = { use_master=1, use_new=1, allow_container=1 }}
+		{ validator = rlv_cfpath, opts = { use_master=1, use_config=1, t_container=1 }}
 	}
 }
 CMDS["cd"].func = function(cmd, cmdline, tokens)

@@ -170,6 +170,18 @@ TYPE["ipv4_nm"].options = { text = 1, [1] = TEXT[[
 }
 
 -- ------------------------------------------------------------------------------
+-- depends is a cfpath with a .dependable option
+-- ------------------------------------------------------------------------------
+TYPE["depends"] = {}
+TYPE["depends"].validator = function(value, mp, kp, token, t)
+	-- fake a new token if needed
+	token = token or { value = value }
+
+	rlv_cfpath(token, { use_master=1, use_config=1, t_dependable=1 })
+	return token.status, token.err
+end
+
+-- ------------------------------------------------------------------------------
 -- This returns a validator function that checks against a list of options and
 -- then drops back to the validator for the given type.
 -- ------------------------------------------------------------------------------

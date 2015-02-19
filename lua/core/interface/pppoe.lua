@@ -235,7 +235,7 @@ master["/interface/pppoe"] = {
 	["with_children"] = 1,
 }
 
-master["/interface/pppoe/*"] =						{ ["style"] = "pppoe_if" }
+master["/interface/pppoe/*"] =						{ ["style"] = "pppoe_if", ["dependable"]=1 }
 master["/interface/pppoe/*/attach"] =				{ ["type"] = "eth_interface",
 											  		  ["options"] = "eth_interfaces" }
 master["/interface/pppoe/*/no-defaultroute"] =		{ ["type"] = "boolean", ["default"] = false }
